@@ -165,6 +165,10 @@ dependencies {
     }
 }
 
+kotlin {
+    explicitApi()
+}
+
 // Adds Access Transformer files to tasks
 @Suppress("Deprecation")
 if (use_access_transformer.toBoolean()) {
