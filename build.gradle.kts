@@ -10,7 +10,7 @@ buildscript {
     }
     
     dependencies {
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${libs.versions.kotlinVersion}")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${libs.versions.kotlinVersion.get()}")
     }
 }
 
