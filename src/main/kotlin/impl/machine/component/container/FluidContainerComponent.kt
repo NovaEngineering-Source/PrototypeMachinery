@@ -1,4 +1,4 @@
-package github.kasuminova.prototypemachinery.api.machine.component.type
+package github.kasuminova.prototypemachinery.impl.machine.component.container
 
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.util.Action
