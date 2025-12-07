@@ -32,6 +32,8 @@ val maven_group: String by project
 @Suppress("PropertyName")
 val mod_id: String by project
 @Suppress("PropertyName")
+val mod_name: String by project
+@Suppress("PropertyName")
 val archives_base_name: String by project
 
 @Suppress("PropertyName")
@@ -51,6 +53,8 @@ val use_assetmover: String by project
 val include_mod: String by project
 @Suppress("PropertyName")
 val coremod_plugin_class_name: String by project
+
+version = mod_version
 
 java {
     toolchain {
@@ -105,15 +109,15 @@ minecraft {
     // Add any properties you want to swap out for a dynamic value at build time here
     // Any properties here will be added to a class at build time, the name can be configured below
     // Example:
-    injectedTags.put("VERSION", project.version)
+    injectedTags.put("VERSION", mod_version)
     injectedTags.put("MOD_ID", mod_id)
-    injectedTags.put("MOD_NAME", archives_base_name)
+    injectedTags.put("MOD_NAME", mod_name)
 }
 
 // Generate a group.archives_base_name.Tags class
 tasks.injectTags.configure {
     // Change Tags class' name here:
-    outputClassName.set("${maven_group}.${archives_base_name}.Tags")
+    outputClassName.set("${maven_group}.${mod_id}.Tags")
 }
 
 repositories {

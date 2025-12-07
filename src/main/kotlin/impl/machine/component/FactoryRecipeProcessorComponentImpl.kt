@@ -40,7 +40,7 @@ public class FactoryRecipeProcessorComponentImpl(
         executors.forEach { it.tick(this) }
     }
 
-    override fun serializeNBT(): NBTTagCompound {
+    override fun writeNBT(): NBTTagCompound {
         val nbt = NBTTagCompound()
         nbt.setInteger("MaxConcurrent", maxConcurrentProcesses)
 
@@ -58,7 +58,7 @@ public class FactoryRecipeProcessorComponentImpl(
         return nbt
     }
 
-    override fun deserializeNBT(nbt: NBTTagCompound) {
+    override fun readNBT(nbt: NBTTagCompound) {
         if (nbt.hasKey("Processes")) {
             val processList = nbt.getTagList("Processes", Constants.NBT.TAG_COMPOUND)
             activeProcesses.clear()

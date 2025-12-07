@@ -1,8 +1,8 @@
 package github.kasuminova.prototypemachinery.impl.machine.component.container
 
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
-import github.kasuminova.prototypemachinery.util.Action
-import github.kasuminova.prototypemachinery.util.IOType
+import github.kasuminova.prototypemachinery.common.util.Action
+import github.kasuminova.prototypemachinery.common.util.IOType
 import net.minecraftforge.fluids.Fluid
 import net.minecraftforge.fluids.FluidStack
 

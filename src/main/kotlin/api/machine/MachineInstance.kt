@@ -9,7 +9,7 @@ public interface MachineInstance {
 
     public val type: MachineType
 
-    public val tile: TileEntity
+    public val blockEntity: TileEntity
 
     public val componentMap: MachineComponentMap
 

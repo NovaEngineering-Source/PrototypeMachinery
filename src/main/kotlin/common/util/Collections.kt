@@ -1,4 +1,4 @@
-package github.kasuminova.prototypemachinery.util
+package github.kasuminova.prototypemachinery.common.util
 
 import java.util.Collections
 

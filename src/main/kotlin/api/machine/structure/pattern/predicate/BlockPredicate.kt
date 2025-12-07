@@ -19,7 +19,7 @@ public interface BlockPredicate {
 
     public class Stated(public val state: IBlockState) : BlockPredicate {
 
-        override fun matches(context: StructureMatchContext, pos: BlockPos): Boolean = context.machine.tile.world.getBlockState(pos) === state
+        override fun matches(context: StructureMatchContext, pos: BlockPos): Boolean = context.machine.blockEntity.world.getBlockState(pos) === state
 
         override fun transform(rotation: (EnumFacing) -> EnumFacing): BlockPredicate {
             var newState = state

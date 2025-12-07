@@ -17,9 +17,9 @@ public interface MachineComponent {
 
     public interface Serializable : MachineComponent {
 
-        public fun serializeNBT(): NBTTagCompound
+        public fun writeNBT(): NBTTagCompound
 
-        public fun deserializeNBT(nbt: NBTTagCompound)
+        public fun readNBT(nbt: NBTTagCompound)
 
     }
 
