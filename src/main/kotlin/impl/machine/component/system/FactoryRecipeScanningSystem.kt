@@ -2,16 +2,16 @@ package github.kasuminova.prototypemachinery.impl.machine.component.system
 
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.system.MachineSystem
-import github.kasuminova.prototypemachinery.api.machine.component.type.RecipeProcessorComponent
+import github.kasuminova.prototypemachinery.api.machine.component.type.FactoryRecipeProcessorComponent
 import github.kasuminova.prototypemachinery.api.machine.recipe.RecipeManager
 
-public class RecipeScanningSystem(
+public class FactoryRecipeScanningSystem(
     private val recipeManager: RecipeManager
-) : MachineSystem<RecipeProcessorComponent> {
+) : MachineSystem<FactoryRecipeProcessorComponent> {
 
-    override fun onPreTick(machine: MachineInstance, component: RecipeProcessorComponent) {}
+    override fun onPreTick(machine: MachineInstance, component: FactoryRecipeProcessorComponent) {}
 
-    override fun onTick(machine: MachineInstance, component: RecipeProcessorComponent) {
+    override fun onTick(machine: MachineInstance, component: FactoryRecipeProcessorComponent) {
         if (component.activeProcesses.size >= component.maxConcurrentProcesses) return
 
         // Iterate through all registered recipes
@@ -27,6 +27,6 @@ public class RecipeScanningSystem(
         }
     }
 
-    override fun onPostTick(machine: MachineInstance, component: RecipeProcessorComponent) {}
+    override fun onPostTick(machine: MachineInstance, component: FactoryRecipeProcessorComponent) {}
 
 }

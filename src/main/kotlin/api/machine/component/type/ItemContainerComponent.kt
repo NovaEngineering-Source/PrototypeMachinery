@@ -1,18 +1,34 @@
 package github.kasuminova.prototypemachinery.api.machine.component.type
 
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
+import github.kasuminova.prototypemachinery.util.Action
+import github.kasuminova.prototypemachinery.util.IOType
 import net.minecraft.item.ItemStack
 
 public interface ItemContainerComponent : MachineComponent {
 
     public val slots: Int
 
-    public fun insertItem(slot: Int, stack: ItemStack, simulate: Boolean): ItemStack
+    public val maxStackSize: Long
 
-    public fun extractItem(slot: Int, amount: Int, simulate: Boolean): ItemStack
+    public fun isAllowedIOType(ioType: IOType): Boolean
 
-    public fun getStackInSlot(slot: Int): ItemStack
+    public fun getItem(slot: Int): ItemStack
 
-    public fun setStackInSlot(slot: Int, stack: ItemStack)
+    public fun setItem(slot: Int, item: ItemStack)
+
+    public fun insertItem(stack: ItemStack, action: Action): InsertResult
+
+    public fun extractItem(amount: Long, action: Action, predicate: (ItemStack) -> Boolean): ExtractResult
+
+    public sealed interface InsertResult {
+        public data class Success(val remaining: ItemStack) : InsertResult
+        public object Full : InsertResult
+    }
+
+    public sealed interface ExtractResult {
+        public data class Success(val extracted: ItemStack) : ExtractResult
+        public object Empty : ExtractResult
+    }
 
 }

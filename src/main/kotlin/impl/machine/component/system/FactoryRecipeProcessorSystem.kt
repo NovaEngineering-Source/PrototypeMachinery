@@ -2,16 +2,16 @@ package github.kasuminova.prototypemachinery.impl.machine.component.system
 
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.system.MachineSystem
-import github.kasuminova.prototypemachinery.api.machine.component.type.RecipeProcessorComponent
+import github.kasuminova.prototypemachinery.api.machine.component.type.FactoryRecipeProcessorComponent
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeProcess
 
-public object RecipeProcessorSystem : MachineSystem<RecipeProcessorComponent> {
+public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcessorComponent> {
 
-    override fun onPreTick(machine: MachineInstance, component: RecipeProcessorComponent) {
+    override fun onPreTick(machine: MachineInstance, component: FactoryRecipeProcessorComponent) {
         // Pre-tick logic if needed
     }
 
-    override fun onTick(machine: MachineInstance, component: RecipeProcessorComponent) {
+    override fun onTick(machine: MachineInstance, component: FactoryRecipeProcessorComponent) {
         component.tickProcesses() // Tick executors
 
         val iterator = component.activeProcesses.iterator()
@@ -52,7 +52,7 @@ public object RecipeProcessorSystem : MachineSystem<RecipeProcessorComponent> {
         }
     }
 
-    override fun onPostTick(machine: MachineInstance, component: RecipeProcessorComponent) {
+    override fun onPostTick(machine: MachineInstance, component: FactoryRecipeProcessorComponent) {
         // Post-tick logic
     }
 
@@ -80,4 +80,5 @@ public object RecipeProcessorSystem : MachineSystem<RecipeProcessorComponent> {
         }
         return true
     }
+
 }

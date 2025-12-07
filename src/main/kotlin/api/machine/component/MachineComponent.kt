@@ -11,12 +11,16 @@ public interface MachineComponent {
 
     public val provider: Any?
 
-    public fun serializeNBT(): NBTTagCompound
-
-    public fun deserializeNBT(nbt: NBTTagCompound)
-
     public fun onLoad() {}
 
     public fun onUnload() {}
+
+    public interface Serializable : MachineComponent {
+
+        public fun serializeNBT(): NBTTagCompound
+
+        public fun deserializeNBT(nbt: NBTTagCompound)
+
+    }
 
 }

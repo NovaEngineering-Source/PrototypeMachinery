@@ -11,11 +11,16 @@ public class MachineComponentMapImpl : MachineComponentMap {
 
     override val systems: MutableMap<MachineSystem<*>, MutableSet<MachineComponent>> = mutableMapOf()
 
+    private val byInstanceOfCache: MutableMap<Class<out MachineComponent>, Collection<MachineComponent>> = mutableMapOf()
+
     override fun add(component: MachineComponent) {
         components[component.type] = component
         @Suppress("UNCHECKED_CAST")
         val system = component.type.system as MachineSystem<MachineComponent>
         systems.computeIfAbsent(system) { mutableSetOf() }.add(component)
+
+        // TODO optimize cache invalidation
+        byInstanceOfCache.clear()
     }
 
     override fun remove(component: MachineComponent) {
@@ -27,11 +32,16 @@ public class MachineComponentMapImpl : MachineComponentMap {
                 systems.remove(component.type.system)
             }
         }
+
+        // TODO optimize cache invalidation
+        byInstanceOfCache.clear()
     }
 
     @Suppress("UNCHECKED_CAST")
-    override fun <C : MachineComponent> get(type: MachineComponentType<C>): C? {
-        return components[type] as? C
-    }
+    override fun <C : MachineComponent> get(type: MachineComponentType<C>): C? = components[type] as? C
+
+    @Suppress("UNCHECKED_CAST")
+    override fun <C : MachineComponent> getByInstanceOf(clazz: Class<out C>): Collection<C> =
+        byInstanceOfCache.getOrPut(clazz) { components.values.filter { clazz.isInstance(it) } } as Collection<C>
 
 }

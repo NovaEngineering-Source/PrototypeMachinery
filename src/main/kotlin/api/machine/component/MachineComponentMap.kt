@@ -14,4 +14,6 @@ public interface MachineComponentMap {
 
     public fun <C : MachineComponent> get(type: MachineComponentType<C>): C?
 
+    public fun <C : MachineComponent> getByInstanceOf(clazz: Class<out C>): Collection<C>
+
 }
