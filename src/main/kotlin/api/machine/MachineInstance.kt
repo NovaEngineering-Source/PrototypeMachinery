@@ -3,13 +3,13 @@ package github.kasuminova.prototypemachinery.api.machine
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeMap
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentMap
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeProcess
-import net.minecraft.tileentity.TileEntity
+import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 
 public interface MachineInstance {
 
     public val type: MachineType
 
-    public val blockEntity: TileEntity
+    public val blockEntity: BlockEntity
 
     public val componentMap: MachineComponentMap
 
