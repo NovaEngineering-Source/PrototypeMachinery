@@ -5,6 +5,7 @@ import org.jetbrains.gradle.ext.settings
 
 buildscript { 
     repositories {
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
         mavenCentral()
     }
     
@@ -116,6 +117,8 @@ tasks.injectTags.configure {
 }
 
 repositories {
+    maven { url = uri("https://maven.aliyun.com/repository/public") }
+    mavenCentral()
     maven {
         name = "CleanroomMC Maven"
         url = uri("https://maven.cleanroommc.com")

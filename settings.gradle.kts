@@ -1,5 +1,6 @@
 pluginManagement {
     repositories {
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
         maven {
             // RetroFuturaGradle
             name = "GTNH Maven"
@@ -9,8 +10,8 @@ pluginManagement {
                 includeGroup("com.gtnewhorizons.retrofuturagradle")
             }
         }
-        gradlePluginPortal()
         mavenCentral()
+        gradlePluginPortal()
         mavenLocal()
     }
 }

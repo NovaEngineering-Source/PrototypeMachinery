@@ -4,7 +4,7 @@ import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.machine.recipe.requirement.component.system.RecipeRequirementSystem
-import github.kasuminova.prototypemachinery.api.machine.recipe.requirement.component.system.RecipeTransaction
+import github.kasuminova.prototypemachinery.api.machine.recipe.requirement.component.system.RequirementTransaction
 import github.kasuminova.prototypemachinery.impl.machine.recipe.requirement.ItemRequirementComponent
 
 public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequirementComponent> {
@@ -24,7 +24,7 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
         machine: MachineInstance,
         component: ItemRequirementComponent,
         process: RecipeProcess
-    ): RecipeTransaction {
+    ): RequirementTransaction {
         TODO("Not yet implemented")
     }
 

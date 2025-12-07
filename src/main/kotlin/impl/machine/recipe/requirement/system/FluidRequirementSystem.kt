@@ -4,7 +4,7 @@ import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.machine.recipe.requirement.component.system.RecipeRequirementSystem
-import github.kasuminova.prototypemachinery.api.machine.recipe.requirement.component.system.RecipeTransaction
+import github.kasuminova.prototypemachinery.api.machine.recipe.requirement.component.system.RequirementTransaction
 import github.kasuminova.prototypemachinery.impl.machine.recipe.requirement.FluidRequirementComponent
 
 public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidRequirementComponent>  {
@@ -29,7 +29,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
         machine: MachineInstance,
         component: FluidRequirementComponent,
         process: RecipeProcess
-    ): RecipeTransaction {
+    ): RequirementTransaction {
         TODO("Not yet implemented")
     }
 

@@ -15,13 +15,13 @@ public interface RecipeRequirementSystem<C : RecipeRequirementComponent> {
 
     public interface Tickable<C : RecipeRequirementComponent> : RecipeRequirementSystem<C> {
 
-        public fun acquireTickTransaction(machine: MachineInstance, component: C, process: RecipeProcess): RecipeTransaction
+        public fun acquireTickTransaction(machine: MachineInstance, component: C, process: RecipeProcess): RequirementTransaction
 
     }
 
 }
 
-public interface RecipeTransaction {
+public interface RequirementTransaction {
 
     public val result: ProcessResult
 
