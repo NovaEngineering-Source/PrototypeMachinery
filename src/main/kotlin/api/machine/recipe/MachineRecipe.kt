@@ -7,6 +7,6 @@ public interface MachineRecipe {
 
     public val id: String
 
-    public val requirements: Map<RecipeRequirementType, List<RecipeRequirement>>
+    public val requirements: Map<RecipeRequirementType<*>, List<RecipeRequirement>>
 
 }
