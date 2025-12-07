@@ -1,14 +1,14 @@
 [
 {
-  "modid": "examplemod",
-  "name": "Example Mod",
-  "description": "Example placeholder mod.",
+  "modid": "prototype_machinery",
+  "name": "Prototype Machinery",
+  "description": "A powerful multiblock machinery mod to customize your machinery.",
   "version": "${version}",
   "mcversion": "${mcversion}",
   "url": "",
   "updateUrl": "",
-  "authorList": ["CleanroomMC"],
-  "credits": "Authors of this project",
+  "authorList": ["Hikari_Nova", "WI_8614_ice"],
+  "credits": "Artist by WI_8614_ice, Coder by Hikari_Nova.",
   "logoFile": "",
   "screenshots": [],
   "dependencies": []
