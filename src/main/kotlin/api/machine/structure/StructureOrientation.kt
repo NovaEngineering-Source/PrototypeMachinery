@@ -1,7 +1,12 @@
 package github.kasuminova.prototypemachinery.api.machine.structure
 
 import net.minecraft.util.EnumFacing
-import net.minecraft.util.EnumFacing.*
+import net.minecraft.util.EnumFacing.DOWN
+import net.minecraft.util.EnumFacing.EAST
+import net.minecraft.util.EnumFacing.NORTH
+import net.minecraft.util.EnumFacing.SOUTH
+import net.minecraft.util.EnumFacing.UP
+import net.minecraft.util.EnumFacing.WEST
 
 /**
  * Represents the orientation of a structure in 3D space.
@@ -58,7 +63,7 @@ public data class StructureOrientation(
     private fun rotate90(target: EnumFacing, axis: EnumFacing): EnumFacing {
         // If the target is on the rotation axis, it doesn't change.
         if (target.axis == axis.axis) return target
-        
+
         // For 90 degree rotation around an axis: Result = Target x Axis
         // Example: Rotate NORTH around UP. NORTH x UP = EAST.
         // Example: Rotate EAST around UP. EAST x UP = SOUTH.
@@ -73,6 +78,7 @@ public data class StructureOrientation(
             EAST -> SOUTH
             else -> throw IllegalArgumentException("Invalid cross product: $a x $b")
         }
+
         UP -> when (b) {
             NORTH -> WEST
             SOUTH -> EAST
@@ -80,6 +86,7 @@ public data class StructureOrientation(
             EAST -> NORTH
             else -> throw IllegalArgumentException("Invalid cross product: $a x $b")
         }
+
         NORTH -> when (b) {
             UP -> EAST
             DOWN -> WEST
@@ -87,6 +94,7 @@ public data class StructureOrientation(
             EAST -> DOWN
             else -> throw IllegalArgumentException("Invalid cross product: $a x $b")
         }
+
         SOUTH -> when (b) {
             UP -> WEST
             DOWN -> EAST
@@ -94,6 +102,7 @@ public data class StructureOrientation(
             EAST -> UP
             else -> throw IllegalArgumentException("Invalid cross product: $a x $b")
         }
+
         WEST -> when (b) {
             UP -> NORTH
             DOWN -> SOUTH
@@ -101,6 +110,7 @@ public data class StructureOrientation(
             SOUTH -> UP
             else -> throw IllegalArgumentException("Invalid cross product: $a x $b")
         }
+
         EAST -> when (b) {
             UP -> SOUTH
             DOWN -> NORTH

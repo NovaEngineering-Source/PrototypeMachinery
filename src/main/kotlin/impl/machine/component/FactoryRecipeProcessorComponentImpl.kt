@@ -42,10 +42,6 @@ public class FactoryRecipeProcessorComponentImpl(
 
     override fun writeNBT(): NBTTagCompound {
         val nbt = NBTTagCompound()
-        nbt.setInteger("MaxConcurrent", maxConcurrentProcesses)
-
-        val statusTag = NBTTagCompound()
-        nbt.setTag("Status", statusTag)
 
         val processList = NBTTagList()
         activeProcesses.forEach { process ->

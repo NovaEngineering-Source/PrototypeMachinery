@@ -22,7 +22,7 @@ public object StructureRegistryImpl : StructureRegistry {
         cache[id]?.get(orientation)?.let { return it }
 
         val structure = structures[id] ?: return null
-        
+
         // Assuming base structure is NORTH/UP
         val base = StructureOrientation(EnumFacing.NORTH, EnumFacing.UP)
         val target = orientation
@@ -40,7 +40,7 @@ public object StructureRegistryImpl : StructureRegistry {
         }
 
         val transformed = structure.transform(rotation)
-        
+
         // Cache the result
         cache.computeIfAbsent(id) { HashMap() }[orientation] = transformed
 

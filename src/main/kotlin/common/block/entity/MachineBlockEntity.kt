@@ -1,11 +1,13 @@
 package github.kasuminova.prototypemachinery.common.block.entity
 
 import github.kasuminova.prototypemachinery.PrototypeMachinery
+import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.api.machine.MachineType
-import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 import github.kasuminova.prototypemachinery.common.util.warnWithBlockEntity
+import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.util.ITickable
+import net.minecraft.util.ResourceLocation
 
 public class MachineBlockEntity() : BlockEntity(), ITickable {
 
@@ -44,7 +46,11 @@ public class MachineBlockEntity() : BlockEntity(), ITickable {
     override fun readFromNBT(compound: NBTTagCompound) {
         super.readFromNBT(compound)
         val machineId = compound.getString("MachineID")
-        val machineType: MachineType = TODO("Get MachineType by ID: $machineId")
+        val machineType: MachineType? = PrototypeMachineryAPI.getMachineType(ResourceLocation(machineId))
+        if (machineType == null) {
+            PrototypeMachinery.logger.error("Failed to load machine with ID: $machineId (not registered)")
+            return
+        }
         initialize(machineType)
         val machineNBT = compound.getCompoundTag("MachineData")
         machine.readNBT(machineNBT)

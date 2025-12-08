@@ -7,7 +7,7 @@ import github.kasuminova.prototypemachinery.api.machine.recipe.requirement.compo
 import github.kasuminova.prototypemachinery.api.machine.recipe.requirement.component.system.RequirementTransaction
 import github.kasuminova.prototypemachinery.impl.machine.recipe.requirement.FluidRequirementComponent
 
-public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidRequirementComponent>  {
+public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidRequirementComponent> {
 
     override fun check(
         machine: MachineInstance,

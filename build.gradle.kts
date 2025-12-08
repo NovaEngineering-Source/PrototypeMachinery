@@ -137,6 +137,9 @@ repositories {
             includeGroup("curse.maven")
         }
     }
+    maven {
+        url = uri("https://maven.blamejared.com/")
+    }
     mavenCentral()
     mavenLocal() // Must be last for caching to work
 }
@@ -150,9 +153,8 @@ dependencies {
         implementation("com.cleanroommc:assetmover:2.5")
     }
 
-    // Example of deobfuscating a dependency
-    // implementation rfg.deobf("curse.maven:had-enough-items-557549:4543375")
     implementation(rfg.deobf("curse.maven:modularui-624243:7102461-sources-7102463"))
+    implementation("CraftTweaker2:CraftTweaker2-MC1120-Main:1.12-4.+")
 
     if (use_mixins.toBoolean()) {
         // Change your mixin refmap name here:
@@ -185,7 +187,6 @@ if (use_access_transformer.toBoolean()) {
     }
 }
 
-@Suppress("UnstableApiUsage")
 tasks.withType<ProcessResources> {
     // This will ensure that this task is redone when the versions change
     inputs.property("version", mod_version)

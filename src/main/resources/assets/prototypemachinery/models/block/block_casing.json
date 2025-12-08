@@ -1,0 +1,12 @@
+{
+  "parent": "block/cube",
+  "textures": {
+    "particle": "prototypemachinery:blocks/block_casing_plain_top",
+    "down": "prototypemachinery:blocks/block_casing_plain_down",
+    "up": "prototypemachinery:blocks/block_casing_plain_top",
+    "north": "prototypemachinery:blocks/block_casing_plain_side",
+    "east": "prototypemachinery:blocks/block_casing_plain_side",
+    "south": "prototypemachinery:blocks/block_casing_plain_side",
+    "west": "prototypemachinery:blocks/block_casing_plain_side"
+  }
+}

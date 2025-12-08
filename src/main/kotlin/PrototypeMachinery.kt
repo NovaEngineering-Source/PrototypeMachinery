@@ -1,6 +1,7 @@
 package github.kasuminova.prototypemachinery
 
 import github.kasuminova.prototypemachinery.common.CommonProxy
+import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
 import net.minecraftforge.fml.common.Mod
 import net.minecraftforge.fml.common.SidedProxy
 import net.minecraftforge.fml.common.event.FMLInitializationEvent
@@ -25,7 +26,7 @@ public object PrototypeMachinery {
     public const val MOD_NAME: String = Tags.MOD_NAME
     public const val VERSION: String = Tags.VERSION
 
-    public lateinit var logger: Logger
+    internal lateinit var logger: Logger
 
     @JvmStatic
     @SidedProxy(
@@ -38,6 +39,9 @@ public object PrototypeMachinery {
     internal fun preInit(event: FMLPreInitializationEvent) {
         logger = event.modLog
         event.modMetadata.version = Tags.VERSION
+
+        // Register machine types from queue
+        MachineTypeRegisterer.processQueue(event)
 
         proxy.preInit()
     }
