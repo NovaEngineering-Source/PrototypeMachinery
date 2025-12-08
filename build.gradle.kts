@@ -122,7 +122,6 @@ tasks.injectTags.configure {
 
 repositories {
     maven { url = uri("https://maven.aliyun.com/repository/public") }
-    mavenCentral()
     maven {
         name = "CleanroomMC Maven"
         url = uri("https://maven.cleanroommc.com")
@@ -138,6 +137,7 @@ repositories {
             includeGroup("curse.maven")
         }
     }
+    mavenCentral()
     mavenLocal() // Must be last for caching to work
 }
 
@@ -149,17 +149,15 @@ dependencies {
     if (use_assetmover.toBoolean()) {
         implementation("com.cleanroommc:assetmover:2.5")
     }
-    if (use_mixins.toBoolean()) {
-        implementation("zone.rong:mixinbooter:7.1")
-    }
 
     // Example of deobfuscating a dependency
     // implementation rfg.deobf("curse.maven:had-enough-items-557549:4543375")
+    implementation(rfg.deobf("curse.maven:modularui-624243:7102461-sources-7102463"))
 
     if (use_mixins.toBoolean()) {
         // Change your mixin refmap name here:
         val mixin =
-            modUtils.enableMixins("org.spongepowered:mixin:0.8.3", "mixins.${archives_base_name}.refmap.json") as String
+            modUtils.enableMixins("zone.rong:mixinbooter:10.7", "mixins.${mod_id}.refmap.json") as String
         api(mixin) {
             isTransitive = true
         }
