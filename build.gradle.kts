@@ -18,6 +18,7 @@ plugins {
     id("java")
     id("java-library")
     kotlin("jvm") version libs.versions.kotlinVersion
+    kotlin("plugin.serialization") version libs.versions.kotlinVersion
     id("maven-publish")
     id("org.jetbrains.gradle.plugin.idea-ext") version "1.1.7"
     id("eclipse")
@@ -148,6 +149,9 @@ dependencies {
     implementation("io.github.chaosunity.forgelin:Forgelin-Continuous:${forgelin_continuous_version}") {
         exclude("net.minecraftforge")
     }
+    
+    // Kotlin Serialization for JSON support (matching Kotlin 2.1.0)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     
     if (use_assetmover.toBoolean()) {
         implementation("com.cleanroommc:assetmover:2.5")

@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery
 
 import github.kasuminova.prototypemachinery.common.CommonProxy
 import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
+import github.kasuminova.prototypemachinery.common.structure.loader.StructureLoader
 import net.minecraftforge.fml.common.Mod
 import net.minecraftforge.fml.common.SidedProxy
 import net.minecraftforge.fml.common.event.FMLInitializationEvent
@@ -40,6 +41,10 @@ public object PrototypeMachinery {
         logger = event.modLog
         event.modMetadata.version = Tags.VERSION
 
+        // Load structure JSON data (without resolving blocks)
+        // 加载结构 JSON 数据（不解析方块）
+        StructureLoader.loadStructureData(event)
+
         // Register machine types from queue
         MachineTypeRegisterer.processQueue(event)
 
@@ -53,6 +58,10 @@ public object PrototypeMachinery {
 
     @Mod.EventHandler
     internal fun postInit(event: FMLPostInitializationEvent) {
+        // Process structures and resolve block references
+        // 处理结构并解析方块引用
+        StructureLoader.processStructures(event)
+
         proxy.postInit()
     }
 

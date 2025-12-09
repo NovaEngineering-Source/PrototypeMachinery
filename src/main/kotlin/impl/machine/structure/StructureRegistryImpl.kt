@@ -4,15 +4,27 @@ import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructu
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureRegistry
 import net.minecraft.util.EnumFacing
+import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Default implementation of StructureRegistry.
+ * 结构注册表的默认实现。
+ *
+ * Thread-safe with concurrent collections.
+ * 使用并发集合实现线程安全。
+ */
 public object StructureRegistryImpl : StructureRegistry {
 
-    private val structures = mutableMapOf<String, MachineStructure>()
-    private val cache = mutableMapOf<String, MutableMap<StructureOrientation, MachineStructure>>()
+    private val structures: MutableMap<String, MachineStructure> = ConcurrentHashMap()
+    private val cache: MutableMap<String, MutableMap<StructureOrientation, MachineStructure>> = ConcurrentHashMap()
 
     override fun register(structure: MachineStructure) {
-        structures[structure.id] = structure
-        cache.remove(structure.id)
+        val id = structure.id
+        if (structures.containsKey(id)) {
+            throw IllegalArgumentException("Structure with ID $id is already registered")
+        }
+        structures[id] = structure
+        cache.remove(id)
     }
 
     override fun get(id: String): MachineStructure? = structures[id]
@@ -42,9 +54,13 @@ public object StructureRegistryImpl : StructureRegistry {
         val transformed = structure.transform(rotation)
 
         // Cache the result
-        cache.computeIfAbsent(id) { HashMap() }[orientation] = transformed
+        cache.computeIfAbsent(id) { ConcurrentHashMap() }[orientation] = transformed
 
         return transformed
     }
+
+    override fun getAll(): Collection<MachineStructure> = structures.values.toList()
+
+    override fun contains(id: String): Boolean = structures.containsKey(id)
 
 }
