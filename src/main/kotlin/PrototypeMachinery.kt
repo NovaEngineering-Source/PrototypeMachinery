@@ -1,13 +1,17 @@
 package github.kasuminova.prototypemachinery
 
 import github.kasuminova.prototypemachinery.common.CommonProxy
+import github.kasuminova.prototypemachinery.integration.crafttweaker.CraftTweakerExamples
 import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
 import github.kasuminova.prototypemachinery.common.structure.loader.StructureLoader
+import github.kasuminova.prototypemachinery.impl.scheduler.TaskSchedulerImpl
+import net.minecraftforge.common.MinecraftForge
 import net.minecraftforge.fml.common.Mod
 import net.minecraftforge.fml.common.SidedProxy
 import net.minecraftforge.fml.common.event.FMLInitializationEvent
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent
+import net.minecraftforge.fml.common.event.FMLServerStoppingEvent
 import org.apache.logging.log4j.Logger
 
 @Mod(
@@ -41,9 +45,17 @@ public object PrototypeMachinery {
         logger = event.modLog
         event.modMetadata.version = Tags.VERSION
 
+        // Register scheduler to event bus
+        // 注册调度器到事件总线
+        MinecraftForge.EVENT_BUS.register(TaskSchedulerImpl)
+
         // Load structure JSON data (without resolving blocks)
         // 加载结构 JSON 数据（不解析方块）
         StructureLoader.loadStructureData(event)
+
+        // Copy CraftTweaker example scripts if CraftTweaker is loaded
+        // 如果 CraftTweaker 已加载，则复制示例脚本
+        CraftTweakerExamples.initialize(event)
 
         // Register machine types from queue
         MachineTypeRegisterer.processQueue(event)
@@ -63,6 +75,13 @@ public object PrototypeMachinery {
         StructureLoader.processStructures(event)
 
         proxy.postInit()
+    }
+
+    @Mod.EventHandler
+    internal fun serverStopping(event: FMLServerStoppingEvent) {
+        // Shutdown scheduler and cleanup resources
+        // 关闭调度器并清理资源
+        TaskSchedulerImpl.shutdown()
     }
 
 }

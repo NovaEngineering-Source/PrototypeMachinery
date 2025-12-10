@@ -7,6 +7,8 @@ import github.kasuminova.prototypemachinery.api.machine.recipe.process.component
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.component.RecipeProcessComponentType
 import net.minecraft.nbt.NBTTagCompound
 
+import github.kasuminova.prototypemachinery.api.ecs.TopologicalComponentMap
+
 /**
  * # RecipeProcess - Runtime Recipe Execution
  * # RecipeProcess - 运行时配方执行实例
@@ -68,7 +70,7 @@ public interface RecipeProcess {
      * Components attached to this process, indexed by component type.
      * 附加到此进程的组件，按组件类型索引。
      */
-    public val components: Map<RecipeProcessComponentType<*>, RecipeProcessComponent>
+    public val components: TopologicalComponentMap<RecipeProcessComponentType<*>, RecipeProcessComponent>
 
     /**
      * Convenience lookup for a specific process component by type.

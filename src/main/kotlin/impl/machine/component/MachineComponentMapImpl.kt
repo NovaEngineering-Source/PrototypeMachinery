@@ -4,44 +4,125 @@ import github.kasuminova.prototypemachinery.api.machine.component.MachineCompone
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentMap
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentType
 import github.kasuminova.prototypemachinery.api.machine.component.system.MachineSystem
+import github.kasuminova.prototypemachinery.impl.ecs.TopologicalComponentMapImpl
+import java.util.IdentityHashMap
 
-public class MachineComponentMapImpl : MachineComponentMap {
+public class MachineComponentMapImpl : TopologicalComponentMapImpl<MachineComponentType<*>, MachineComponent>(), MachineComponentMap {
 
-    override val components: MutableMap<MachineComponentType<*>, MachineComponent> = mutableMapOf()
+    private val _components: MutableMap<MachineComponentType<*>, MachineComponent> = IdentityHashMap()
+    private val typesBySystem: MutableMap<Class<out MachineSystem<*>>, MutableSet<MachineComponentType<*>>> = IdentityHashMap()
 
-    override val systems: MutableMap<MachineSystem<*>, MutableSet<MachineComponent>> = mutableMapOf()
+    override val components: Map<MachineComponentType<*>, MachineComponent>
+        get() = _components
 
-    private val byInstanceOfCache: MutableMap<Class<out MachineComponent>, Collection<MachineComponent>> = mutableMapOf()
+    private var _cachedSystemsList: List<MachineSystem<*>>? = null
+    override val systems: List<MachineSystem<*>>
+        get() {
+            if (_cachedSystemsList == null) {
+                // Derive system order from component topological order
+                // 从组件拓扑顺序派生系统顺序
+                _cachedSystemsList = orderedComponents.map { it.key.system }.distinct()
+            }
+            return _cachedSystemsList!!
+        }
+
+    private val byInstanceOfCache: MutableMap<Class<out MachineComponent>, MutableCollection<MachineComponent>> = IdentityHashMap()
 
     override fun add(component: MachineComponent) {
-        components[component.type] = component
-        @Suppress("UNCHECKED_CAST")
-        val system = component.type.system as MachineSystem<MachineComponent>
-        systems.computeIfAbsent(system) { mutableSetOf() }.add(component)
+        val type = component.type
+        val system = type.system
+        val systemClass = system::class.java
+        
+        // Register type for system
+        typesBySystem.computeIfAbsent(systemClass) { mutableSetOf() }.add(type)
+        
+        // Calculate dependencies
+        val dependencies = HashSet<MachineComponentType<*>>()
+        dependencies.addAll(type.dependencies)
+        
+        // 1. Add dependencies based on system.runAfter
+        for (depSystemClass in system.runAfter) {
+            typesBySystem[depSystemClass]?.let { dependencies.addAll(it) }
+        }
+        
+        // Add to topological map
+        super.add(type, component, dependencies)
+        
+        _components[type] = component
+        
+        // 2. Add reverse dependencies based on system.runBefore
+        for (dependentSystemClass in system.runBefore) {
+            typesBySystem[dependentSystemClass]?.forEach { dependentType ->
+                addDependency(dependentType, type)
+            }
+        }
+        
+        // 3. Handle existing components that should depend on this new component
+        // or that this component should depend on (due to their runBefore)
+        for ((otherSystemClass, otherTypes) in typesBySystem) {
+            if (otherSystemClass == systemClass) continue
+            
+            val otherSystem = otherTypes.first().system
+            
+            // If other system runs after this system, other types depend on this type
+            if (otherSystem.runAfter.contains(systemClass)) {
+                otherTypes.forEach { otherType ->
+                    addDependency(otherType, type)
+                }
+            }
+            
+            // If other system runs before this system, this type depends on other types
+            if (otherSystem.runBefore.contains(systemClass)) {
+                otherTypes.forEach { otherType ->
+                    addDependency(type, otherType)
+                }
+            }
+        }
+        
+        // Invalidate systems cache
+        _cachedSystemsList = null
 
-        // TODO optimize cache invalidation
-        byInstanceOfCache.clear()
+        // Update cache incrementally
+        // 增量更新缓存
+        for ((clazz, collection) in byInstanceOfCache) {
+            if (clazz.isInstance(component)) {
+                collection.add(component)
+            }
+        }
     }
 
     override fun remove(component: MachineComponent) {
-        components.remove(component.type)
-        val componentSet = systems[component.type.system]
-        if (componentSet != null) {
-            componentSet.remove(component)
-            if (componentSet.isEmpty()) {
-                systems.remove(component.type.system)
+        val type = component.type
+        val systemClass = type.system::class.java
+        
+        typesBySystem[systemClass]?.remove(type)
+        if (typesBySystem[systemClass]?.isEmpty() == true) {
+            typesBySystem.remove(systemClass)
+        }
+        
+        super.remove(type)
+        
+        _components.remove(component.type)
+        
+        // Invalidate systems cache
+        _cachedSystemsList = null
+
+        // Update cache incrementally
+        // 增量更新缓存
+        for ((clazz, collection) in byInstanceOfCache) {
+            if (clazz.isInstance(component)) {
+                collection.remove(component)
             }
         }
-
-        // TODO optimize cache invalidation
-        byInstanceOfCache.clear()
     }
 
     @Suppress("UNCHECKED_CAST")
-    override fun <C : MachineComponent> get(type: MachineComponentType<C>): C? = components[type] as? C
+    override fun <C : MachineComponent> get(type: MachineComponentType<C>): C? = _components[type] as? C
 
     @Suppress("UNCHECKED_CAST")
     override fun <C : MachineComponent> getByInstanceOf(clazz: Class<out C>): Collection<C> =
-        byInstanceOfCache.getOrPut(clazz) { components.values.filter { clazz.isInstance(it) } } as Collection<C>
+        byInstanceOfCache.getOrPut(clazz) { 
+            _components.values.filter { clazz.isInstance(it) }.toMutableSet() 
+        } as Collection<C>
 
 }

@@ -4,6 +4,7 @@ import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructu
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureInstanceData
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidator
+import github.kasuminova.prototypemachinery.api.machine.structure.match.StructureMatchContext
 import github.kasuminova.prototypemachinery.api.machine.structure.pattern.StructurePattern
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.math.BlockPos
@@ -31,6 +32,46 @@ public class TemplateStructure(
             validators,
             children.map { it.transform(rotation) }
         )
+    }
+
+    override fun matches(context: StructureMatchContext, origin: BlockPos): Boolean {
+        context.enterStructure(this)
+        var matched = false
+        try {
+            // Apply offset to get the actual starting position
+            // 应用偏移以获取实际的起始位置
+            val offsetOrigin = origin.add(offset)
+
+            // Check if pattern matches
+            // 检查模式是否匹配
+            for ((relativePos, predicate) in pattern.blocks) {
+                val actualPos = offsetOrigin.add(relativePos)
+                if (!predicate.matches(context, actualPos)) {
+                    return false
+                }
+            }
+
+            // Run validators
+            // 运行验证器
+            for (validator in validators) {
+                if (!validator.validate(context, offsetOrigin)) {
+                    return false
+                }
+            }
+
+            // Check children structures
+            // 检查子结构
+            for (child in children) {
+                if (!child.matches(context, offsetOrigin)) {
+                    return false
+                }
+            }
+
+            matched = true
+            return true
+        } finally {
+            context.exitStructure(matched)
+        }
     }
 
 }

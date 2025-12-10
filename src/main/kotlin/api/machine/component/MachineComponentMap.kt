@@ -1,5 +1,6 @@
 package github.kasuminova.prototypemachinery.api.machine.component
 
+import github.kasuminova.prototypemachinery.api.ecs.TopologicalComponentMap
 import github.kasuminova.prototypemachinery.api.machine.component.system.MachineSystem
 
 /**
@@ -60,7 +61,7 @@ import github.kasuminova.prototypemachinery.api.machine.component.system.Machine
  * @see MachineComponentType
  * @see MachineSystem
  */
-public interface MachineComponentMap {
+public interface MachineComponentMap : TopologicalComponentMap<MachineComponentType<*>, MachineComponent> {
 
     /**
      * Map of all components indexed by their type.
@@ -72,13 +73,13 @@ public interface MachineComponentMap {
     public val components: Map<MachineComponentType<*>, MachineComponent>
 
     /**
-     * Map of components grouped by their processing system.
-     * Used for efficient tick iteration.
+     * List of systems that process components in this map.
+     * Ordered by topological dependency of their components.
      * 
-     * 按处理系统分组的组件映射。
-     * 用于高效的 tick 迭代。
+     * 处理此映射中组件的系统列表。
+     * 按其组件的拓扑依赖关系排序。
      */
-    public val systems: Map<MachineSystem<*>, MutableSet<MachineComponent>>
+    public val systems: List<MachineSystem<*>>
 
     /**
      * Add a component to the map.

@@ -9,7 +9,7 @@ public class SimpleStructurePattern(
     override val blocks: Map<BlockPos, BlockPredicate>
 ) : StructurePattern {
     override fun transform(rotation: (EnumFacing) -> EnumFacing): StructurePattern {
-        val newBlocks = HashMap<BlockPos, BlockPredicate>()
+        val newBlocks = mutableMapOf<BlockPos, BlockPredicate>()
         for ((pos, predicate) in blocks) {
             val newPos = rotatePos(pos, rotation)
             val newPredicate = predicate.transform(rotation)

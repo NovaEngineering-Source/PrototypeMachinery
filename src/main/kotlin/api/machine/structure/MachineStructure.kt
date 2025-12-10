@@ -1,6 +1,8 @@
 package github.kasuminova.prototypemachinery.api.machine.structure
 
 import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidator
+import github.kasuminova.prototypemachinery.api.machine.structure.match.StructureMatchContext
+import github.kasuminova.prototypemachinery.api.machine.structure.pattern.StructurePattern
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.math.BlockPos
 
@@ -23,7 +25,7 @@ import net.minecraft.util.math.BlockPos
  * ## Related Classes / 相关类
  * - [StructureOrientation]
  * - [StructureValidator]
- * - [github.kasuminova.prototypemachinery.api.machine.structure.pattern.StructurePattern]
+ * - [StructurePattern]
  * - [StructureInstanceData]
  */
 public interface MachineStructure {
@@ -48,5 +50,15 @@ public interface MachineStructure {
 
     /** Transform structure by rotating directions / 通过旋转方向来变换结构 */
     public fun transform(rotation: (EnumFacing) -> EnumFacing): MachineStructure
+
+    /**
+     * Check if this structure matches at the given position in the world.
+     * 检查此结构是否在世界中的给定位置匹配。
+     *
+     * @param context The structure matching context / 结构匹配上下文
+     * @param origin The origin position (controller position) / 原点位置（控制器位置）
+     * @return true if the structure matches, false otherwise / 如果结构匹配则返回 true，否则返回 false
+     */
+    public fun matches(context: StructureMatchContext, origin: BlockPos): Boolean
 
 }

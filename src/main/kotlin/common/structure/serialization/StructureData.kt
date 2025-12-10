@@ -39,5 +39,6 @@ public data class StructureData(
     val children: List<String> = emptyList(),    // Child structure IDs (references)
     // Slice-specific fields
     val minCount: Int? = null,     // Minimum slice count (for slice type)
-    val maxCount: Int? = null      // Maximum slice count (for slice type)
+    val maxCount: Int? = null,     // Maximum slice count (for slice type)
+    val sliceOffset: BlockPosData? = null  // Offset applied per slice iteration (for slice type)
 )

@@ -31,14 +31,34 @@ public class ZenMachineTypeBuilder(
     }
 
     /**
-     * Provide structure definition used for validation/placement.
-     * 设置结构定义，用于校验/放置。
+     * Provide structure definition used for validation/placement (direct reference).
+     * 设置结构定义，用于校验/放置（直接引用）。
      *
+     * @param structure The structure instance to use
      * @return This builder for chaining / 链式返回
      */
     @ZenMethod
     public fun structure(structure: MachineStructure): ZenMachineTypeBuilder {
         builder.structure(structure)
+        return this
+    }
+
+    /**
+     * Provide structure definition by ID (lazy reference).
+     * 通过 ID 设置结构定义（延迟引用）。
+     * 
+     * This variant uses lazy loading to avoid loading order issues.
+     * The structure will be resolved from the registry when the machine type is first accessed.
+     * 
+     * 此变体使用延迟加载以避免加载顺序问题。
+     * 结构将在首次访问机器类型时从注册表解析。
+     *
+     * @param structureId The ID of the structure registered in the structure registry
+     * @return This builder for chaining / 链式返回
+     */
+    @ZenMethod
+    public fun structure(structureId: String): ZenMachineTypeBuilder {
+        builder.structure(structureId)
         return this
     }
 

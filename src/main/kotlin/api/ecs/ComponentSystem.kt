@@ -1,4 +1,4 @@
-package github.kasuminova.prototypemachinery.api.system
+package github.kasuminova.prototypemachinery.api.ecs
 
 /**
  * Generic ECS-style system with three-phase ticking.

@@ -11,6 +11,7 @@ import github.kasuminova.prototypemachinery.impl.machine.structure.SliceStructur
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
 import github.kasuminova.prototypemachinery.impl.machine.structure.TemplateStructure
 import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.SimpleStructurePattern
+import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.StatedBlockPredicate
 import kotlinx.serialization.json.Json
 import net.minecraft.block.Block
 import net.minecraft.init.Blocks
@@ -70,7 +71,6 @@ public object StructureLoader {
         if (!structuresDir.exists()) {
             structuresDir.mkdirs()
             event.modLog.info("Created structures directory at: ${structuresDir.absolutePath}")
-            return
         }
 
         val jsonFiles = structuresDir.listFiles { file ->
@@ -79,6 +79,8 @@ public object StructureLoader {
 
         if (jsonFiles.isEmpty()) {
             event.modLog.info("No structure JSON files found in: ${structuresDir.absolutePath}")
+            event.modLog.info("Copying example structures from resources...")
+            copyExampleStructures(structuresDir, event)
             return
         }
 
@@ -237,6 +239,10 @@ public object StructureLoader {
                 val maxCount = data.maxCount
                     ?: throw IllegalArgumentException("Slice structure '${data.id}' must have 'maxCount' field")
                 
+                val sliceOffset = data.sliceOffset?.let { 
+                    BlockPos(it.x, it.y, it.z) 
+                } ?: BlockPos(0, 1, 0) // Default to upward offset
+                
                 SliceStructure(
                     id = data.id,
                     orientation = DEFAULT_ORIENTATION,
@@ -244,6 +250,7 @@ public object StructureLoader {
                     pattern = pattern,
                     minCount = minCount,
                     maxCount = maxCount,
+                    sliceOffset = sliceOffset,
                     validators = emptyList(),
                     children = children
                 )
@@ -268,16 +275,64 @@ public object StructureLoader {
         for (element in elements) {
             val pos = BlockPos(element.pos.x, element.pos.y, element.pos.z)
             val blockId = ResourceLocation(element.blockId)
-            val block = Block.REGISTRY.getObject(blockId) ?: Blocks.AIR
+            val block = Block.REGISTRY.getObject(blockId)
 
             @Suppress("DEPRECATION")
             val blockState = block.getStateFromMeta(element.meta)
-            val predicate = BlockPredicate.Stated(blockState)
+            val predicate = StatedBlockPredicate(blockState)
 
             blocks[pos] = predicate
         }
 
         return SimpleStructurePattern(blocks)
+    }
+
+    /**
+     * Copy example structure files from resources to config directory.
+     * 从资源文件复制示例结构文件到配置目录。
+     */
+    private fun copyExampleStructures(targetDir: File, event: FMLPreInitializationEvent) {
+        val exampleFiles = listOf(
+            "simple_machine.json",
+            "slice_machine.json",
+            "complex_machine.json",
+            "child_structure.json",
+            "parent_with_child.json",
+            "README.md"
+        )
+
+        val examplesDir = File(targetDir, "examples")
+        if (!examplesDir.exists()) {
+            examplesDir.mkdirs()
+        }
+
+        var copiedCount = 0
+        for (fileName in exampleFiles) {
+            try {
+                val resourcePath = "/assets/prototypemachinery/structures/examples/$fileName"
+                val inputStream = StructureLoader::class.java.getResourceAsStream(resourcePath)
+                
+                if (inputStream != null) {
+                    val targetFile = File(examplesDir, fileName)
+                    inputStream.use { input ->
+                        targetFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    copiedCount++
+                    event.modLog.info("Copied example structure: $fileName")
+                } else {
+                    event.modLog.warn("Example structure not found in resources: $fileName")
+                }
+            } catch (e: Exception) {
+                event.modLog.error("Failed to copy example structure: $fileName", e)
+            }
+        }
+
+        if (copiedCount > 0) {
+            event.modLog.info("Copied $copiedCount example structure(s) to: ${examplesDir.absolutePath}")
+            event.modLog.info("You can use these as templates for your own structures")
+        }
     }
 
 }

@@ -4,7 +4,7 @@ import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.api.machine.event.MachineEvent
 import github.kasuminova.prototypemachinery.api.machine.event.MachineTickEvent
-import github.kasuminova.prototypemachinery.api.system.ComponentSystem
+import github.kasuminova.prototypemachinery.api.ecs.ComponentSystem
 
 /**
  * # MachineSystem - Component Processing System (ECS System)
@@ -127,5 +127,23 @@ public interface MachineSystem<C : MachineComponent> : ComponentSystem<MachineIn
      * @param event The event being dispatched / 正在分发的事件
      */
     public fun onEvent(machine: MachineInstance, component: C, event: MachineEvent) {}
+
+    /**
+     * Systems that must run before this system.
+     * This system depends on them.
+     *
+     * 必须在此系统之前运行的系统。
+     * 此系统依赖于它们。
+     */
+    public val runAfter: Set<Class<out MachineSystem<*>>> get() = emptySet()
+
+    /**
+     * Systems that must run after this system.
+     * They depend on this system.
+     *
+     * 必须在此系统之后运行的系统。
+     * 它们依赖于此系统。
+     */
+    public val runBefore: Set<Class<out MachineSystem<*>>> get() = emptySet()
 
 }

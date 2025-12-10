@@ -9,6 +9,7 @@ import net.minecraft.block.SoundType
 import net.minecraft.block.material.Material
 import net.minecraft.block.properties.PropertyBool
 import net.minecraft.block.properties.PropertyEnum
+import net.minecraft.block.state.BlockStateContainer
 import net.minecraft.block.state.IBlockState
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.util.BlockRenderLayer
@@ -18,6 +19,7 @@ import net.minecraft.util.EnumHand
 import net.minecraft.util.ResourceLocation
 import net.minecraft.util.Rotation
 import net.minecraft.util.math.BlockPos
+import net.minecraft.world.IBlockAccess
 import net.minecraft.world.World
 import net.minecraftforge.fml.relauncher.Side
 import net.minecraftforge.fml.relauncher.SideOnly
@@ -50,10 +52,38 @@ public open class MachineBlock(
             machineType.id.namespace,
             machineType.id.path + "_controller"
         )
+
+        translationKey = "prototypemachinery.machine.${machineType.id.path}_controller"
     }
+
+    // region BlockStates
 
     @Nonnull
     override fun withRotation(state: IBlockState, rot: Rotation): IBlockState = state.withProperty(FACING, rot.rotate(state.getValue(FACING)))
+
+    override fun createBlockState(): BlockStateContainer = BlockStateContainer(this, FACING, FORMED)
+
+    override fun getStateFromMeta(meta: Int): IBlockState {
+        val facing = EnumFacing.HORIZONTALS[meta and 3]
+        return defaultState.withProperty(FACING, facing)
+    }
+
+    override fun getMetaFromState(state: IBlockState): Int {
+        val facing = state.getValue(FACING)
+        return facing.horizontalIndex
+    }
+
+    override fun getActualState(state: IBlockState, worldIn: IBlockAccess, pos: BlockPos): IBlockState {
+        val tileEntity = worldIn.getTileEntity(pos)
+        val formed = if (tileEntity is MachineBlockEntity) {
+            tileEntity.machine.isFormed()
+        } else {
+            false
+        }
+        return state.withProperty(FORMED, formed)
+    }
+
+    // endregion
 
     // region GUI
 

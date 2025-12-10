@@ -2,7 +2,7 @@ package github.kasuminova.prototypemachinery.api.machine.recipe.process.componen
 
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.component.RecipeProcessComponent
-import github.kasuminova.prototypemachinery.api.system.ComponentSystem
+import github.kasuminova.prototypemachinery.api.ecs.ComponentSystem
 
 /**
  * System that processes RecipeProcessComponents each tick (pre/tick/post).

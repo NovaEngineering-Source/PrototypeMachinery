@@ -79,6 +79,15 @@ public interface MachineComponentType<C : MachineComponent> {
     public val system: MachineSystem<C>
 
     /**
+     * The dependencies of this component type.
+     * Used for topological sorting of components and systems.
+     *
+     * 此组件类型的依赖项。
+     * 用于组件和系统的拓扑排序。
+     */
+    public val dependencies: Set<MachineComponentType<*>> get() = emptySet()
+
+    /**
      * Factory method to create a new component instance.
      * Called during machine initialization.
      * 

@@ -1,0 +1,49 @@
+{
+    "id": "example_simple_machine",
+    "type": "template",
+    "offset": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+    },
+    "pattern": [
+        {
+            "pos": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+            },
+            "blockId": "minecraft:iron_block",
+            "meta": 0
+        },
+        {
+            "pos": {
+                "x": 1,
+                "y": 0,
+                "z": 0
+            },
+            "blockId": "minecraft:gold_block",
+            "meta": 0
+        },
+        {
+            "pos": {
+                "x": 0,
+                "y": 1,
+                "z": 0
+            },
+            "blockId": "minecraft:diamond_block",
+            "meta": 0
+        },
+        {
+            "pos": {
+                "x": 1,
+                "y": 1,
+                "z": 0
+            },
+            "blockId": "minecraft:emerald_block",
+            "meta": 0
+        }
+    ],
+    "validators": [],
+    "children": []
+}

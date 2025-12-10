@@ -107,4 +107,12 @@ public interface MachineInstance {
      */
     public val attributeMap: MachineAttributeMap
 
+    /**
+     * Check if the machine structure is fully formed.
+     * 检查机械结构是否已完全形成。
+     * 
+     * @return true if the structure is valid and formed, false otherwise
+     */
+    public fun isFormed(): Boolean
+
 }

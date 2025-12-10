@@ -1,5 +1,6 @@
 package github.kasuminova.prototypemachinery.impl.machine.recipe.process
 
+import github.kasuminova.prototypemachinery.api.ecs.TopologicalComponentMap
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeInstance
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeMap
@@ -9,6 +10,7 @@ import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipePro
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeProcessStatus
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.component.RecipeProcessComponent
 import github.kasuminova.prototypemachinery.api.machine.recipe.process.component.RecipeProcessComponentType
+import github.kasuminova.prototypemachinery.impl.ecs.TopologicalComponentMapImpl
 import net.minecraft.nbt.NBTTagCompound
 
 public class RecipeProcessImpl(
@@ -26,7 +28,7 @@ public class RecipeProcessImpl(
         isError = false
     )
 
-    override val components: MutableMap<RecipeProcessComponentType<*>, RecipeProcessComponent> = mutableMapOf()
+    override val components: TopologicalComponentMap<RecipeProcessComponentType<*>, RecipeProcessComponent> = TopologicalComponentMapImpl()
 
     override fun serializeNBT(): NBTTagCompound {
         val nbt = NBTTagCompound()
@@ -35,7 +37,14 @@ public class RecipeProcessImpl(
             setString("Message", status.message)
             setBoolean("IsError", status.isError)
         })
-        // Component serialization would go here
+        
+        val componentsTag = NBTTagCompound()
+        components.orderedComponents.forEach { node ->
+            val component = node.component
+            componentsTag.setTag(component.type.id.toString(), component.serializeNBT())
+        }
+        nbt.setTag("Components", componentsTag)
+        
         return nbt
     }
 
@@ -48,6 +57,16 @@ public class RecipeProcessImpl(
                 isError = statusNbt.getBoolean("IsError")
             )
         }
-        // Component deserialization would go here
+        
+        if (nbt.hasKey("Components")) {
+            val componentsTag = nbt.getCompoundTag("Components")
+            components.orderedComponents.forEach { node ->
+                val component = node.component
+                val key = component.type.id.toString()
+                if (componentsTag.hasKey(key)) {
+                    component.deserializeNBT(componentsTag.getCompoundTag(key))
+                }
+            }
+        }
     }
 }

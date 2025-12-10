@@ -24,6 +24,7 @@ plugins {
     id("eclipse")
     id("com.gtnewhorizons.retrofuturagradle") version "1.3.27"
     id("com.matthewprenger.cursegradle") version "1.4.0"
+    id("me.champeau.jmh") version "0.7.2"
 }
 
 @Suppress("PropertyName")
@@ -149,16 +150,22 @@ dependencies {
     implementation("io.github.chaosunity.forgelin:Forgelin-Continuous:${forgelin_continuous_version}") {
         exclude("net.minecraftforge")
     }
-    
+
     // Kotlin Serialization for JSON support (matching Kotlin 2.1.0)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-    
+
     if (use_assetmover.toBoolean()) {
         implementation("com.cleanroommc:assetmover:2.5")
     }
 
     implementation(rfg.deobf("curse.maven:modularui-624243:7102461-sources-7102463"))
+    implementation(rfg.deobf("curse.maven:had-enough-items-557549:7282920"))
     implementation("CraftTweaker2:CraftTweaker2-MC1120-Main:1.12-4.+")
+
+    // linux only
+    if (System.getProperty("os.name").lowercase().contains("linux")) {
+        runtimeOnly(rfg.deobf("curse.maven:kokoalinux-357211:2854454"))
+    }
 
     if (use_mixins.toBoolean()) {
         // Change your mixin refmap name here:
@@ -174,6 +181,14 @@ dependencies {
             isTransitive = false
         }
     }
+
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
+    testImplementation(kotlin("test"))
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 kotlin {
@@ -267,3 +282,11 @@ idea {
 tasks.named("processIdeaSettings").configure {
     dependsOn("injectTags")
 }
+
+tasks.test {
+    testLogging {
+        events("passed", "skipped", "failed", "standardOut", "standardError")
+        showStandardStreams = true
+    }
+}
+
