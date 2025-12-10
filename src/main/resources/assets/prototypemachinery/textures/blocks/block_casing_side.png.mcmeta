@@ -1,0 +1,17 @@
+{
+  "ctm": {
+    "ctm_version": 1,
+    "type": "CTM",
+    "layer": "SOLID",
+    "textures": [
+      "contenttweaker:blocks/block_casing_side-ctm"
+    ],
+    "extra": {
+      "connect_to": [
+        {
+          "block": "contenttweaker:block_casing"
+        }
+      ]
+    }
+  }
+}

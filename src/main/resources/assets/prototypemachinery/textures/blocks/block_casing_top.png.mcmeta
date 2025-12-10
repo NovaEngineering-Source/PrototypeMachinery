@@ -1,0 +1,17 @@
+{
+  "ctm": {
+    "ctm_version": 1,
+    "type": "CTM",
+    "layer": "SOLID",
+    "textures": [
+      "prototypemachinery:blocks/block_casing_top-ctm"
+    ],
+    "extra": {
+      "connect_to": [
+        {
+          "block": "prototypemachinery:block_casing"
+        }
+      ]
+    }
+  }
+}
