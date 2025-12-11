@@ -5,10 +5,10 @@ import github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachin
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentType
 import github.kasuminova.prototypemachinery.api.machine.component.type.FactoryRecipeProcessorComponent
-import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeExecutor
-import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeProcess
-import github.kasuminova.prototypemachinery.impl.machine.recipe.RecipeManagerImpl
-import github.kasuminova.prototypemachinery.impl.machine.recipe.process.RecipeProcessImpl
+import github.kasuminova.prototypemachinery.api.recipe.process.RecipeExecutor
+import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
+import github.kasuminova.prototypemachinery.impl.recipe.RecipeManagerImpl
+import github.kasuminova.prototypemachinery.impl.recipe.process.RecipeProcessImpl
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.nbt.NBTTagList
 import net.minecraftforge.common.util.Constants
@@ -64,7 +64,7 @@ public class FactoryRecipeProcessorComponentImpl(
                 val recipe = RecipeManagerImpl.get(recipeId)
 
                 if (recipe != null) {
-                    val process = RecipeProcessImpl(owner, recipe)
+                    val process = RecipeProcessImpl(owner, recipe, seed = 0) // Seed will be overwritten in deserializeNBT
                     process.deserializeNBT(processTag)
                     activeProcesses.add(process)
                 }

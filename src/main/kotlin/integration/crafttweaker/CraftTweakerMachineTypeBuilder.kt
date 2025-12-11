@@ -16,6 +16,7 @@ public class CraftTweakerMachineTypeBuilder(
     private var name: String = id.toString()
     private var structureProvider: (() -> MachineStructure)? = null
     private val componentTypes: MutableSet<MachineComponentType<*>> = mutableSetOf()
+    private var controllerModel: ResourceLocation? = null
 
     /**
      * Set display name for scripts.
@@ -23,6 +24,15 @@ public class CraftTweakerMachineTypeBuilder(
      */
     public fun name(name: String): CraftTweakerMachineTypeBuilder {
         this.name = name
+        return this
+    }
+
+    /**
+     * Set custom model location for the controller block.
+     * 设置控制器方块的自定义模型位置。
+     */
+    public fun controllerModel(modelLocation: ResourceLocation): CraftTweakerMachineTypeBuilder {
+        this.controllerModel = modelLocation
         return this
     }
 
@@ -82,7 +92,8 @@ public class CraftTweakerMachineTypeBuilder(
             id = id,
             name = name,
             structureProvider = structureProvider,
-            componentTypes = componentTypes.toSet()
+            componentTypes = componentTypes.toSet(),
+            controllerModelLocation = controllerModel
         )
     }
 
@@ -98,7 +109,8 @@ private class CraftTweakerMachineTypeImpl(
     override val id: ResourceLocation,
     override val name: String,
     private val structureProvider: () -> MachineStructure,
-    override val componentTypes: Set<MachineComponentType<*>>
+    override val componentTypes: Set<MachineComponentType<*>>,
+    override val controllerModelLocation: ResourceLocation?
 ) : ICraftTweakerMachineType {
     
     /**

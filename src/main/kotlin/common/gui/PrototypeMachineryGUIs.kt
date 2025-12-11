@@ -12,7 +12,10 @@ public enum class PrototypeMachineryGUIs(
     public val clientGui: (Container?) -> Any?,
 ) {
 
-    CONTROLLER(TODO(), TODO());
+    CONTROLLER(
+        serverContainer = { null }, // TODO implement
+        clientGui = { null }, // TODO implement
+    );
 
     public fun open(player: EntityPlayer, world: World, pos: BlockPos) {
         player.openGui(PrototypeMachinery, this.ordinal, world, pos.x, pos.y, pos.z)

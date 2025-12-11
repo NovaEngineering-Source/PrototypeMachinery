@@ -87,4 +87,14 @@ public interface MachineType {
      */
     public val componentTypes: Set<MachineComponentType<*>>
 
+    /**
+     * Optional custom model location for the controller block.
+     * If null, the default model will be used.
+     * 
+     * 控制器方块的可选自定义模型位置。
+     * 如果为 null，将使用默认模型。
+     */
+    public val controllerModelLocation: ResourceLocation?
+        get() = null
+
 }

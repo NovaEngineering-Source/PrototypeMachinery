@@ -5,6 +5,7 @@ import github.kasuminova.prototypemachinery.api.machine.component.MachineCompone
 import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
 import github.kasuminova.prototypemachinery.integration.crafttweaker.CraftTweakerMachineTypeBuilder
 import github.kasuminova.prototypemachinery.integration.crafttweaker.ICraftTweakerMachineType
+import net.minecraft.util.ResourceLocation
 import stanhebben.zenscript.annotations.ZenClass
 import stanhebben.zenscript.annotations.ZenMethod
 
@@ -27,6 +28,19 @@ public class ZenMachineTypeBuilder(
     @ZenMethod
     public fun name(name: String): ZenMachineTypeBuilder {
         builder.name(name)
+        return this
+    }
+
+    /**
+     * Set custom model location for the controller block.
+     * 设置控制器方块的自定义模型位置。
+     *
+     * @param modelLocation The resource location string of the model (e.g. "modid:block/model_name")
+     * @return This builder for chaining / 链式返回
+     */
+    @ZenMethod
+    public fun setControllerModel(modelLocation: String): ZenMachineTypeBuilder {
+        builder.controllerModel(ResourceLocation(modelLocation))
         return this
     }
 

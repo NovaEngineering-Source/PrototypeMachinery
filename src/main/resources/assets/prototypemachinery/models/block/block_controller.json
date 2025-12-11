@@ -1,4 +1,5 @@
 {
+  "parent": "block/block",
   "credit": "Made with WI_8614_ice X:@wi8614ice QQ:1463599076",
   "textures": {
     "0": "prototypemachinery:blocks/block_controller",

@@ -13,6 +13,10 @@ import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttrib
 import github.kasuminova.prototypemachinery.impl.machine.component.MachineComponentMapImpl
 import net.minecraft.nbt.NBTTagCompound
 
+import github.kasuminova.prototypemachinery.common.network.NetworkHandler
+import github.kasuminova.prototypemachinery.common.network.PacketSyncMachine
+import net.minecraftforge.fml.common.network.NetworkRegistry
+
 public class MachineInstanceImpl(
     override val blockEntity: BlockEntity,
     override val type: MachineType
@@ -30,6 +34,28 @@ public class MachineInstanceImpl(
 
     init {
         createComponents()
+    }
+
+    /**
+     * Request a sync for a specific component.
+     * 请求同步特定组件。
+     */
+    override fun syncComponent(component: MachineComponent.Synchronizable) {
+        if (blockEntity.world.isRemote) return
+
+        val data = component.writeClientNBT(MachineComponent.Synchronizable.SyncType.INCREMENTAL) ?: return
+        val pos = blockEntity.pos
+        val packet = PacketSyncMachine(pos, component.type.id.toString(), data, false)
+        
+        // Send to all players tracking this chunk
+        val target = NetworkRegistry.TargetPoint(
+            blockEntity.world.provider.dimension,
+            pos.x.toDouble(),
+            pos.y.toDouble(),
+            pos.z.toDouble(),
+            -1.0, // sendToAllTracking does not require a specific range
+        )
+        NetworkHandler.INSTANCE.sendToAllTracking(packet, target)
     }
 
     private fun createComponents() {
@@ -75,11 +101,11 @@ public class MachineInstanceImpl(
     // ISchedulable 实现
 
     override fun onSchedule() {
-        // Execute machine logic here
-        // 在此执行机械逻辑
-        
-        // TODO: Implement actual machine logic execution
-        // TODO: 实现实际的机械逻辑执行
+        runCatching {
+            // TODO Ticking Machine Components
+        }.onFailure {
+            PrototypeMachinery.logger.warnWithBlockEntity("Error occurred when ticking machine instance.", blockEntity, it)
+        }
     }
 
     override fun getExecutionMode(): ExecutionMode {

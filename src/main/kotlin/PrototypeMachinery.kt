@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery
 
 import github.kasuminova.prototypemachinery.common.CommonProxy
 import github.kasuminova.prototypemachinery.integration.crafttweaker.CraftTweakerExamples
+import github.kasuminova.prototypemachinery.common.network.NetworkHandler
 import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
 import github.kasuminova.prototypemachinery.common.structure.loader.StructureLoader
 import github.kasuminova.prototypemachinery.impl.scheduler.TaskSchedulerImpl
@@ -44,6 +45,8 @@ public object PrototypeMachinery {
     internal fun preInit(event: FMLPreInitializationEvent) {
         logger = event.modLog
         event.modMetadata.version = Tags.VERSION
+
+        NetworkHandler.init()
 
         // Register scheduler to event bus
         // 注册调度器到事件总线

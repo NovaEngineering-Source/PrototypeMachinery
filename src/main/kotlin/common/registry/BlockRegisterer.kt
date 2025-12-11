@@ -2,6 +2,8 @@ package github.kasuminova.prototypemachinery.common.registry
 
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.common.block.MachineBlock
+import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
+import github.kasuminova.prototypemachinery.common.util.register
 import github.kasuminova.prototypemachinery.impl.machine.MachineTypeRegistryImpl
 import net.minecraft.block.Block
 import net.minecraftforge.event.RegistryEvent
@@ -53,6 +55,14 @@ internal object BlockRegisterer {
         }
 
         PrototypeMachinery.logger.info("Machine block registration completed")
+
+        registerBlockEntities()
+    }
+
+    private fun registerBlockEntities() {
+        MachineBlockEntity::class.register("machine_block_entity")
+
+        PrototypeMachinery.logger.info("Registered block entities.")
     }
 
     /**

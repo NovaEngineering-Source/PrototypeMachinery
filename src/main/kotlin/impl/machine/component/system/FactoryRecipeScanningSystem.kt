@@ -3,7 +3,7 @@ package github.kasuminova.prototypemachinery.impl.machine.component.system
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.system.MachineSystem
 import github.kasuminova.prototypemachinery.api.machine.component.type.FactoryRecipeProcessorComponent
-import github.kasuminova.prototypemachinery.api.machine.recipe.RecipeManager
+import github.kasuminova.prototypemachinery.api.recipe.RecipeManager
 
 public class FactoryRecipeScanningSystem(
     private val recipeManager: RecipeManager

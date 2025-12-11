@@ -34,4 +34,10 @@ public interface ICraftTweakerMachineType {
      */
     public val componentTypes: Set<MachineComponentType<*>>
 
+    /**
+     * Optional custom model location for the controller block.
+     * 控制器方块的可选自定义模型位置。
+     */
+    public val controllerModelLocation: ResourceLocation?
+
 }

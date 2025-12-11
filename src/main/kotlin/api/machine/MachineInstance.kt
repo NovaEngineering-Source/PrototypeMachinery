@@ -1,8 +1,9 @@
 package github.kasuminova.prototypemachinery.api.machine
 
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeMap
+import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentMap
-import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeProcess
+import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 
 /**
@@ -114,5 +115,13 @@ public interface MachineInstance {
      * @return true if the structure is valid and formed, false otherwise
      */
     public fun isFormed(): Boolean
+
+    /**
+     * Request a sync for a specific component.
+     * 请求同步特定组件。
+     *
+     * @param component The component to sync / 要同步的组件
+     */
+    public fun syncComponent(component: MachineComponent.Synchronizable)
 
 }

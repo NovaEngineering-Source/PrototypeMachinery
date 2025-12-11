@@ -113,7 +113,7 @@ public interface MachineComponentMap : TopologicalComponentMap<MachineComponentT
      * @param type The component type to lookup / 要查找的组件类型
      * @return The component, or null if not found / 组件，如果未找到则为 null
      */
-    public fun <C : MachineComponent> get(type: MachineComponentType<C>): C?
+    public operator fun <C : MachineComponent> get(type: MachineComponentType<C>): C?
 
     /**
      * Get all components that are instances of the given class.

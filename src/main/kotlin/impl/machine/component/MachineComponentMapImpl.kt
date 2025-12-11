@@ -117,7 +117,7 @@ public class MachineComponentMapImpl : TopologicalComponentMapImpl<MachineCompon
     }
 
     @Suppress("UNCHECKED_CAST")
-    override fun <C : MachineComponent> get(type: MachineComponentType<C>): C? = _components[type] as? C
+    override operator fun <C : MachineComponent> get(type: MachineComponentType<C>): C? = _components[type] as? C
 
     @Suppress("UNCHECKED_CAST")
     override fun <C : MachineComponent> getByInstanceOf(clazz: Class<out C>): Collection<C> =

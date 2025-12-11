@@ -47,14 +47,21 @@ PrototypeMachinery 是一个基于 Minecraft Forge 1.12.2 的多方块机械框�
 
 - **运行态封装**：`RecipeProcessImpl` 绑定 `owner: MachineInstance` 与 `recipe: MachineRecipe`，拥有独立的 `attributeMap`（支持基于机器/配方的倍率、效率等）。
 - **状态管理**：`RecipeProcessStatus`（progress/message/isError）提供进度与错误标记；序列化到 NBT 以便区块保存。
+- **可复现随机性**：`RecipeProcess` 持有持久化的随机种子 (`seed`)，通过 `getRandom(salt)` 提供确定性的随机数生成器，确保跨会话和回滚逻辑的一致性。
 - **组件扩展**：`RecipeProcessComponent` + `RecipeProcessComponentType` + `RecipeProcessSystem` 允许为进程本身挂载可 tick 的子组件（如进度条、缓存等）。
 
 #### 2.1.5 需求类型与系统（Requirement Layer）
 
-- **类型声明**：`RecipeRequirementType<C>` 绑定一个 `RecipeRequirementSystem<C>`，定义“这种需求由哪个系统执行”。示例实现：`ItemRequirementType`、`FluidRequirementType`、`EnergyRequirementType`（位于 `common/registry/RecipeRequirementTypes`）。
-- **需求组件**：`RecipeRequirementComponent` 代表机器侧用于满足该需求的“端口/容器”，如 `ItemRequirementComponent` 持有 `ItemContainerComponent`。
-- **处理系统**：`RecipeRequirementSystem` 提供 `check / onStart / onEnd` 钩子，`Tickable` 版本增加 `acquireTickTransaction()` 以事务方式逐 tick 消耗/产出。现有系统（物品/流体/能量）均为骨架，等待接入真实容器/网络逻辑。
-- **返回值模型**：`ProcessResult` 封装成功/失败与本地化错误信息，贯穿需求检查与执行。
+- **类型声明**：`RecipeRequirementType<C>` 绑定一个 `RecipeRequirementSystem<C>`，定义“这种需求由哪个系统执行”。
+- **需求组件**：`RecipeRequirementComponent` 代表机器侧用于满足该需求的“端口/容器”。
+  - **属性配置**：`properties` 映射表支持存储静态配置（如“忽略输出满”、“可选输入”）。
+- **处理系统（事务化）**：`RecipeRequirementSystem` 采用 **事务化模型**。
+  - **生命周期**：`start`（验证+预扣）、`acquireTickTransaction`（逐 tick 执行）、`onEnd`（完成/产出）。
+  - **事务回滚**：所有操作返回 `RequirementTransaction`，仅包含 `rollback()`。若后续步骤失败，系统调用回滚撤销之前的操作。
+- **高级特性**：
+  - **检查点 (Checkpoint)**：`CheckpointRequirementSystem` 允许将需求包装，在特定 tick 原子性地执行完整生命周期（Start -> Tick -> End）。
+  - **动态修改器 (Modifiers)**：`RecipeRequirement` 持有 `RecipeRequirementModifier` 列表，允许在执行前动态拦截并修改需求数据（用于实现并行化倍率、随机化变异、机器升级影响等）。
+- **返回值模型**：`ProcessResult` 封装成功/失败与本地化错误信息。
 
 #### 2.1.6 执行管线（Processor System）
 
@@ -327,19 +334,18 @@ ZenScript 暴露类：`@ZenClass("mods.prototypemachinery.MachineTypeBuilder")`
 - 继承自 `BlockContainer`
 - 关键属性：
   - `FACING: PropertyEnum<EnumFacing>` — 水平朝向
+  - `TWIST: PropertyInteger` — 旋转角度 (0-3)，配合 FACING 实现 24 方向旋转
   - `FORMED: PropertyBool` — 多方块是否形成（**不存入 meta，动态计算**）
 - 初始化：
   - 设定硬度、抗性、采集工具等级、音效等
-  - `defaultState = baseState.withProperty(FACING, NORTH).withProperty(FORMED, false)`
+  - `defaultState` 包含 FACING, TWIST, FORMED
   - `registryName = ResourceLocation(machineType.id.namespace, machineType.id.path + "_controller")`
 - BlockState 编码：
-  - `createBlockState()` — 包含 FACING & FORMED
-  - `getStateFromMeta(meta)` — 仅编码朝向（0-3）
-  - `getMetaFromState(state)` — 仅使用 `facing.horizontalIndex`
-  - `getActualState(state, world, pos)` — 动态查询 TileEntity：
-    - 若为 `MachineBlockEntity`，则 `formed = tile.machine.isFormed()`
-    - 将 `FORMED` 属性更新并返回
+  - `createBlockState()` — 包含 FACING, TWIST, FORMED
+  - `getStateFromMeta(meta)` / `getMetaFromState(state)` — 编码 6 向 Facing 和 4 向 Twist 到 Meta (需自定义逻辑或扩展 Meta 存储)
+  - `getActualState(state, world, pos)` — 动态查询 TileEntity 更新 `FORMED` 属性
 - 渲染与方块实体：
+  - 自动生成 BlockState JSON 和 Item Model JSON（如果启用资源生成）
   - 渲染层：`CUTOUT`
   - 渲染类型：`MODEL`
   - 非不透明方块

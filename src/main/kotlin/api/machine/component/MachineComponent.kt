@@ -132,4 +132,38 @@ public interface MachineComponent {
 
     }
 
+    /**
+     * # Synchronizable - Network Synchronization Support
+     * # Synchronizable - 网络同步支持
+     *
+     * Interface for components that need to sync data to client.
+     * 支持向客户端同步数据的组件接口。
+     */
+    public interface Synchronizable : MachineComponent {
+
+        public enum class SyncType {
+            FULL,       // Initial sync (chunk load) / 初始同步（区块加载）
+            INCREMENTAL // Partial update / 增量更新
+        }
+
+        /**
+         * Write data to be sent to client.
+         * 写入要发送到客户端的数据。
+         *
+         * @param type The type of sync requested / 请求的同步类型
+         * @return NBT tag containing data to sync, or null if nothing to sync / 包含同步数据的 NBT，如果没有数据则返回 null
+         */
+        public fun writeClientNBT(type: SyncType): NBTTagCompound?
+
+        /**
+         * Read data received from server.
+         * 读取从服务端接收的数据。
+         *
+         * @param nbt The received data / 接收到的数据
+         * @param type The type of sync received / 接收到的同步类型
+         */
+        public fun readClientNBT(nbt: NBTTagCompound, type: SyncType)
+
+    }
+
 }

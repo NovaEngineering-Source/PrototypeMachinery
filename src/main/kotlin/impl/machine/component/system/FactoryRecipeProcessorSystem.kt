@@ -3,7 +3,7 @@ package github.kasuminova.prototypemachinery.impl.machine.component.system
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.system.MachineSystem
 import github.kasuminova.prototypemachinery.api.machine.component.type.FactoryRecipeProcessorComponent
-import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeProcess
+import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 
 public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcessorComponent> {
 

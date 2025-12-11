@@ -1,8 +1,8 @@
 package github.kasuminova.prototypemachinery.api.machine.component.type
 
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
-import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeExecutor
-import github.kasuminova.prototypemachinery.api.machine.recipe.process.RecipeProcess
+import github.kasuminova.prototypemachinery.api.recipe.process.RecipeExecutor
+import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 
 public interface FactoryRecipeProcessorComponent : MachineComponent {
 
