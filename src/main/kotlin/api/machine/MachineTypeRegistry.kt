@@ -82,7 +82,7 @@ public interface MachineTypeRegistry {
      * @param id The resource location ID of the machine type / 机械类型的资源位置 ID
      * @return The machine type, or null if not found / 机械类型，如果未找到则为 null
      */
-    public fun get(id: ResourceLocation): MachineType?
+    public operator fun get(id: ResourceLocation): MachineType?
 
     /**
      * Check if a machine type is registered.

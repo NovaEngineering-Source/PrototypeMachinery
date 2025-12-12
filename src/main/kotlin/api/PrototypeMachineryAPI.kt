@@ -2,8 +2,19 @@ package github.kasuminova.prototypemachinery.api
 
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.machine.MachineTypeRegistry
+import github.kasuminova.prototypemachinery.api.machine.structure.StructureRegistry
+import github.kasuminova.prototypemachinery.api.recipe.RecipeManager
+import github.kasuminova.prototypemachinery.api.recipe.index.IRecipeIndexRegistry
+import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementRegistry
+import github.kasuminova.prototypemachinery.api.recipe.selective.SelectiveModifierRegistry
+import github.kasuminova.prototypemachinery.api.scheduler.TaskScheduler
+import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
 import github.kasuminova.prototypemachinery.impl.machine.MachineTypeRegistryImpl
-import net.minecraft.util.ResourceLocation
+import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
+import github.kasuminova.prototypemachinery.impl.recipe.RecipeManagerImpl
+import github.kasuminova.prototypemachinery.impl.recipe.index.RecipeIndexRegistry
+import github.kasuminova.prototypemachinery.impl.scheduler.TaskSchedulerImpl
+import github.kasuminova.prototypemachinery.integration.crafttweaker.zenclass.ZenMachineRegistry
 
 /**
  * # PrototypeMachineryAPI - Main API Entry Point
@@ -25,47 +36,42 @@ import net.minecraft.util.ResourceLocation
  * - **Immutability**: Returns immutable collections to prevent external modification
  *   **不可变性**: 返回不可变集合以防止外部修改
  * 
- * ## Usage Contexts / 使用场景
- * 
- * ### From Java / 从 Java 调用
- * ```java
- * import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI;
- * import net.minecraft.util.ResourceLocation;
- * 
- * // Get a machine type
- * MachineType machine = PrototypeMachineryAPI.getMachineType(
- *     new ResourceLocation("mymod", "my_machine")
- * );
- * 
- * // Or using string parameters
- * MachineType machine2 = PrototypeMachineryAPI.getMachineType("mymod", "my_machine");
- * ```
- * 
- * ### From Kotlin / 从 Kotlin 调用
+ * ## Key Components / 核心组件
+ *
+ * - **[machineTypeRegistry]**:
+ *   Manages machine definitions and lookups.
+ *   管理机器定义和查找。
+ *
+ * - **[structureRegistry]**:
+ *   Handles multiblock structure definitions and validation.
+ *   处理多方块结构定义和验证。
+ *
+ * - **[recipeManager]**:
+ *   Central registry for all machine recipes.
+ *   所有机器配方的中央注册表。
+ *
+ * - **[recipeIndexRegistry]**:
+ *   Optimizes recipe lookups using pre-calculated indices.
+ *   使用预计算索引优化配方查找。
+ *
+ * - **[recipeRequirementRegistry]**:
+ *   Registers custom recipe requirement types (e.g., Item, Fluid, Energy).
+ *   注册自定义配方需求类型（例如：物品、流体、能量）。
+ *
+ * - **[selectiveModifierRegistry]**:
+ *   Manages dynamic modifiers for recipe logic.
+ *   管理配方逻辑的动态修改器。
+ *
+ * - **[taskScheduler]**:
+ *   Provides scheduling for synchronous and asynchronous tasks.
+ *   提供同步和异步任务的调度。
+ *
+ * ## Usage Example / 使用示例
+ *
  * ```kotlin
- * import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
- * import net.minecraft.util.ResourceLocation
- * 
- * // Get a machine type
- * val machine = PrototypeMachineryAPI.getMachineType(ResourceLocation("mymod", "my_machine"))
- * 
- * // Check existence
- * if (PrototypeMachineryAPI.hasMachineType(id)) {
- *     // Machine exists
- * }
- * 
- * // Get all machines
- * val allMachines = PrototypeMachineryAPI.getAllMachineTypes()
- * ```
- * 
- * ### From CraftTweaker / 从 CraftTweaker 调用
- * ```zenscript
- * import mods.prototypemachinery.MachineRegistry;
- * 
- * // Register a machine (handled by ZenMachineRegistry internally)
- * MachineRegistry.create("mymod", "my_machine")
- *     .name("My Custom Machine")
- *     .register();
+ * // Accessing registries / 访问注册表
+ * val machineType = PrototypeMachineryAPI.machineTypeRegistry.get(id)
+ * val structure = PrototypeMachineryAPI.structureRegistry.get(id)
  * ```
  * 
  * ## Thread Safety / 线程安全
@@ -80,106 +86,100 @@ import net.minecraft.util.ResourceLocation
  * 
  * - [MachineTypeRegistry] - Machine type registration and lookup
  * - [MachineType] - Machine type definitions
- * - [github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer] - Queue-based registration
- * - [github.kasuminova.prototypemachinery.integration.crafttweaker.zenclass.ZenMachineRegistry] - CraftTweaker bridge
+ * - [StructureRegistry] - Structure registration
+ * - [RecipeManager] - Recipe management
+ * - [IRecipeIndexRegistry] - Recipe indexing
+ * - [MachineTypeRegisterer] - Queue-based registration
+ * - [ZenMachineRegistry] - CraftTweaker bridge
  * 
  * @see MachineTypeRegistry
- * @see MachineType
+ * @see StructureRegistry
+ * @see RecipeManager
  */
 public object PrototypeMachineryAPI {
 
     /**
      * The machine type registry.
      * 
-     * Direct access to the registry for advanced use cases.
-     * Most users should use the convenience methods below instead.
+     * Primary entry point for machine type operations.
      * 
      * 机械类型注册表。
      * 
-     * 为高级用例提供对注册表的直接访问。
-     * 大多数用户应改用下面的便捷方法。
+     * 机械类型操作的主要入口点。
      */
-    @JvmStatic
+    @get:JvmStatic
     public val machineTypeRegistry: MachineTypeRegistry = MachineTypeRegistryImpl
 
     /**
-     * Get a machine type by its ID.
-     * 
-     * 通过 ID 获取机械类型。
-     * 
-     * @param id The resource location ID of the machine type / 机械类型的资源位置 ID
-     * @return The machine type, or null if not found / 机械类型，如果未找到则为 null
+     * The structure registry.
+     *
+     * Registry for machine structures.
+     *
+     * 结构注册表。
+     *
+     * 机器结构的注册表。
      */
-    @JvmStatic
-    public fun getMachineType(id: ResourceLocation): MachineType? {
-        return machineTypeRegistry.get(id)
-    }
+    @get:JvmStatic
+    public val structureRegistry: StructureRegistry = StructureRegistryImpl
 
     /**
-     * Get a machine type by its ID components.
-     * 
-     * Convenience overload for Java/Kotlin code to avoid ResourceLocation construction.
-     * 
-     * 通过 ID 组件获取机械类型。
-     * 
-     * 为 Java/Kotlin 代码提供的便捷重载，避免构造 ResourceLocation。
-     * 
-     * @param modId The mod ID / 模组 ID
-     * @param path The machine path/name / 机械路径/名称
-     * @return The machine type, or null if not found / 机械类型，如果未找到则为 null
+     * The recipe manager.
+     *
+     * Manager for machine recipes.
+     *
+     * 配方管理器。
+     *
+     * 机器配方的管理器。
      */
-    @JvmStatic
-    public fun getMachineType(modId: String, path: String): MachineType? {
-        return getMachineType(ResourceLocation(modId, path))
-    }
+    @get:JvmStatic
+    public val recipeManager: RecipeManager = RecipeManagerImpl
 
     /**
-     * Check if a machine type exists.
-     * 
-     * 检查机械类型是否存在。
-     * 
-     * @param id The resource location ID to check / 要检查的资源位置 ID
-     * @return true if the machine type is registered / 如果机械类型已注册则返回 true
+     * The recipe index registry.
+     *
+     * Registry for recipe indices.
+     *
+     * 配方索引注册表。
+     *
+     * 配方索引的注册表。
      */
-    @JvmStatic
-    public fun hasMachineType(id: ResourceLocation): Boolean {
-        return machineTypeRegistry.contains(id)
-    }
+    @get:JvmStatic
+    public val recipeIndexRegistry: IRecipeIndexRegistry = RecipeIndexRegistry
 
     /**
-     * Get all registered machine types.
-     * 
-     * Returns an immutable snapshot of all registered machine types.
-     * Useful for iteration, debugging, and mod integration.
-     * 
-     * 获取所有已注册的机械类型。
-     * 
-     * 返回所有已注册机械类型的不可变快照。
-     * 对于迭代、调试和模组集成很有用。
-     * 
-     * @return An immutable collection of all registered machine types / 所有已注册机械类型的不可变集合
+     * The recipe requirement registry.
+     *
+     * Registry for recipe requirements.
+     *
+     * 配方需求注册表。
+     *
+     * 配方需求的注册表。
      */
-    @JvmStatic
-    public fun getAllMachineTypes(): Collection<MachineType> {
-        return machineTypeRegistry.all()
-    }
+    @get:JvmStatic
+    public val recipeRequirementRegistry: RecipeRequirementRegistry = RecipeRequirementRegistry
 
     /**
-     * Get all registered machine type IDs.
-     * 
-     * Returns an immutable snapshot of all registered IDs.
-     * Useful for autocomplete, validation, and debugging.
-     * 
-     * 获取所有已注册的机械类型 ID。
-     * 
-     * 返回所有已注册 ID 的不可变快照。
-     * 对于自动完成、验证和调试很有用。
-     * 
-     * @return An immutable set of all registered machine type IDs / 所有已注册机械类型 ID 的不可变集合
+     * The selective modifier registry.
+     *
+     * Registry for selective modifiers.
+     *
+     * 选择性修改器注册表。
+     *
+     * 选择性修改器的注册表。
      */
-    @JvmStatic
-    public fun getAllMachineTypeIds(): Set<ResourceLocation> {
-        return machineTypeRegistry.allIds()
-    }
+    @get:JvmStatic
+    public val selectiveModifierRegistry: SelectiveModifierRegistry = SelectiveModifierRegistry
+
+    /**
+     * The task scheduler.
+     *
+     * Scheduler for tasks.
+     *
+     * 任务调度器。
+     *
+     * 任务的调度器。
+     */
+    @get:JvmStatic
+    public val taskScheduler: TaskScheduler = TaskSchedulerImpl
 
 }

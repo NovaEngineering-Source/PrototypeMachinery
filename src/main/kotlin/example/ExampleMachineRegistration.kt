@@ -88,14 +88,14 @@ public object ExampleMachineQuery {
      */
     public fun findMachine(modId: String, machinePath: String): MachineType? {
         val id = ResourceLocation(modId, machinePath)
-        return github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.getMachineType(id)
+        return github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.machineTypeRegistry[id]
     }
 
     /**
      * Example: List all registered machines
      */
     public fun listAllMachines() {
-        val allMachines = github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.getAllMachineTypes()
+        val allMachines = github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.machineTypeRegistry.all()
         allMachines.forEach { machine ->
             println("Machine: ${machine.id} - ${machine.name}")
             println("  Components: ${machine.componentTypes.size}")
@@ -107,7 +107,7 @@ public object ExampleMachineQuery {
      */
     public fun hasMachine(modId: String, machinePath: String): Boolean {
         val id = ResourceLocation(modId, machinePath)
-        return github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.hasMachineType(id)
+        return github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.machineTypeRegistry.contains(id)
     }
 
 }

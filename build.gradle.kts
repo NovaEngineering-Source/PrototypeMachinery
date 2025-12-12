@@ -188,7 +188,24 @@ dependencies {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags("benchmark")
+    }
+}
+
+tasks.register<Test>("benchmark") {
+    useJUnitPlatform {
+        includeTags("benchmark")
+    }
+    group = "verification"
+    description = "Runs benchmark tests."
+
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+
+    testLogging {
+        events("passed", "skipped", "failed", "standardOut", "standardError")
+    }
 }
 
 kotlin {

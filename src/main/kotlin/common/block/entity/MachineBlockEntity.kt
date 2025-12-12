@@ -76,7 +76,7 @@ public class MachineBlockEntity() : BlockEntity(), ITickable {
     override fun readFromNBT(compound: NBTTagCompound) {
         super.readFromNBT(compound)
         val machineId = compound.getString("MachineID")
-        val machineType: MachineType? = PrototypeMachineryAPI.getMachineType(ResourceLocation(machineId))
+        val machineType: MachineType? = PrototypeMachineryAPI.machineTypeRegistry[ResourceLocation(machineId)]
         if (machineType == null) {
             PrototypeMachinery.logger.error("Failed to load machine with ID: $machineId (not registered)")
             return
@@ -124,7 +124,7 @@ public class MachineBlockEntity() : BlockEntity(), ITickable {
         // Read basic data
         val machineId = tag.getString("MachineID")
         if (!::machine.isInitialized) {
-            val machineType: MachineType? = PrototypeMachineryAPI.getMachineType(ResourceLocation(machineId))
+            val machineType: MachineType? = PrototypeMachineryAPI.machineTypeRegistry[ResourceLocation(machineId)]
             if (machineType != null) {
                 initialize(machineType)
             }

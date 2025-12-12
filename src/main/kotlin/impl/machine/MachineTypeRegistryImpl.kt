@@ -22,7 +22,7 @@ public object MachineTypeRegistryImpl : MachineTypeRegistry {
         registry[id] = machineType
     }
 
-    override fun get(id: ResourceLocation): MachineType? = registry[id]
+    override operator fun get(id: ResourceLocation): MachineType? = registry[id]
 
     override fun contains(id: ResourceLocation): Boolean = registry.containsKey(id)
 

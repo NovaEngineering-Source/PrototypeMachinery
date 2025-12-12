@@ -102,7 +102,19 @@ PrototypeMachinery 是一个基于 Minecraft Forge 1.12.2 的多方块机械框�
      - 完成后调用需求系统的 `onEnd` 做收尾，随后移出队列
 - **执行器插拔**：`RecipeExecutor.tick(processor)` 允许不同策略驱动（如同步/异步、优先级排序等）。当前未提供默认执行器，可在构造机器类型时按需注入。
 
-#### 2.1.7 设计要点与待办
+#### 2.1.7 配方索引系统 (Recipe Indexing)
+
+为了优化高频的配方查找操作（避免每 tick 遍历所有配方），引入了配方索引系统：
+
+- **核心接口**：`IRecipeIndexRegistry`（API）与 `RecipeIndexRegistry`（实现）。
+- **工作原理**：
+  - 在 PostInit 阶段，系统遍历所有机器类型，利用注册的 `RequirementIndexFactory` 构建索引。
+  - **RequirementIndex**：针对特定需求类型（如物品、能量）的预计算查找表。例如 `ItemRequirementIndex` 使用 `ItemStackKey` 快速定位包含特定输入的配方。
+  - **RecipeIndex**：聚合了该机器类型所有可用的 `RequirementIndex`。
+- **查询流程**：机器运行时调用 `RecipeIndex.lookup(machine)`，各子索引返回“潜在匹配配方”的交集，大幅缩小实际匹配范围。
+- **扩展性**：模组开发者可实现 `RequirementIndexFactory` 并注册到 `PrototypeMachineryAPI.recipeIndexRegistry`，为自定义需求类型提供索引支持。
+
+#### 2.1.8 设计要点与待办
 
 - **匹配与开工**：需要在 `FactoryRecipeScanningSystem` 中实现实际的“需求可行性检测”（结合 `MachineInstance` 的组件/库存）并创建 `RecipeProcessImpl`。
 - **完成判定**：`checkCompletion` 需根据配方时长/需求进度判断；可结合 `RecipeProcessComponent`（如进度条）实现。
@@ -440,6 +452,37 @@ ZenScript 暴露类：`@ZenClass("mods.prototypemachinery.MachineTypeBuilder")`
 - `MachineInstanceImpl` 默认 `ExecutionMode.CONCURRENT`，在 `MachineBlockEntity.initialize` 时注册调度，在 `invalidate` 时移除。
 
 后续落地建议：在 `onSchedule()` 内衔接配方扫描/执行与结构检查；若需要强一致性，可在关键路径强制使用 `MAIN_THREAD`。
+
+### 2.7 API 统一访问点 (PrototypeMachineryAPI)
+
+为了简化开发体验，所有核心注册表和管理器均通过 `PrototypeMachineryAPI` 单例对象暴露：
+
+- **`machineTypeRegistry`**: 机器类型注册与查找。
+- **`structureRegistry`**: 多方块结构定义与验证。
+- **`recipeManager`**: 机器配方管理。
+- **`recipeIndexRegistry`**: 配方索引注册表（管理索引工厂与构建）。
+- **`recipeRequirementRegistry`**: 配方需求类型与系统注册。
+- **`selectiveModifierRegistry`**: 选择性需求修改器注册。
+- **`taskScheduler`**: 任务调度器。
+
+推荐在 Java/Kotlin 代码中始终通过此入口点访问各子系统，而非直接使用实现类。
+
+### 2.8 资源键系统 (PMKey System)
+
+为了解决 Minecraft 原生对象（如 `ItemStack`）作为 Map 键时性能低下且易出错（可变性）的问题，引入了类似 AE2 的资源键系统：
+
+- **核心目标**：提供不可变、内存唯一（Interned）的资源标识符，用于高性能查找与缓存。
+- **PMKey 接口**：所有资源键的基类。
+- **PMKeyType**：负责管理键的生命周期与驻留池。
+  - 使用 `WeakHashMap` 实现自动去重与内存回收。
+  - 确保逻辑相同的资源（如相同 Item/Meta/NBT 的物品）在内存中仅存在一个 `PMKey` 实例。
+  - 允许使用 **引用相等性 (`===`)** 代替对象相等性 (`equals`)，极大提升比较性能。
+- **ItemStackKey 实现**：
+  - 针对物品栈的深度优化实现。
+  - **哈希策略**：结合 `System.identityHashCode(Item)` 与 Metadata 进行位运算，大幅降低哈希冲突率；NBT 哈希被缓存以避免重复计算。
+  - **安全性**：构造时深拷贝 NBT，确保键的不可变性。
+
+此系统是 **配方索引系统** 的基石，确保了在处理大量配方与物品时的检索效率。
 
 ## 3. 生命周期与加载顺序
 
