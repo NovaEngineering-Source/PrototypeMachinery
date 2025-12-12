@@ -28,6 +28,7 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
     ): RequirementTransaction {
         return object : RequirementTransaction {
             override val result: ProcessResult = ProcessResult.Success
+            override fun commit() {}
             override fun rollback() {}
         }
     }
@@ -39,6 +40,7 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
     ): RequirementTransaction {
         return object : RequirementTransaction {
             override val result: ProcessResult = ProcessResult.Success
+            override fun commit() {}
             override fun rollback() {}
         }
     }
@@ -60,6 +62,7 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
 
         return object : RequirementTransaction {
             override val result: ProcessResult = ProcessResult.Success
+            override fun commit() {}
             override fun rollback() {}
         }
     }
@@ -71,44 +74,76 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
         process: RecipeProcess
     ): RequirementTransaction {
         val system = getSystemFor(component) as? RecipeRequirementSystem<T>
-            ?: return object : RequirementTransaction {
-                override val result = ProcessResult.Failure("error.system_not_found", listOf(component.type.toString()))
-                override fun rollback() {}
-            }
+            ?: return failure(ProcessResult.Failure("error.system_not_found", listOf(component.type.toString())))
 
         val transactions = mutableListOf<RequirementTransaction>()
+        var overallResult: ProcessResult = ProcessResult.Success
 
         // 1. Start
         val startTx = system.start(machine, component, process)
-        if (startTx.result !is ProcessResult.Success) {
-            return startTx
+        when (val r = startTx.result) {
+            is ProcessResult.Failure -> return failure(r) { startTx.rollback() }
+            is ProcessResult.Blocked -> overallResult = r
+            is ProcessResult.Success -> {}
         }
         transactions.add(startTx)
 
         // 2. Tick (if tickable)
         if (system is RecipeRequirementSystem.Tickable) {
             val tickTx = system.acquireTickTransaction(machine, component, process)
-            if (tickTx.result !is ProcessResult.Success) {
-                rollbackAll(transactions)
-                return tickTx
+            when (val r = tickTx.result) {
+                is ProcessResult.Failure -> {
+                    return failure(r) {
+                        tickTx.rollback()
+                        rollbackAll(transactions)
+                    }
+                }
+                is ProcessResult.Blocked -> if (overallResult is ProcessResult.Success) overallResult = r
+                is ProcessResult.Success -> {}
             }
             transactions.add(tickTx)
         }
 
         // 3. End
         val endTx = system.onEnd(machine, component, process)
-        if (endTx.result !is ProcessResult.Success) {
-            rollbackAll(transactions)
-            return endTx
+        when (val r = endTx.result) {
+            is ProcessResult.Failure -> {
+                return failure(r) {
+                    endTx.rollback()
+                    rollbackAll(transactions)
+                }
+            }
+            is ProcessResult.Blocked -> if (overallResult is ProcessResult.Success) overallResult = r
+            is ProcessResult.Success -> {}
         }
         transactions.add(endTx)
 
         return object : RequirementTransaction {
-            override val result = ProcessResult.Success
+            override val result: ProcessResult = overallResult
+            override fun commit() {
+                commitAll(transactions)
+            }
             override fun rollback() {
                 rollbackAll(transactions)
             }
         }
+    }
+
+    private fun failure(result: ProcessResult.Failure, rollbackAction: () -> Unit = {}): RequirementTransaction {
+        return object : RequirementTransaction {
+            override val result: ProcessResult = result
+            override fun commit() {
+                error("commit() must not be called when result is Failure")
+            }
+
+            override fun rollback() {
+                rollbackAction()
+            }
+        }
+    }
+
+    private fun commitAll(transactions: List<RequirementTransaction>) {
+        transactions.forEach { it.commit() }
     }
 
     private fun rollbackAll(transactions: List<RequirementTransaction>) {

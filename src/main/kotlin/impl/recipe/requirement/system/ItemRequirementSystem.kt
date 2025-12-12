@@ -13,6 +13,7 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
         // Check if items are available and consume
         return object : RequirementTransaction {
             override val result: ProcessResult = ProcessResult.Success
+            override fun commit() {}
             override fun rollback() {}
         }
     }
@@ -29,6 +30,7 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
         // Handle item outputs here
         return object : RequirementTransaction {
             override val result: ProcessResult = ProcessResult.Success
+            override fun commit() {}
             override fun rollback() {}
         }
     }

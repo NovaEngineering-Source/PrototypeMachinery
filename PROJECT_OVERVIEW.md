@@ -17,6 +17,27 @@ PrototypeMachinery 是一个基于 Minecraft Forge 1.12.2 的多方块机械框�
 
 ## 2. 核心模块总览
 
+### 2.0 属性系统（Machine Attributes）
+
+属性系统用于表达“机器/进程的数值能力”（如速度、效率、需求倍率等），并支持在不同层级叠加：
+
+- **机器基线（MachineInstance）**：`MachineInstance.attributeMap`（实现：`MachineAttributeMapImpl`）
+- **进程叠加（RecipeProcess）**：`RecipeProcess.attributeMap`（实现：`OverlayMachineAttributeMapImpl(parent = owner.attributeMap)`），每个进程可独立叠加 modifiers 而互不影响。
+
+修改器的统一运算顺序为：`ADDITION -> MULTIPLY_BASE -> MULTIPLY_TOTAL`。
+
+序列化方面：
+
+- 机器 attributeMap 全量持久化（base + modifiers）。
+- 进程 attributeMap 只持久化 overlay 的 *local changes*（local modifiers + base override），避免把机器基线重复写入每个进程。
+
+更多细节：
+
+- `docs/Attributes.md`
+- `docs/Localization.md`
+
+> TODO：当前属性“注册表”仍为临时实现：反序列化主要依赖 `StandardMachineAttributes.getById(...)`，后续应替换为可扩展的全局属性注册表。
+
 ### 2.1 机械逻辑与配方架构（重点）
 
 这一节集中介绍机械本体的逻辑管线与配方执行设计，按“类型 → 实例 → 组件 → 配方 → 需求系统”的层次展开。
@@ -57,10 +78,18 @@ PrototypeMachinery 是一个基于 Minecraft Forge 1.12.2 的多方块机械框�
   - **属性配置**：`properties` 映射表支持存储静态配置（如“忽略输出满”、“可选输入”）。
 - **处理系统（事务化）**：`RecipeRequirementSystem` 采用 **事务化模型**。
   - **生命周期**：`start`（验证+预扣）、`acquireTickTransaction`（逐 tick 执行）、`onEnd`（完成/产出）。
-  - **事务回滚**：所有操作返回 `RequirementTransaction`，仅包含 `rollback()`。若后续步骤失败，系统调用回滚撤销之前的操作。
+  - **二阶段事务（commit/rollback）**：所有阶段返回 `RequirementTransaction`。
+    - **获取即生效**：在 `start/acquireTickTransaction/onEnd` 获取事务时，核心变更（如扣除/预留资源）就会立即应用。
+    - **commit()**：当事务返回非 Failure（Success/Blocked）时必定会被调用，并且实现必须保证成功；用于结算“获取阶段之后才应生效”的效果（例如：选择性包装已确定候选后，触发 Selective modifier 对进程属性施加加速/减速等效果）。
+    - **rollback()**：仅当事务结果为 Failure 时才会被调用（并且触发时绝不会调用任何事务的 commit()）；用于撤销获取阶段引入的全部变更，并清理由 commit 阶段注入的可回滚副作用（例如：移除已应用到 `RecipeProcess.attributeMap` 的 attribute modifiers）。
 - **高级特性**：
   - **检查点 (Checkpoint)**：`CheckpointRequirementSystem` 允许将需求包装，在特定 tick 原子性地执行完整生命周期（Start -> Tick -> End）。
   - **动态修改器 (Modifiers)**：`RecipeRequirement` 持有 `RecipeRequirementModifier` 列表，允许在执行前动态拦截并修改需求数据（用于实现并行化倍率、随机化变异、机器升级影响等）。
+  - **选择性包装 (Selective)**：提供“从多个候选需求中择一”的包装组件，并可在 commit 时触发 modifier。
+    - 组件：`impl/recipe/requirement/component/SelectiveRequirementComponent.kt`
+    - 系统：`impl/recipe/requirement/component/system/SelectiveRequirementSystem.kt`
+    - 进程侧状态（选择结果 + 已应用 modifier 记录）：`impl/recipe/process/component/SelectiveStateProcessComponent.kt` 与 `SelectiveStateProcessComponentType.kt`
+    - modifier API：`api/recipe/selective/SelectiveContext.kt`、`SelectiveModifier.kt`、`SelectiveModifierRegistry.kt`
 - **返回值模型**：`ProcessResult` 封装成功/失败与本地化错误信息。
 
 #### 2.1.6 执行管线（Processor System）
@@ -77,7 +106,7 @@ PrototypeMachinery 是一个基于 Minecraft Forge 1.12.2 的多方块机械框�
 
 - **匹配与开工**：需要在 `FactoryRecipeScanningSystem` 中实现实际的“需求可行性检测”（结合 `MachineInstance` 的组件/库存）并创建 `RecipeProcessImpl`。
 - **完成判定**：`checkCompletion` 需根据配方时长/需求进度判断；可结合 `RecipeProcessComponent`（如进度条）实现。
-- **需求事务**：Tickable 需求应在 `acquireTickTransaction` 中执行“预扣-提交”模式，失败则自然回滚。
+- **需求事务**：Tickable 需求应在 `acquireTickTransaction` 中遵循“获取即生效 + commit/rollback 二阶段”模型；当本 tick/本阶段被确认采用时 commit，否则在失败时 rollback。
 - **形成状态联动**：结构校验通过后调用 `MachineInstanceImpl.setFormed(true/false)`，使方块状态与渲染实时反映多方块是否完整。
 
 #### 2.1.8 ECS 核心与系统调度
@@ -259,6 +288,8 @@ fun validate(context: StructureMatchContext, offset: BlockPos): Boolean
 - `integration/crafttweaker/CraftTweakerMachineTypeBuilder.kt`
 - `integration/crafttweaker/zenclass/ZenMachineTypeBuilder.kt`
 - `integration/crafttweaker/zenclass/ZenMachineRegistry.kt`
+- `integration/crafttweaker/zenclass/ZenSelectiveContext.kt`
+- `integration/crafttweaker/zenclass/ZenSelectiveModifiers.kt`
 - `common/integration/crafttweaker/CraftTweakerExamples.kt`
 - 资源脚本示例：`assets/prototypemachinery/scripts/examples/machine_registration.zs`
 
@@ -317,6 +348,13 @@ ZenScript 暴露类：`@ZenClass("mods.prototypemachinery.MachineTypeBuilder")`
 - `structure("example_parent_with_child")`
 
 并在注释中说明使用 ID 方式进行延迟加载是推荐做法。
+
+#### 选择性修改器（Selective Modifiers）
+
+- ZenScript 注册入口：`@ZenClass("mods.prototypemachinery.SelectiveModifiers")`
+- 运行时上下文：`@ZenClass("mods.prototypemachinery.SelectiveContext")`
+  - `id()` 返回配方内的 `selectionId`
+  - 可通过 `addProcessSpeed(...)` / `mulProcessSpeed(...)` 对进程速度等属性施加 modifier（底层写入 `RecipeProcess.attributeMap`）
 
 ---
 

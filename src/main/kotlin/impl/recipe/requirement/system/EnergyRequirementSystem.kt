@@ -13,6 +13,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
         // Check if energy is available and consume if needed
         return object : RequirementTransaction {
             override val result: ProcessResult = ProcessResult.Success
+            override fun commit() {}
             override fun rollback() {}
         }
     }
@@ -29,6 +30,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
         // Energy usually not handled at end unless it's generation
         return object : RequirementTransaction {
             override val result: ProcessResult = ProcessResult.Success
+            override fun commit() {}
             override fun rollback() {}
         }
     }

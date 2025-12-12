@@ -106,14 +106,15 @@ public interface MachineComponentMap : TopologicalComponentMap<MachineComponentT
     /**
      * Get a component by its type.
      * Fast O(1) lookup.
-     * 
+     *
      * 按类型获取组件。
      * 快速 O(1) 查找。
-     * 
+     *
      * @param type The component type to lookup / 要查找的组件类型
      * @return The component, or null if not found / 组件，如果未找到则为 null
      */
-    public operator fun <C : MachineComponent> get(type: MachineComponentType<C>): C?
+    @Suppress("UNCHECKED_CAST")
+    public fun <C : MachineComponent> getBy(type: MachineComponentType<C>): C? = components[type] as? C
 
     /**
      * Get all components that are instances of the given class.

@@ -117,9 +117,6 @@ public class MachineComponentMapImpl : TopologicalComponentMapImpl<MachineCompon
     }
 
     @Suppress("UNCHECKED_CAST")
-    override operator fun <C : MachineComponent> get(type: MachineComponentType<C>): C? = _components[type] as? C
-
-    @Suppress("UNCHECKED_CAST")
     override fun <C : MachineComponent> getByInstanceOf(clazz: Class<out C>): Collection<C> =
         byInstanceOfCache.getOrPut(clazz) { 
             _components.values.filter { clazz.isInstance(it) }.toMutableSet() 

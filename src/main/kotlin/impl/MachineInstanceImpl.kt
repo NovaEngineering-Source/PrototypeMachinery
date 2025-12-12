@@ -9,6 +9,7 @@ import github.kasuminova.prototypemachinery.api.scheduler.ExecutionMode
 import github.kasuminova.prototypemachinery.api.scheduler.ISchedulable
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 import github.kasuminova.prototypemachinery.common.util.warnWithBlockEntity
+import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeNbt
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.component.MachineComponentMapImpl
 import net.minecraft.nbt.NBTTagCompound
@@ -74,6 +75,14 @@ public class MachineInstanceImpl(
     }
 
     internal fun readNBT(tag: NBTTagCompound) {
+        if (tag.hasKey("Attributes") && attributeMap is MachineAttributeMapImpl) {
+            runCatching {
+                MachineAttributeNbt.readMachineMap(tag.getCompoundTag("Attributes"), attributeMap as MachineAttributeMapImpl)
+            }.onFailure {
+                PrototypeMachinery.logger.warnWithBlockEntity("Error while reading machine attribute map.", blockEntity, it)
+            }
+        }
+
         componentMap.components.forEach { (type, component) ->
             if (component is MachineComponent.Serializable) {
                 runCatching {
@@ -86,6 +95,14 @@ public class MachineInstanceImpl(
     }
 
     internal fun writeNBT(tag: NBTTagCompound) {
+        if (attributeMap is MachineAttributeMapImpl) {
+            runCatching {
+                tag.setTag("Attributes", MachineAttributeNbt.writeMachineMap(attributeMap as MachineAttributeMapImpl))
+            }.onFailure {
+                PrototypeMachinery.logger.warnWithBlockEntity("Error while writing machine attribute map.", blockEntity, it)
+            }
+        }
+
         componentMap.components.forEach { (type, component) ->
             if (component is MachineComponent.Serializable) {
                 runCatching {

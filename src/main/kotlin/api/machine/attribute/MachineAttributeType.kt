@@ -18,6 +18,14 @@ import net.minecraft.util.ResourceLocation
  * - [MachineAttributeInstance] - Holds runtime value and modifiers
  * - [MachineAttributeModifier] - Modifies attribute values
  * - [MachineAttributeMap] - Container for attributes per machine/process
+ *
+ * ## Registry / 注册表
+ *
+ * There is currently no global attribute registry in the framework.
+ * Built-in attributes live in [StandardMachineAttributes].
+ *
+ * 当前框架尚未提供全局属性注册表。
+ * 内置属性位于 [StandardMachineAttributes]。
  */
 public interface MachineAttributeType {
 

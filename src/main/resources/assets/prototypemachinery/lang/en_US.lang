@@ -1,0 +1,10 @@
+
+# Machine attributes
+attribute.prototypemachinery.max_concurrent_processes=Max Concurrent Processes
+attribute.prototypemachinery.process_parallelism=Process Parallelism
+attribute.prototypemachinery.process_speed=Process Speed
+attribute.prototypemachinery.energy_efficiency=Energy Efficiency
+
+# Requirement wrapper errors
+error.selective.missing_start_tx=Internal error: missing start transaction for selective wrapper (%s)
+error.selective.invalid_selection=Internal error: selective wrapper (%s) selected invalid index %s
