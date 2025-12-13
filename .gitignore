@@ -23,3 +23,6 @@ run
 
 # local logs
 logs
+
+# Kotlin generated files
+.kotlin

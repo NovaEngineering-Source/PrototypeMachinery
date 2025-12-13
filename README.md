@@ -18,3 +18,10 @@ With **coremod and mixin support** that is easy to configure.
 ### Mixins:
 
 - When writing Mixins on IntelliJ, it is advisable to use latest [MinecraftDev Fork for RetroFuturaGradle](https://github.com/eigenraven/MinecraftDev/releases).
+
+### Asset maintenance (PNG lossless optimize):
+
+This repo includes a helper script to losslessly recompress PNG files and strip all ancillary metadata chunks (keeping only essential pixel data).
+
+- Script: `scripts/optimize_png.sh`
+- Target: `src/main/resources`
