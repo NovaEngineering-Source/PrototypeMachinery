@@ -1,6 +1,7 @@
 package github.kasuminova.prototypemachinery.common.gui
 
 import com.cleanroommc.modularui.factory.GuiFactories
+import com.cleanroommc.modularui.factory.TileEntityGuiFactory
 import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.util.math.BlockPos
@@ -11,6 +12,24 @@ import net.minecraft.world.World
  * 使用 ModularUI 工厂系统打开机器 GUI 的工具对象。
  */
 public object PrototypeMachineryGUIs {
+
+    /**
+     * GUI factory for item hatches.
+     * 物品仓的 GUI 工厂。
+     */
+    public val ITEM_HATCH: TileEntityGuiFactory = GuiFactories.tileEntity()
+
+    /**
+     * GUI factory for fluid hatches.
+     * 流体仓的 GUI 工厂。
+     */
+    public val FLUID_HATCH: TileEntityGuiFactory = GuiFactories.tileEntity()
+
+    /**
+     * GUI factory for energy hatches.
+     * 能量仓的 GUI 工厂。
+     */
+    public val ENERGY_HATCH: TileEntityGuiFactory = GuiFactories.tileEntity()
 
     /**
      * Open the machine controller GUI for a player.

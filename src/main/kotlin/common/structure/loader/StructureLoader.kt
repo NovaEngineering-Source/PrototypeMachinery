@@ -73,26 +73,46 @@ public object StructureLoader {
             event.modLog.info("Created structures directory at: ${structuresDir.absolutePath}")
         }
 
-        val jsonFiles = structuresDir.listFiles { file ->
-            file.isFile && file.extension.equals("json", ignoreCase = true)
-        } ?: emptyArray()
+        fun collectJsonFiles(): List<File> {
+            if (!structuresDir.exists()) return emptyList()
+            return structuresDir
+                .walkTopDown()
+                .filter { it.isFile && it.extension.equals("json", ignoreCase = true) }
+                .toList()
+        }
 
+        var jsonFiles = collectJsonFiles()
         if (jsonFiles.isEmpty()) {
             event.modLog.info("No structure JSON files found in: ${structuresDir.absolutePath}")
             event.modLog.info("Copying example structures from resources...")
             copyExampleStructures(structuresDir, event)
+
+            // Re-scan after copying examples so first-run has usable templates.
+            // 复制示例后重新扫描，保证首次运行就能加载到示例。
+            jsonFiles = collectJsonFiles()
+        }
+
+        if (jsonFiles.isEmpty()) {
+            event.modLog.warn("No structure JSON files found even after copying examples: ${structuresDir.absolutePath}")
             return
         }
 
-        event.modLog.info("Loading ${jsonFiles.size} structure file(s) from: ${structuresDir.absolutePath}")
+        event.modLog.info(
+            "Loading ${jsonFiles.size} structure file(s) from: ${structuresDir.absolutePath} (recursive)"
+        )
 
         // Load all JSON files and cache StructureData
         // 加载所有 JSON 文件并缓存 StructureData
         for (file in jsonFiles) {
             try {
-                loadStructureDataFile(file, event)
+                loadStructureDataFile(file, structuresDir, event)
             } catch (e: Throwable) {
-                event.modLog.error("Failed to load structure data from file: ${file.name}", e)
+                val rel = try {
+                    file.relativeTo(structuresDir).path
+                } catch (_: Throwable) {
+                    file.absolutePath
+                }
+                event.modLog.error("Failed to load structure data from file: $rel", e)
             }
         }
 
@@ -147,17 +167,22 @@ public object StructureLoader {
      * Load a single structure file and cache the data.
      * 加载单个结构文件并缓存数据。
      */
-    private fun loadStructureDataFile(file: File, event: FMLPreInitializationEvent) {
+    private fun loadStructureDataFile(file: File, baseDir: File, event: FMLPreInitializationEvent) {
+        val relPath = try {
+            file.relativeTo(baseDir).path
+        } catch (_: Throwable) {
+            file.name
+        }
         val jsonText = file.readText()
         val structureData = json.decodeFromString<StructureData>(jsonText)
 
         if (structureDataCache.containsKey(structureData.id)) {
-            event.modLog.warn("Duplicate structure ID '${structureData.id}' in file: ${file.name}")
+            event.modLog.warn("Duplicate structure ID '${structureData.id}' in file: $relPath")
             return
         }
 
         structureDataCache[structureData.id] = structureData
-        event.modLog.info("Loaded structure data '${structureData.id}' from file: ${file.name}")
+        event.modLog.info("Loaded structure data '${structureData.id}' from file: $relPath")
     }
 
     /**

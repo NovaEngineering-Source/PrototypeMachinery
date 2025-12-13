@@ -8,6 +8,7 @@ import github.kasuminova.prototypemachinery.common.structure.loader.StructureLoa
 import github.kasuminova.prototypemachinery.impl.scheduler.TaskSchedulerImpl
 import github.kasuminova.prototypemachinery.integration.crafttweaker.CraftTweakerExamples
 import net.minecraftforge.common.MinecraftForge
+import net.minecraftforge.fml.common.Loader
 import net.minecraftforge.fml.common.Mod
 import net.minecraftforge.fml.common.SidedProxy
 import net.minecraftforge.fml.common.event.FMLInitializationEvent
@@ -55,7 +56,10 @@ public object PrototypeMachinery {
 
         // CraftTweaker script reload hook (ZenUtils)
         // CraftTweaker 脚本热重载钩子（ZenUtils）
-        MinecraftForge.EVENT_BUS.register(CraftTweakerReloadHandler)
+        if (Loader.isModLoaded("crafttweaker")) {
+            logger.info("CraftTweaker detected: enabling integration.")
+            MinecraftForge.EVENT_BUS.register(CraftTweakerReloadHandler)
+        }
 
         // Load structure JSON data (without resolving blocks)
         // 加载结构 JSON 数据（不解析方块）
