@@ -1,1 +1,3 @@
-{ "parent": "prototypemachinery:block/item_output_hatch_6" }
+{
+  "parent": "prototypemachinery:block/item_output_hatch_6"
+}

@@ -1,5 +1,7 @@
 {
   "variants": {
-    "normal": { "model": "prototypemachinery:item_input_hatch_3" }
+    "normal": {
+      "model": "prototypemachinery:item_input_hatch_3"
+    }
   }
 }

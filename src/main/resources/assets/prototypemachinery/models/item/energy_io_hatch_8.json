@@ -1,1 +1,3 @@
-{ "parent": "prototypemachinery:block/energy_io_hatch_8" }
+{
+  "parent": "prototypemachinery:block/energy_io_hatch_8"
+}

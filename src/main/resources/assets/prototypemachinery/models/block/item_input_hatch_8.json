@@ -1,1 +1,3 @@
-{ "parent": "prototypemachinery:block/item_hatch/input/lv8" }
+{
+  "parent": "prototypemachinery:block/item_hatch/input/lv8"
+}

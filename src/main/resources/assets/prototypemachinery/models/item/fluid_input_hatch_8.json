@@ -1,1 +1,3 @@
-{ "parent": "prototypemachinery:block/fluid_input_hatch_8" }
+{
+  "parent": "prototypemachinery:block/fluid_input_hatch_8"
+}

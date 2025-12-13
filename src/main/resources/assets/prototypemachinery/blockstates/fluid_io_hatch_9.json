@@ -1,5 +1,7 @@
 {
   "variants": {
-    "normal": { "model": "prototypemachinery:fluid_io_hatch_9" }
+    "normal": {
+      "model": "prototypemachinery:fluid_io_hatch_9"
+    }
   }
 }

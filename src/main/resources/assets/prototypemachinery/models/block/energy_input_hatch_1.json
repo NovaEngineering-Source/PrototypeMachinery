@@ -1,1 +1,3 @@
-{ "parent": "prototypemachinery:block/energy_hatch/input/lv1" }
+{
+  "parent": "prototypemachinery:block/energy_hatch/input/lv1"
+}

@@ -1,1 +1,3 @@
-{ "parent": "prototypemachinery:block/item_hatch/io/lv2" }
+{
+  "parent": "prototypemachinery:block/item_hatch/io/lv2"
+}

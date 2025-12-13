@@ -11,7 +11,6 @@ import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEnti
 import java.util.concurrent.ConcurrentHashMap
 import java.util.function.Consumer
 import java.util.function.DoubleConsumer
-import java.util.function.Supplier
 
 public class UIBindings {
 

@@ -1,1 +1,3 @@
-{ "parent": "prototypemachinery:block/energy_hatch/io/lv9" }
+{
+  "parent": "prototypemachinery:block/energy_hatch/io/lv9"
+}

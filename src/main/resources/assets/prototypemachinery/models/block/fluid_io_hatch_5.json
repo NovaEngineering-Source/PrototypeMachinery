@@ -1,1 +1,3 @@
-{ "parent": "prototypemachinery:block/fluid_hatch/io/lv5" }
+{
+  "parent": "prototypemachinery:block/fluid_hatch/io/lv5"
+}

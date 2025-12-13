@@ -1,1 +1,3 @@
-{ "parent": "prototypemachinery:block/fluid_io_hatch_1" }
+{
+  "parent": "prototypemachinery:block/fluid_io_hatch_1"
+}

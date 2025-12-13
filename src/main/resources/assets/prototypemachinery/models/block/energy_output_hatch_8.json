@@ -1,1 +1,3 @@
-{ "parent": "prototypemachinery:block/energy_hatch/output/lv8" }
+{
+  "parent": "prototypemachinery:block/energy_hatch/output/lv8"
+}

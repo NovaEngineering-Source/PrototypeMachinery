@@ -3,7 +3,7 @@
     "interpolate": true,
     "frametime": 3
   },
-    "ctm": {
+  "ctm": {
     "ctm_version": 1,
     "layer": "BLOOM",
     "gregtech": true,

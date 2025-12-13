@@ -1,5 +1,7 @@
 {
   "variants": {
-    "normal": { "model": "prototypemachinery:energy_output_hatch_8" }
+    "normal": {
+      "model": "prototypemachinery:energy_output_hatch_8"
+    }
   }
 }
