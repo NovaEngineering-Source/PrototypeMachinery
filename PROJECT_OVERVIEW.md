@@ -492,6 +492,58 @@ ZenScript 暴露类：`@ZenClass("mods.prototypemachinery.MachineTypeBuilder")`
 - 一个控制器方块
 - 一个对应的物品形态（ItemBlock）
 
+#### Hatch Blocks（Item/Fluid/Energy 仓位方块）
+
+除机器控制器外，项目还内置了一套 **10 级 Hatch 系统**，用于为多方块机器提供外部 I/O 能力（物品 / 流体 / 能量）。
+
+相关代码入口：
+
+- 注册器：`common/registry/HatchRegisterer.kt`
+- 方块：
+  - 物品：`common/block/hatch/item/ItemHatchBlock.kt`、`ItemIOHatchBlock.kt`
+  - 流体：`common/block/hatch/fluid/FluidHatchBlock.kt`、`FluidIOHatchBlock.kt`
+  - 能量：`common/block/hatch/energy/EnergyHatchBlock.kt`
+
+注册与命名规则（Tier 1..10）：
+
+- 物品：
+  - `item_input_hatch_<tier>`
+  - `item_output_hatch_<tier>`
+  - `item_io_hatch_<tier>`
+- 流体：
+  - `fluid_input_hatch_<tier>`
+  - `fluid_output_hatch_<tier>`
+  - `fluid_io_hatch_<tier>`
+- 能量：
+  - `energy_input_hatch_<tier>`
+  - `energy_output_hatch_<tier>`
+  - `energy_io_hatch_<tier>`
+
+> 注意：当前 Hatch 方块 **不再携带 facing（朝向）方块状态**。也就是说，这些方块的 BlockState 不需要（也不应该）再配置 `facing=north/east/...` 之类的变体。
+
+资源文件约定（Forge 1.12.2 标准 BlockState/Model 管线）：
+
+- BlockState（已补齐 90 个）：
+  - 路径：`src/main/resources/assets/prototypemachinery/blockstates/`
+  - 文件名：与注册名一致，例如 `item_input_hatch_1.json`
+  - 统一使用 `variants.normal` 指向同名模型（不带任何属性）
+
+- Block 模型（两层结构，便于兼容与重用）：
+  1) **标准名入口模型**（已新增 90 个）
+     - 路径：`src/main/resources/assets/prototypemachinery/models/block/`
+     - 文件名：与注册名一致，例如 `models/block/item_input_hatch_1.json`
+     - 内容：仅 `parent` 指向旧的分目录模型（见下一条），用于“把模型文件名标准化”同时避免破坏已有资源结构。
+  2) **既有分目录模型（按类型/模式 + lv1..lv10）**
+     - 路径示例：
+       - `models/block/item_hatch/input/lv1.json`
+       - `models/block/fluid_hatch/output/lv10.json`
+       - `models/block/energy_hatch/io/lv5.json`
+
+- ItemBlock 模型（已补齐 90 个）：
+  - 路径：`src/main/resources/assets/prototypemachinery/models/item/`
+  - 文件名：与注册名一致，例如 `models/item/item_input_hatch_1.json`
+  - 内容：`parent` 指向对应的 block 模型，确保物品栏/手持渲染正确。
+
 ---
 
 ### 2.6 Scheduler & 并发执行（补充，后置）

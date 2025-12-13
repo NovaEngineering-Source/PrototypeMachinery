@@ -1,150 +1,38 @@
 {
-  "credit": "Made with WI_8614_ice X:@wi8614ice @wi8614art QQ:1463599076",
-  "textures": {
-    "1": "prototypemachinery:blocks/energy_hatch/base/lv7_top",
-    "2": "prototypemachinery:blocks/energy_hatch/base/lv7_down",
-    "3": "prototypemachinery:blocks/bloom/energy_hatch/output_lv7_10",
-    "4": "prototypemachinery:blocks/energy_hatch/base/lv7_side",
-    "particle": "prototypemachinery:blocks/energy_hatch/base/lv7_top"
-  },
-  "elements": [
-    {
-      "name": "bloom_1",
-      "from": [
-        0,
-        0,
-        0
-      ],
-      "to": [
-        16,
-        16,
-        16
-      ],
-      "faces": {
-        "north": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#3"
-        },
-        "east": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#3"
-        },
-        "south": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#3"
-        },
-        "west": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#3"
-        },
-        "up": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#3"
-        },
-        "down": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#3"
-        }
-      }
-    },
-    {
-      "name": "base",
-      "from": [
-        0,
-        0,
-        0
-      ],
-      "to": [
-        16,
-        16,
-        16
-      ],
-      "faces": {
-        "north": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#4"
-        },
-        "east": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#4"
-        },
-        "south": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#4"
-        },
-        "west": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#4"
-        },
-        "up": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#1"
-        },
-        "down": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#2"
-        }
-      }
-    }
-  ]
+	"credit": "Made with WI_8614_ice X:@wi8614ice @wi8614art QQ:1463599076",
+	"textures": {
+		"1": "prototypemachinery:blocks/energy_hatch/base/lv7_top",
+		"2": "prototypemachinery:blocks/energy_hatch/base/lv7_down",
+		"3": "prototypemachinery:blocks/bloom/energy_hatch/output_lv7_10",
+		"4": "prototypemachinery:blocks/energy_hatch/base/lv7_side",
+		"particle": "prototypemachinery:blocks/energy_hatch/base/lv7_top"
+	},
+	"elements": [
+		{
+			"name": "bloom_1",
+			"from": [0, 0, 0],
+			"to": [16, 16, 16],
+			"faces": {
+				"north": {"uv": [0, 0, 16, 16], "texture": "#3"},
+				"east": {"uv": [0, 0, 16, 16], "texture": "#3"},
+				"south": {"uv": [0, 0, 16, 16], "texture": "#3"},
+				"west": {"uv": [0, 0, 16, 16], "texture": "#3"},
+				"up": {"uv": [0, 0, 16, 16], "texture": "#3"},
+				"down": {"uv": [0, 0, 16, 16], "texture": "#3"}
+			}
+		},
+		{
+			"name": "base",
+			"from": [0, 0, 0],
+			"to": [16, 16, 16],
+			"faces": {
+				"north": {"uv": [0, 0, 16, 16], "texture": "#4"},
+				"east": {"uv": [0, 0, 16, 16], "texture": "#4"},
+				"south": {"uv": [0, 0, 16, 16], "texture": "#4"},
+				"west": {"uv": [0, 0, 16, 16], "texture": "#4"},
+				"up": {"uv": [0, 0, 16, 16], "texture": "#1"},
+				"down": {"uv": [0, 0, 16, 16], "texture": "#2"}
+			}
+		}
+	]
 }
