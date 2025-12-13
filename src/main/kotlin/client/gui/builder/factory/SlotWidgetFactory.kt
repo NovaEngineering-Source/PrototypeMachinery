@@ -1,6 +1,7 @@
 package github.kasuminova.prototypemachinery.client.gui.builder.factory
 
 import com.cleanroommc.modularui.api.widget.IWidget
+import com.cleanroommc.modularui.api.drawable.IDrawable
 import com.cleanroommc.modularui.drawable.Rectangle
 import com.cleanroommc.modularui.utils.Color
 import com.cleanroommc.modularui.widget.Widget
@@ -18,7 +19,7 @@ public class SlotWidgetFactory : WidgetFactory {
     // Player inventory slot consumer: ensure slots are visible even on custom backgrounds.
     private fun playerInvSlotBackground(ctx: UIBuildContext): SlotGroupWidget.SlotConsumer {
         return SlotGroupWidget.SlotConsumer { _: Int, slot: ItemSlot ->
-            slot.background(ctx.textures.defaultSlotBackground)
+            slot.background(IDrawable.EMPTY)
         }
     }
 

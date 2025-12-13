@@ -12,7 +12,9 @@ import com.cleanroommc.modularui.value.sync.PanelSyncManager
 import com.cleanroommc.modularui.widgets.SlotGroupWidget
 import com.cleanroommc.modularui.widgets.ToggleButton
 import com.cleanroommc.modularui.widgets.layout.Column
+import com.cleanroommc.modularui.widgets.layout.Grid
 import com.cleanroommc.modularui.widgets.layout.Row
+import github.kasuminova.prototypemachinery.client.gui.scroll.PMVerticalScrollData
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.key.PMKey
 import github.kasuminova.prototypemachinery.client.gui.builder.UITextures
@@ -21,6 +23,7 @@ import github.kasuminova.prototypemachinery.client.gui.widget.ResourceSlotWidget
 import github.kasuminova.prototypemachinery.common.block.hatch.HatchTier
 import github.kasuminova.prototypemachinery.impl.key.item.PMItemKeyType
 import net.minecraft.item.ItemStack
+import net.minecraft.util.ResourceLocation
 import java.util.function.BooleanSupplier
 
 /**
@@ -35,29 +38,99 @@ public object ItemIOHatchGUI {
 
     private val uiTextures: UITextures = UITextures()
 
-    // GUI dimensions (base size for tiers 1-4)
-    private const val GUI_WIDTH_SMALL = 192
-    private const val GUI_HEIGHT_SMALL = 182
+    private val ITEM_SLOT_BG: IDrawable = UITexture.builder()
+        .location(ResourceLocation(PrototypeMachinery.MOD_ID, "textures/gui/states.png"))
+        .imageSize(256, 256)
+        .subAreaXYWH(73, 0, 18, 18)
+        .build()
 
-    // Large GUI size for tiers 5-10 (512x512 textures)
-    private const val GUI_WIDTH_LARGE = 384
-    private const val GUI_HEIGHT_LARGE = 364
+    private const val AUTO_BTN_W = 14
+    private const val AUTO_BTN_H = 14
 
-    // Slot grid configuration
-    private const val SLOT_SIZE = 18
-    private const val SLOTS_PER_ROW = 5
-    private const val MAX_VISIBLE_ROWS = 4
+    private const val AUTO_INPUT_X = 4
+    private const val AUTO_INPUT_Y = 13
+    private const val AUTO_OUTPUT_X = 4
+    private const val AUTO_OUTPUT_Y = 31
 
-    // Section positions
-    private const val INPUT_SECTION_X = 8
-    private const val OUTPUT_SECTION_X = 100
+    // states.png button sprites:
+    // order: off / hover / enabled / disabled
+    private fun stateIcon(x: Int, y: Int): IDrawable {
+        return UITexture.builder()
+            .location(ResourceLocation(PrototypeMachinery.MOD_ID, "textures/gui/states.png"))
+            .imageSize(256, 256)
+            .subAreaXYWH(x, y, AUTO_BTN_W, AUTO_BTN_H)
+            .build()
+    }
 
-    private fun getGuiSize(tier: HatchTier): Pair<Int, Int> {
-        return if (tier.tier <= 4) {
-            Pair(GUI_WIDTH_SMALL, GUI_HEIGHT_SMALL)
-        } else {
-            Pair(GUI_WIDTH_LARGE, GUI_HEIGHT_LARGE)
+    private val AUTO_INPUT_OFF: IDrawable = stateIcon(185, 18)
+    private val AUTO_INPUT_HOVER: IDrawable = stateIcon(199, 18)
+    private val AUTO_INPUT_ON: IDrawable = stateIcon(213, 18)
+    private val AUTO_INPUT_DISABLED: IDrawable = stateIcon(227, 18)
+
+    private val AUTO_OUTPUT_OFF: IDrawable = stateIcon(185, 1)
+    private val AUTO_OUTPUT_HOVER: IDrawable = stateIcon(199, 1)
+    private val AUTO_OUTPUT_ON: IDrawable = stateIcon(213, 1)
+    private val AUTO_OUTPUT_DISABLED: IDrawable = stateIcon(227, 1)
+
+    private data class GuiTextureSpec(
+        val texSize: Int,
+        val uiWidth: Int,
+        val uiHeight: Int
+    )
+
+    // Derived from Python analysis of textures (gui_item_io_hatch_*).
+    private fun getTextureSpec(tier: HatchTier): GuiTextureSpec {
+        return when (tier.tier) {
+            1, 2 -> GuiTextureSpec(256, 251, 168)
+            3, 4 -> GuiTextureSpec(256, 251, 186)
+            5, 6, 7, 8, 9, 10 -> GuiTextureSpec(256, 245, 240)
+            else -> GuiTextureSpec(256, 251, 225)
         }
+    }
+
+    private val HIDE_PLAYER_INV_BG: SlotGroupWidget.SlotConsumer = SlotGroupWidget.SlotConsumer { _, slot ->
+        slot.background(IDrawable.EMPTY)
+    }
+
+    private const val SLOT_SIZE = 18
+
+    private data class GridSpec(
+        val columns: Int,
+        val visibleRows: Int,
+        val inputX: Int,
+        val inputY: Int,
+        val outputX: Int,
+        val outputY: Int
+    )
+
+    // Layout rules (slot size is fixed 18px):
+    // - Input grid starts at X=26, Y=24
+    // - Output grid X = inputX + (columns * SLOT_SIZE) + gap
+    // - Gap inferred from Lv1-2: 114 - 26 - (4 * 18) = 16
+    private fun getGridSpec(tier: HatchTier): GridSpec {
+        val inputX = 26
+        val inputY = 24
+        val (cols, rows) = when (tier.tier) {
+            1, 2 -> 4 to 3
+            3, 4 -> 4 to 4
+            else -> 5 to 7
+        }
+
+        // NOTE: Prefer explicit coordinates when provided (texture may contain extra decorative elements).
+        val outputX = when (tier.tier) {
+            1, 2 -> 114
+            3, 4 -> 123
+            else -> 137
+        }
+        val outputY = inputY
+        return GridSpec(
+            columns = cols,
+            visibleRows = rows,
+            inputX = inputX,
+            inputY = inputY,
+            outputX = outputX,
+            outputY = outputY
+        )
     }
 
     /**
@@ -72,10 +145,14 @@ public object ItemIOHatchGUI {
         val config = hatch.config
         val tier = config.tier
 
-        val (guiWidth, guiHeight) = getGuiSize(tier)
+        val spec = getTextureSpec(tier)
+        val guiWidth = spec.uiWidth
+        val guiHeight = spec.uiHeight
+
+        val gridSpec = getGridSpec(tier)
 
         // Select background texture based on tier
-        val backgroundTexture = getBackgroundTexture(tier)
+        val backgroundTexture = getBackgroundTexture(tier, spec)
 
         val panel = ModularPanel.defaultPanel("item_io_hatch_${tier.tier}")
             .size(guiWidth, guiHeight)
@@ -92,26 +169,24 @@ public object ItemIOHatchGUI {
         panel.child(
             IKey.lang("prototypemachinery.gui.hatch.input")
                 .asWidget()
-                .pos(INPUT_SECTION_X, 18)
+                .pos(gridSpec.inputX, 18)
         )
 
         // Output section label
         panel.child(
             IKey.lang("prototypemachinery.gui.hatch.output")
                 .asWidget()
-                .pos(OUTPUT_SECTION_X, 18)
+                .pos(gridSpec.outputX, 18)
         )
 
-        // Build input section
-        panel.child(buildInputSection(hatch, syncManager, config))
-
-        // Build output section
-        panel.child(buildOutputSection(hatch, syncManager, config))
+        // Build input/output grids
+        panel.child(buildInputSection(hatch, syncManager, config, gridSpec))
+        panel.child(buildOutputSection(hatch, syncManager, config, gridSpec))
 
         // Player inventory
         panel.child(
-            SlotGroupWidget.playerInventory(true)
-                .pos(16, guiHeight - 82 - 4)
+            SlotGroupWidget.playerInventory(HIDE_PLAYER_INV_BG)
+                .pos(26, guiHeight - 81 - 4)
         )
 
         // Control buttons
@@ -123,8 +198,9 @@ public object ItemIOHatchGUI {
     private fun buildInputSection(
         hatch: ItemIOHatchBlockEntity,
         syncManager: PanelSyncManager,
-        config: ItemIOHatchConfig
-    ): Column {
+        config: ItemIOHatchConfig,
+        gridSpec: GridSpec
+    ): IWidget {
         val slotCount = config.inputSlotCount
 
         // Register sync handler for input storage
@@ -135,21 +211,24 @@ public object ItemIOHatchGUI {
         )
         syncManager.syncValue("inputStorage", inputSyncHandler)
 
-        val container = Column()
-        container.pos(INPUT_SECTION_X, 30)
-        container.width(SLOT_SIZE * SLOTS_PER_ROW)
-        container.height(SLOT_SIZE * MAX_VISIBLE_ROWS)
-
-        buildSlotGrid(container, inputSyncHandler, slotCount, canInsert = true, canExtract = false)
-
-        return container
+        return buildSlotGrid(
+            syncHandler = inputSyncHandler,
+            slotCount = slotCount,
+            columns = gridSpec.columns,
+            visibleRows = gridSpec.visibleRows,
+            canInsert = true,
+            canExtract = false
+        ).apply {
+            pos(gridSpec.inputX, gridSpec.inputY)
+        }
     }
 
     private fun buildOutputSection(
         hatch: ItemIOHatchBlockEntity,
         syncManager: PanelSyncManager,
-        config: ItemIOHatchConfig
-    ): Column {
+        config: ItemIOHatchConfig,
+        gridSpec: GridSpec
+    ): IWidget {
         val slotCount = config.outputSlotCount
 
         // Register sync handler for output storage
@@ -160,39 +239,44 @@ public object ItemIOHatchGUI {
         )
         syncManager.syncValue("outputStorage", outputSyncHandler)
 
-        val container = Column()
-        container.pos(OUTPUT_SECTION_X, 30)
-        container.width(SLOT_SIZE * SLOTS_PER_ROW)
-        container.height(SLOT_SIZE * MAX_VISIBLE_ROWS)
-
-        buildSlotGrid(container, outputSyncHandler, slotCount, canInsert = false, canExtract = true)
-
-        return container
+        return buildSlotGrid(
+            syncHandler = outputSyncHandler,
+            slotCount = slotCount,
+            columns = gridSpec.columns,
+            visibleRows = gridSpec.visibleRows,
+            canInsert = false,
+            canExtract = true
+        ).apply {
+            pos(gridSpec.outputX, gridSpec.outputY)
+        }
     }
 
     private fun buildSlotGrid(
-        container: Column,
         syncHandler: ResourceSlotSyncHandler<PMKey<ItemStack>>,
         slotCount: Int,
+        columns: Int,
+        visibleRows: Int,
         canInsert: Boolean,
         canExtract: Boolean
-    ) {
-        var slotIndex = 0
-        while (slotIndex < slotCount) {
-            val row = Row().height(SLOT_SIZE)
-            for (col in 0 until SLOTS_PER_ROW) {
-                if (slotIndex >= slotCount) break
-                row.child(
+    ): Grid {
+        val totalRows = (slotCount + columns - 1) / columns
+
+        return Grid().apply {
+            // Reserve space for the custom scrollbar strip so slots won't be clipped.
+            size(columns * SLOT_SIZE + PMVerticalScrollData.RESERVED_THICKNESS, visibleRows * SLOT_SIZE)
+            // Requirement: all grids must be scrollable.
+            scrollable(PMVerticalScrollData().cancelScrollEdge(true))
+
+            matrix(
+                Grid.mapToMatrix(columns, slotCount) { index ->
                     ResourceSlotWidget<PMKey<ItemStack>>()
                         .syncHandler(syncHandler)
-                        .slotIndex(slotIndex)
-                        .slotBackground(uiTextures.defaultSlotBackground)
+                        .slotIndex(index)
+                        .slotBackground(ITEM_SLOT_BG)
                         .canInsert(canInsert)
                         .canExtract(canExtract)
-                )
-                slotIndex++
-            }
-            container.child(row)
+                }
+            )
         }
     }
 
@@ -201,49 +285,52 @@ public object ItemIOHatchGUI {
         syncManager: PanelSyncManager,
         guiWidth: Int
     ): IWidget {
-        val buttonRow = Row()
-        buttonRow.pos(guiWidth - 40, 4)
-        buttonRow.height(16)
+        fun createAutoToggle(isInput: Boolean, value: BooleanSyncValue): ToggleButton {
+            val off = if (isInput) AUTO_INPUT_OFF else AUTO_OUTPUT_OFF
+            val hover = if (isInput) AUTO_INPUT_HOVER else AUTO_OUTPUT_HOVER
+            val on = if (isInput) AUTO_INPUT_ON else AUTO_OUTPUT_ON
+            return ToggleButton()
+                .value(value)
+                .size(AUTO_BTN_W, AUTO_BTN_H)
+                .background(false, off)
+                .hoverBackground(false, hover)
+                .background(true, on)
+        }
 
-        // Auto-input button
+        val container = Column().apply { pos(0, 0) }
+
         val autoInputSync = BooleanSyncValue(
             BooleanSupplier { hatch.autoInput },
             BooleanConsumer { hatch.autoInput = it }
         )
-        syncManager.syncValue("autoInput", autoInputSync)
-
-        buttonRow.child(
-            ToggleButton()
-                .value(autoInputSync)
-                .size(16, 16)
+        container.child(
+            createAutoToggle(isInput = true, value = autoInputSync)
+                .pos(AUTO_INPUT_X, AUTO_INPUT_Y)
                 .tooltip { it.addLine(IKey.lang("prototypemachinery.gui.hatch.auto_input")) }
         )
 
-        // Auto-output button
         val autoOutputSync = BooleanSyncValue(
             BooleanSupplier { hatch.autoOutput },
             BooleanConsumer { hatch.autoOutput = it }
         )
-        syncManager.syncValue("autoOutput", autoOutputSync)
-
-        buttonRow.child(
-            ToggleButton()
-                .value(autoOutputSync)
-                .size(16, 16)
+        container.child(
+            createAutoToggle(isInput = false, value = autoOutputSync)
+                .pos(AUTO_OUTPUT_X, AUTO_OUTPUT_Y)
                 .tooltip { it.addLine(IKey.lang("prototypemachinery.gui.hatch.auto_output")) }
         )
 
-        return buttonRow
+        return container
     }
 
-    private fun getBackgroundTexture(tier: HatchTier): IDrawable {
+    private fun getBackgroundTexture(tier: HatchTier, spec: GuiTextureSpec): IDrawable {
         val tierLevel = tier.tier
         val fileName = "gui_item_io_hatch_${tierLevel}.png"
 
-        return UITexture.fullImage(
-            PrototypeMachinery.MOD_ID,
-            "textures/gui/gui_item_io_hatch/$fileName"
-        )
+        return UITexture.builder()
+            .location(ResourceLocation(PrototypeMachinery.MOD_ID, "textures/gui/gui_item_io_hatch/$fileName"))
+            .imageSize(spec.texSize, spec.texSize)
+            .subAreaXYWH(0, 0, spec.uiWidth, spec.uiHeight)
+            .build()
     }
 
 }

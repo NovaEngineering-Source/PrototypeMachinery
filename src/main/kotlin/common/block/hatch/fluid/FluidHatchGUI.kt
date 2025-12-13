@@ -20,6 +20,7 @@ import github.kasuminova.prototypemachinery.common.block.hatch.HatchTier
 import github.kasuminova.prototypemachinery.common.block.hatch.HatchType
 import github.kasuminova.prototypemachinery.impl.key.fluid.PMFluidKeyType
 import net.minecraftforge.fluids.FluidStack
+import net.minecraft.util.ResourceLocation
 import java.util.function.BooleanSupplier
 
 /**
@@ -32,9 +33,24 @@ import java.util.function.BooleanSupplier
  */
 public object FluidHatchGUI {
 
-    // GUI dimensions
-    private const val GUI_WIDTH = 176
-    private const val GUI_HEIGHT = 166
+    private data class GuiTextureSpec(
+        val texSize: Int,
+        val uiWidth: Int,
+        val uiHeight: Int
+    )
+
+    // Derived from Python analysis of textures (gui_fluid_hatch_*).
+    private fun getTextureSpec(tier: HatchTier): GuiTextureSpec {
+        return if (tier.tier <= 8) {
+            GuiTextureSpec(256, 225, 168)
+        } else {
+            GuiTextureSpec(256, 243, 168)
+        }
+    }
+
+    private val HIDE_PLAYER_INV_BG: SlotGroupWidget.SlotConsumer = SlotGroupWidget.SlotConsumer { _, slot ->
+        slot.background(IDrawable.EMPTY)
+    }
 
     // Slot grid configuration
     private const val SLOT_SIZE = 18
@@ -54,11 +70,15 @@ public object FluidHatchGUI {
         val tier = config.tier
         val hatchType = config.hatchType
 
+        val spec = getTextureSpec(tier)
+        val guiWidth = spec.uiWidth
+        val guiHeight = spec.uiHeight
+
         // Select background texture based on tier
-        val backgroundTexture = getBackgroundTexture(tier, hatchType)
+        val backgroundTexture = getBackgroundTexture(tier, hatchType, spec)
 
         val panel = ModularPanel.defaultPanel("fluid_hatch_${hatchType.name.lowercase()}_${tier.tier}")
-            .size(GUI_WIDTH, GUI_HEIGHT)
+            .size(guiWidth, guiHeight)
             .background(backgroundTexture)
 
         // Title bar
@@ -73,12 +93,12 @@ public object FluidHatchGUI {
 
         // Player inventory
         panel.child(
-            SlotGroupWidget.playerInventory(true)
-                .pos(8, GUI_HEIGHT - 82 - 4)
+            SlotGroupWidget.playerInventory(HIDE_PLAYER_INV_BG)
+                .pos(8, guiHeight - 82 - 4)
         )
 
         // Auto-input/output buttons
-        panel.child(buildControlButtons(hatch, syncManager, hatchType))
+        panel.child(buildControlButtons(hatch, syncManager, hatchType, guiWidth))
 
         return panel
     }
@@ -120,10 +140,11 @@ public object FluidHatchGUI {
     private fun buildControlButtons(
         hatch: FluidHatchBlockEntity,
         syncManager: PanelSyncManager,
-        hatchType: HatchType
+        hatchType: HatchType,
+        guiWidth: Int
     ): IWidget {
         val buttonRow = Row()
-        buttonRow.pos(GUI_WIDTH - 40, 4)
+        buttonRow.pos(guiWidth - 40, 4)
         buttonRow.height(16)
 
         // Auto-input button (only for INPUT and IO)
@@ -132,7 +153,6 @@ public object FluidHatchGUI {
                 BooleanSupplier { hatch.autoInput },
                 BooleanConsumer { hatch.autoInput = it }
             )
-            syncManager.syncValue("autoInput", autoInputSync)
 
             buttonRow.child(
                 ToggleButton()
@@ -148,7 +168,6 @@ public object FluidHatchGUI {
                 BooleanSupplier { hatch.autoOutput },
                 BooleanConsumer { hatch.autoOutput = it }
             )
-            syncManager.syncValue("autoOutput", autoOutputSync)
 
             buttonRow.child(
                 ToggleButton()
@@ -161,14 +180,15 @@ public object FluidHatchGUI {
         return buttonRow
     }
 
-    private fun getBackgroundTexture(tier: HatchTier, hatchType: HatchType): IDrawable {
+    private fun getBackgroundTexture(tier: HatchTier, hatchType: HatchType, spec: GuiTextureSpec): IDrawable {
         val tierLevel = tier.tier
         val fileName = "gui_fluid_hatch_${tierLevel}.png"
 
-        return UITexture.fullImage(
-            PrototypeMachinery.MOD_ID,
-            "textures/gui/gui_fluid_hatch/$fileName"
-        )
+        return UITexture.builder()
+            .location(ResourceLocation(PrototypeMachinery.MOD_ID, "textures/gui/gui_fluid_hatch/$fileName"))
+            .imageSize(spec.texSize, spec.texSize)
+            .subAreaXYWH(0, 0, spec.uiWidth, spec.uiHeight)
+            .build()
     }
 
 }

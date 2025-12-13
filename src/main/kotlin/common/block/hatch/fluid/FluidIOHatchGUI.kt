@@ -31,6 +31,10 @@ import java.util.function.BooleanSupplier
  */
 public object FluidIOHatchGUI {
 
+    private val HIDE_PLAYER_INV_BG: SlotGroupWidget.SlotConsumer = SlotGroupWidget.SlotConsumer { _, slot ->
+        slot.background(IDrawable.EMPTY)
+    }
+
     // GUI dimensions
     private const val GUI_WIDTH = 192
     private const val GUI_HEIGHT = 182
@@ -92,7 +96,7 @@ public object FluidIOHatchGUI {
 
         // Player inventory
         panel.child(
-            SlotGroupWidget.playerInventory(true)
+            SlotGroupWidget.playerInventory(HIDE_PLAYER_INV_BG)
                 .pos(16, GUI_HEIGHT - 82 - 4)
         )
 
@@ -171,7 +175,6 @@ public object FluidIOHatchGUI {
             BooleanSupplier { hatch.autoInput },
             BooleanConsumer { hatch.autoInput = it }
         )
-        syncManager.syncValue("autoInput", autoInputSync)
 
         buttonRow.child(
             ToggleButton()
@@ -185,7 +188,6 @@ public object FluidIOHatchGUI {
             BooleanSupplier { hatch.autoOutput },
             BooleanConsumer { hatch.autoOutput = it }
         )
-        syncManager.syncValue("autoOutput", autoOutputSync)
 
         buttonRow.child(
             ToggleButton()

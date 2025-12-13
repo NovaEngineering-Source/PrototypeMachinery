@@ -18,6 +18,7 @@ import github.kasuminova.prototypemachinery.client.gui.sync.EnergySyncHandler
 import github.kasuminova.prototypemachinery.common.block.hatch.HatchTier
 import github.kasuminova.prototypemachinery.common.block.hatch.HatchType
 import github.kasuminova.prototypemachinery.common.util.NumberFormatter
+import net.minecraft.util.ResourceLocation
 import java.util.function.BooleanSupplier
 
 /**
@@ -32,9 +33,18 @@ public object EnergyHatchGUI {
 
     private val uiTextures: UITextures = UITextures()
 
-    // GUI dimensions
-    private const val GUI_WIDTH = 176
-    private const val GUI_HEIGHT = 166
+    private data class GuiTextureSpec(
+        val texSize: Int,
+        val uiWidth: Int,
+        val uiHeight: Int
+    )
+
+    // Derived from Python analysis of textures (gui_energy_hatch_*).
+    private fun getTextureSpec(): GuiTextureSpec = GuiTextureSpec(256, 195, 256)
+
+    private val HIDE_PLAYER_INV_BG: SlotGroupWidget.SlotConsumer = SlotGroupWidget.SlotConsumer { _, slot ->
+        slot.background(IDrawable.EMPTY)
+    }
 
     // Energy bar configuration
     private const val ENERGY_BAR_WIDTH = 14
@@ -55,11 +65,15 @@ public object EnergyHatchGUI {
         val tier = config.tier
         val hatchType = config.hatchType
 
+        val spec = getTextureSpec()
+        val guiWidth = spec.uiWidth
+        val guiHeight = spec.uiHeight
+
         // Select background texture based on tier
-        val backgroundTexture = getBackgroundTexture(tier)
+        val backgroundTexture = getBackgroundTexture(tier, spec)
 
         val panel = ModularPanel.defaultPanel("energy_hatch_${hatchType.name.lowercase()}_${tier.tier}")
-            .size(GUI_WIDTH, GUI_HEIGHT)
+            .size(guiWidth, guiHeight)
             .background(backgroundTexture)
 
         // Title bar
@@ -77,12 +91,12 @@ public object EnergyHatchGUI {
 
         // Player inventory
         panel.child(
-            SlotGroupWidget.playerInventory(true)
-                .pos(8, GUI_HEIGHT - 82 - 4)
+            SlotGroupWidget.playerInventory(HIDE_PLAYER_INV_BG)
+                .pos(8, guiHeight - 82 - 4)
         )
 
         // Control buttons
-        panel.child(buildControlButtons(hatch, syncManager, hatchType))
+        panel.child(buildControlButtons(hatch, syncManager, hatchType, guiWidth))
 
         return panel
     }
@@ -148,10 +162,11 @@ public object EnergyHatchGUI {
     private fun buildControlButtons(
         hatch: EnergyHatchBlockEntity,
         syncManager: PanelSyncManager,
-        hatchType: HatchType
+        hatchType: HatchType,
+        guiWidth: Int
     ): com.cleanroommc.modularui.api.widget.IWidget {
         val buttonRow = Row()
-        buttonRow.pos(GUI_WIDTH - 40, 4)
+        buttonRow.pos(guiWidth - 40, 4)
         buttonRow.height(16)
 
         // Auto-input button (only for INPUT and IO)
@@ -160,7 +175,6 @@ public object EnergyHatchGUI {
                 BooleanSupplier { hatch.autoInput },
                 BooleanConsumer { hatch.autoInput = it }
             )
-            syncManager.syncValue("autoInput", autoInputSync)
 
             buttonRow.child(
                 ToggleButton()
@@ -176,7 +190,6 @@ public object EnergyHatchGUI {
                 BooleanSupplier { hatch.autoOutput },
                 BooleanConsumer { hatch.autoOutput = it }
             )
-            syncManager.syncValue("autoOutput", autoOutputSync)
 
             buttonRow.child(
                 ToggleButton()
@@ -189,14 +202,15 @@ public object EnergyHatchGUI {
         return buttonRow
     }
 
-    private fun getBackgroundTexture(tier: HatchTier): IDrawable {
+    private fun getBackgroundTexture(tier: HatchTier, spec: GuiTextureSpec): IDrawable {
         val tierLevel = tier.tier
         val fileName = "gui_energy_hatch_${tierLevel}.png"
 
-        return UITexture.fullImage(
-            PrototypeMachinery.MOD_ID,
-            "textures/gui/gui_energy_hatch/$fileName"
-        )
+        return UITexture.builder()
+            .location(ResourceLocation(PrototypeMachinery.MOD_ID, "textures/gui/gui_energy_hatch/$fileName"))
+            .imageSize(spec.texSize, spec.texSize)
+            .subAreaXYWH(0, 0, spec.uiWidth, spec.uiHeight)
+            .build()
     }
 
 }
