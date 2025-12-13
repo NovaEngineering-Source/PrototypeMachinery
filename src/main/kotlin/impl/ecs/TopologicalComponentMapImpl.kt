@@ -26,8 +26,18 @@ import github.kasuminova.prototypemachinery.api.ecs.TopologicalComponentNode
  */
 public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalComponentMap<K, C> {
 
+    /**
+     * A monotonically increasing counter for structural modifications.
+     *
+     * Any operation that changes nodes or edges (dependencies) MUST increment this value.
+     * This is used for cache invalidation by upper layers.
+     */
+    @Volatile
+    public var modificationCount: Int = 0
+        protected set
+
     private val nodes: MutableMap<K, TopologicalComponentNode<K, C>> = LinkedHashMap()
-    
+
     // Adjacency list: Key -> Set of keys that depend on it (Dependency -> Dependents)
     // 邻接表：键 -> 依赖于它的键集合 (依赖项 -> 依赖者)
     private val dependents: MutableMap<K, MutableSet<K>> = mutableMapOf()
@@ -46,7 +56,7 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
      * 值: 目标应依赖的组件集合。
      */
     private val pendingReverseDependencies: MutableMap<K, MutableSet<K>> = mutableMapOf()
-    
+
     private var cachedOrder: List<TopologicalComponentNode<K, C>> = emptyList()
     private var dirty: Boolean = false
 
@@ -68,7 +78,7 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
             if (dependencyKey !in dependentNode.dependencies) {
                 val newDependencies = dependentNode.dependencies + dependencyKey
                 nodes[dependentKey] = dependentNode.copy(dependencies = newDependencies)
-                
+
                 // Update graph
                 if (nodes.containsKey(dependencyKey)) {
                     dependents[dependencyKey]!!.add(dependentKey)
@@ -76,11 +86,13 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
                     pendingDependents.computeIfAbsent(dependencyKey) { mutableSetOf() }.add(dependentKey)
                 }
                 dirty = true
+                modificationCount++
             }
         } else {
             // Node doesn't exist yet, record pending reverse dependency
             // When dependentKey is added, it should depend on dependencyKey
             pendingReverseDependencies.computeIfAbsent(dependentKey) { mutableSetOf() }.add(dependencyKey)
+            modificationCount++
         }
     }
 
@@ -90,7 +102,7 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
             if (dependencyKey in dependentNode.dependencies) {
                 val newDependencies = dependentNode.dependencies - dependencyKey
                 nodes[dependentKey] = dependentNode.copy(dependencies = newDependencies)
-                
+
                 // Update graph
                 if (nodes.containsKey(dependencyKey)) {
                     dependents[dependencyKey]?.remove(dependentKey)
@@ -98,10 +110,12 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
                     pendingDependents[dependencyKey]?.remove(dependentKey)
                 }
                 dirty = true
+                modificationCount++
             }
         } else {
             // Remove from pending if exists
             pendingReverseDependencies[dependentKey]?.remove(dependencyKey)
+            modificationCount++
         }
     }
 
@@ -120,11 +134,11 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
         // 软依赖检查：我们允许尚不存在的依赖项。
         // 在添加之前，它们将在拓扑排序期间被忽略。
         nodes[key] = TopologicalComponentNode(key, component, finalDependencies)
-        
+
         // Update graph structures
         // 更新图结构
         dependents[key] = mutableSetOf()
-        
+
         // 1. Handle dependencies of the new node
         for (dep in finalDependencies) {
             if (nodes.containsKey(dep)) {
@@ -133,14 +147,15 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
                 pendingDependents.computeIfAbsent(dep) { mutableSetOf() }.add(key)
             }
         }
-        
+
         // 2. Handle nodes that were waiting for this new node (as a dependency)
         val waiting = pendingDependents.remove(key)
         if (waiting != null) {
             dependents[key]!!.addAll(waiting)
         }
-        
+
         dirty = true
+        modificationCount++
     }
 
     override fun addAfter(targetKey: K, key: K, component: C) {
@@ -156,15 +171,17 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
         if (targetNode != null) {
             val newDependencies = targetNode.dependencies + key
             nodes[targetKey] = targetNode.copy(dependencies = newDependencies)
-            
+
             // Update graph: target depends on key
             dependents[key]!!.add(targetKey)
-            
+
             dirty = true
+            modificationCount++
         } else {
             // Target doesn't exist yet. Record this dependency for later.
             // 目标尚不存在。记录此依赖项以备后用。
             pendingReverseDependencies.computeIfAbsent(targetKey) { mutableSetOf() }.add(key)
+            modificationCount++
         }
     }
 
@@ -184,11 +201,12 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
             if (rootKey == key) continue // Don't depend on self
             val rootNode = nodes[rootKey]!!
             nodes[rootKey] = rootNode.copy(dependencies = rootNode.dependencies + key)
-            
+
             // Update graph: root depends on key
             dependents[key]!!.add(rootKey)
         }
         dirty = true
+        modificationCount++
     }
 
     override fun addTail(key: K, component: C) {
@@ -196,13 +214,13 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
         // 依赖于所有当前汇点节点（没有人依赖的节点）
         // Optimized: Use dependents map to find sinks
         val sinks = dependents.filter { it.value.isEmpty() }.keys
-        
+
         add(key, component, sinks)
     }
 
     override fun remove(key: K) {
         val node = nodes.remove(key) ?: return
-        
+
         // 1. Remove from dependents of its dependencies
         for (dep in node.dependencies) {
             if (nodes.containsKey(dep)) {
@@ -211,7 +229,7 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
                 pendingDependents[dep]?.remove(key)
             }
         }
-        
+
         // 2. Handle its dependents
         val myDependents = dependents.remove(key)
         if (myDependents != null) {
@@ -221,8 +239,9 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
                 pendingDependents.computeIfAbsent(key) { mutableSetOf() }.add(dep)
             }
         }
-        
+
         dirty = true
+        modificationCount++
     }
 
     override fun contains(key: K): Boolean = nodes.containsKey(key)
@@ -234,6 +253,7 @@ public open class TopologicalComponentMapImpl<K : Any, C : Any> : TopologicalCom
         pendingReverseDependencies.clear()
         cachedOrder = emptyList()
         dirty = false
+        modificationCount++
     }
 
     /**

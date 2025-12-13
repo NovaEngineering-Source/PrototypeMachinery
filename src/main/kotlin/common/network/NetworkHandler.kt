@@ -14,6 +14,7 @@ internal object NetworkHandler {
 
     fun init() {
         registerPacket(PacketSyncMachine::class.java, PacketSyncMachine.Handler::class.java, Side.CLIENT)
+        registerPacket(PacketMachineAction::class.java, PacketMachineAction.Handler::class.java, Side.SERVER)
     }
 
     private fun <REQ : IMessage, REPLY : IMessage> registerPacket(

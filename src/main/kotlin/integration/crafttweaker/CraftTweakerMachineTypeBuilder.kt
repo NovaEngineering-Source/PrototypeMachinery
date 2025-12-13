@@ -1,6 +1,7 @@
 package github.kasuminova.prototypemachinery.integration.crafttweaker
 
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentType
+import github.kasuminova.prototypemachinery.api.machine.component.type.ZSDataComponentType
 import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
 import net.minecraft.util.ResourceLocation
@@ -15,7 +16,10 @@ public class CraftTweakerMachineTypeBuilder(
 
     private var name: String = id.toString()
     private var structureProvider: (() -> MachineStructure)? = null
-    private val componentTypes: MutableSet<MachineComponentType<*>> = mutableSetOf()
+
+    // Default component types include ZSDataComponent for script data storage
+    // 默认组件类型包含 ZSDataComponent 用于脚本数据存储
+    private val componentTypes: MutableSet<MachineComponentType<*>> = mutableSetOf(ZSDataComponentType)
     private var controllerModel: ResourceLocation? = null
 
     /**
@@ -63,7 +67,7 @@ public class CraftTweakerMachineTypeBuilder(
             StructureRegistryImpl.get(structureId)
                 ?: throw IllegalArgumentException(
                     "Structure with ID '$structureId' not found in registry. " +
-                    "Make sure the structure JSON file exists and is loaded before registering this machine type."
+                            "Make sure the structure JSON file exists and is loaded before registering this machine type."
                 )
         }
         return this
@@ -112,7 +116,7 @@ private class CraftTweakerMachineTypeImpl(
     override val componentTypes: Set<MachineComponentType<*>>,
     override val controllerModelLocation: ResourceLocation?
 ) : ICraftTweakerMachineType {
-    
+
     /**
      * Lazily loaded structure instance.
      * 延迟加载的结构实例。
@@ -127,25 +131,25 @@ private class CraftTweakerMachineTypeImpl(
             )
         }
     }
-    
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is CraftTweakerMachineTypeImpl) return false
-        
+
         if (id != other.id) return false
         if (name != other.name) return false
         if (componentTypes != other.componentTypes) return false
-        
+
         return true
     }
-    
+
     override fun hashCode(): Int {
         var result = id.hashCode()
         result = 31 * result + name.hashCode()
         result = 31 * result + componentTypes.hashCode()
         return result
     }
-    
+
     override fun toString(): String {
         return "CraftTweakerMachineType(id=$id, name='$name', componentTypes=$componentTypes)"
     }

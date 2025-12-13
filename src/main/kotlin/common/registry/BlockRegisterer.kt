@@ -44,12 +44,12 @@ internal object BlockRegisterer {
             try {
                 val machineBlock = MachineBlock(machineType)
                 event.registry.register(machineBlock)
-                
+
                 // Store for item registration
                 machineBlocks[machineType.id.toString()] = machineBlock
-                
+
                 PrototypeMachinery.logger.info("Registered machine block: ${machineBlock.registryName}")
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 PrototypeMachinery.logger.error("Failed to register machine block for type: ${machineType.id}", e)
             }
         }

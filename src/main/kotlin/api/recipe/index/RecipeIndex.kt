@@ -1,7 +1,7 @@
 package github.kasuminova.prototypemachinery.api.recipe.index
 
-import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
+import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 
 /**
  * Holds all requirement indices for a specific MachineType.
@@ -20,7 +20,7 @@ public class RecipeIndex(
 
         for (index in indices) {
             val matches = index.lookup(machine)
-            
+
             // If an index returns null, it means it has no opinion (e.g., no inputs of that type).
             // We skip it.
             if (matches == null) continue
@@ -47,7 +47,7 @@ public class RecipeIndex(
         // But usually, indices are for *inputs*. If a machine has no inputs, it might run everything?
         // For safety, if null, we return empty set to force a fallback or indicate no match found via index.
         // Better yet, the caller should check if RecipeIndex exists.
-        
+
         return potentialRecipes ?: emptySet()
     }
 }

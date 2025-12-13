@@ -14,6 +14,14 @@
 
 import mods.prototypemachinery.MachineRegistry;
 
+// Example 0: UI Components Demo (for machine_ui_example.zs)
+// 示例 0：UI 组件展示（配合 machine_ui_example.zs）
+val uiComponentsDemo = MachineRegistry.create("prototypemachinery", "ui_components_demo");
+uiComponentsDemo.name("UI Components Demo");
+uiComponentsDemo.structure("example_simple_machine");
+
+MachineRegistry.register(uiComponentsDemo);
+
 // Example 1: Simple Machine (using structure ID reference)
 // 示例 1：简单机器（使用结构 ID 引用）
 val simpleMachine = MachineRegistry.create("prototypemachinery", "simple_machine");

@@ -45,14 +45,14 @@ public class RecipeProcessImpl(
         (attributeMap as? OverlayMachineAttributeMapImpl)?.let { overlay ->
             nbt.setTag("Attributes", MachineAttributeNbt.writeOverlayLocal(overlay))
         }
-        
+
         val componentsTag = NBTTagCompound()
         components.orderedComponents.forEach { node ->
             val component = node.component
             componentsTag.setTag(component.type.id.toString(), component.serializeNBT())
         }
         nbt.setTag("Components", componentsTag)
-        
+
         return nbt
     }
 
@@ -76,7 +76,7 @@ public class RecipeProcessImpl(
                 MachineAttributeNbt.readOverlayLocal(attrTag, overlay)
             }
         }
-        
+
         if (nbt.hasKey("Components")) {
             val componentsTag = nbt.getCompoundTag("Components")
             components.orderedComponents.forEach { node ->

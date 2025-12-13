@@ -65,13 +65,13 @@ public interface RecipeRequirementSystem<C : RecipeRequirementComponent> {
      * 开始需求处理。
      * 验证条件并执行初始消耗/预留。
      *
-    * @return A transaction representing the start operation.
-    *         - Call commit() when the transaction is accepted.
-    *         - Call rollback() if the recipe cannot start or the overall process aborts.
-    *
-    *         返回表示开始操作的事务。
-    *         - 当事务被确认采用时调用 commit()。
-    *         - 若配方无法开始或整体流程中止，调用 rollback()。
+     * @return A transaction representing the start operation.
+     *         - Call commit() when the transaction is accepted.
+     *         - Call rollback() if the recipe cannot start or the overall process aborts.
+     *
+     *         返回表示开始操作的事务。
+     *         - 当事务被确认采用时调用 commit()。
+     *         - 若配方无法开始或整体流程中止，调用 rollback()。
      */
     public fun start(machine: MachineInstance, component: C, process: RecipeProcess): RequirementTransaction
 

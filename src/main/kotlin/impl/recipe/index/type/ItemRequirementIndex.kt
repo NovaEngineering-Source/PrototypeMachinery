@@ -1,13 +1,13 @@
 package github.kasuminova.prototypemachinery.impl.recipe.index.type
 
+import github.kasuminova.prototypemachinery.api.machine.MachineType
+import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndex
 import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndexFactory
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
 import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 import github.kasuminova.prototypemachinery.impl.key.item.PMItemKey
-import github.kasuminova.prototypemachinery.api.machine.MachineType
-import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 
 public class ItemRequirementIndex(
     private val index: Map<PMItemKey, Set<MachineRecipe>>
@@ -15,10 +15,10 @@ public class ItemRequirementIndex(
 
     public override fun lookup(machine: MachineInstanceImpl): Set<MachineRecipe>? {
         // Pseudo-implementation as per prompt
-        
+
         // 1. Get all ItemContainerComponents from the machine
         // val itemComponents = machine.componentMap.getByInstanceOf(ItemContainerComponent::class.java)
-        
+
         // 2. Collect all available items as ItemStackKeys
         // val availableKeys = mutableSetOf<ItemStackKey>()
         // for (component in itemComponents) {
@@ -28,10 +28,10 @@ public class ItemRequirementIndex(
         //         }
         //     }
         // }
-        
+
         // 3. Query the index
         val potentialRecipes = mutableSetOf<MachineRecipe>()
-        
+
         // In a real implementation, we would iterate availableKeys and addAll(index[key])
         // However, recipes usually require MULTIPLE inputs.
         // If we just union all recipes that match ANY input, we get a superset.
@@ -46,7 +46,7 @@ public class ItemRequirementIndex(
         // Index(Gold) -> [RecipeA]
         // If I only have Iron, Index returns [RecipeA].
         // Then the full check fails because Gold is missing. This is correct.
-        
+
         // Mock logic for compilation
         /*
         for (key in availableKeys) {
@@ -56,7 +56,7 @@ public class ItemRequirementIndex(
             }
         }
         */
-        
+
         return if (potentialRecipes.isEmpty()) null else potentialRecipes
     }
 
@@ -66,9 +66,9 @@ public class ItemRequirementIndex(
         public override fun create(machineType: MachineType, recipes: List<MachineRecipe>): RequirementIndex? {
             // 1. Check if machine has ItemRequirementComponents and if they are static
             // if (!areItemComponentsStatic(machineType)) return null
-            
+
             val map = mutableMapOf<PMItemKey, MutableSet<MachineRecipe>>()
-            
+
             for (recipe in recipes) {
                 // Extract item inputs from recipe
                 // val itemRequirements = recipe.requirements.filterIsInstance<ItemRequirement>()
@@ -79,9 +79,9 @@ public class ItemRequirementIndex(
                 //     }
                 // }
             }
-            
+
             if (map.isEmpty()) return null
-            
+
             return ItemRequirementIndex(map)
         }
     }

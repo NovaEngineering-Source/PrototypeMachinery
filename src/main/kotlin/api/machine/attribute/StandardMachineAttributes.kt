@@ -1,5 +1,6 @@
 package github.kasuminova.prototypemachinery.api.machine.attribute
 
+import github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachineAttributes.getById
 import net.minecraft.client.resources.I18n
 import net.minecraft.util.ResourceLocation
 import net.minecraftforge.fml.relauncher.Side

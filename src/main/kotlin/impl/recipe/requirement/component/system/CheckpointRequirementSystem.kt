@@ -98,6 +98,7 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
                         rollbackAll(transactions)
                     }
                 }
+
                 is ProcessResult.Blocked -> if (overallResult is ProcessResult.Success) overallResult = r
                 is ProcessResult.Success -> {}
             }
@@ -113,6 +114,7 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
                     rollbackAll(transactions)
                 }
             }
+
             is ProcessResult.Blocked -> if (overallResult is ProcessResult.Success) overallResult = r
             is ProcessResult.Success -> {}
         }
@@ -123,6 +125,7 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
             override fun commit() {
                 commitAll(transactions)
             }
+
             override fun rollback() {
                 rollbackAll(transactions)
             }

@@ -123,5 +123,4 @@ public interface MachineInstance {
      * @param component The component to sync / 要同步的组件
      */
     public fun syncComponent(component: MachineComponent.Synchronizable)
-
 }

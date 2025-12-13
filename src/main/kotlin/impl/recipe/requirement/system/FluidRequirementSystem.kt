@@ -1,7 +1,6 @@
 package github.kasuminova.prototypemachinery.impl.recipe.requirement.system
 
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
-import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RequirementTransaction

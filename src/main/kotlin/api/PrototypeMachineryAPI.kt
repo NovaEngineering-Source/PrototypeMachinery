@@ -1,5 +1,12 @@
 package github.kasuminova.prototypemachinery.api
 
+import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.machineTypeRegistry
+import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.recipeIndexRegistry
+import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.recipeManager
+import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.recipeRequirementRegistry
+import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.selectiveModifierRegistry
+import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.structureRegistry
+import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.taskScheduler
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.machine.MachineTypeRegistry
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureRegistry
@@ -8,12 +15,18 @@ import github.kasuminova.prototypemachinery.api.recipe.index.IRecipeIndexRegistr
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementRegistry
 import github.kasuminova.prototypemachinery.api.recipe.selective.SelectiveModifierRegistry
 import github.kasuminova.prototypemachinery.api.scheduler.TaskScheduler
+import github.kasuminova.prototypemachinery.api.ui.action.UIActionRegistry
+import github.kasuminova.prototypemachinery.api.ui.binding.UIBindingRegistry
+import github.kasuminova.prototypemachinery.api.ui.registry.MachineUIRegistry
 import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
 import github.kasuminova.prototypemachinery.impl.machine.MachineTypeRegistryImpl
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
 import github.kasuminova.prototypemachinery.impl.recipe.RecipeManagerImpl
 import github.kasuminova.prototypemachinery.impl.recipe.index.RecipeIndexRegistry
 import github.kasuminova.prototypemachinery.impl.scheduler.TaskSchedulerImpl
+import github.kasuminova.prototypemachinery.impl.ui.action.UIActionRegistryImpl
+import github.kasuminova.prototypemachinery.impl.ui.binding.UIBindingRegistryImpl
+import github.kasuminova.prototypemachinery.impl.ui.registry.MachineUIRegistryImpl
 import github.kasuminova.prototypemachinery.integration.crafttweaker.zenclass.ZenMachineRegistry
 
 /**
@@ -181,5 +194,30 @@ public object PrototypeMachineryAPI {
      */
     @get:JvmStatic
     public val taskScheduler: TaskScheduler = TaskSchedulerImpl
+
+    /**
+     * The machine UI registry.
+     *
+     * This registry allows scripts/mods to register or override UIs independently
+     * from machine type construction.
+     */
+    @get:JvmStatic
+    public val machineUIRegistry: MachineUIRegistry = MachineUIRegistryImpl
+
+    /**
+     * UI binding registry.
+     *
+     * 用于把 UI 中的字符串 key 解析为服务端 getter / setter（可写）并接入 ModularUI 同步。
+     */
+    @get:JvmStatic
+    public val uiBindingRegistry: UIBindingRegistry = UIBindingRegistryImpl
+
+    /**
+     * UI action registry.
+     *
+     * 用于处理 client -> server 的 UI 行为（按钮点击、快捷操作等）。
+     */
+    @get:JvmStatic
+    public val uiActionRegistry: UIActionRegistry = UIActionRegistryImpl
 
 }

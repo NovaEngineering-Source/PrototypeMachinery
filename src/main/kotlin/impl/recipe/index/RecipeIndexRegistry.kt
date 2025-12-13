@@ -1,14 +1,13 @@
 package github.kasuminova.prototypemachinery.impl.recipe.index
 
-import github.kasuminova.prototypemachinery.api.recipe.index.RecipeIndex
-import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndexFactory
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
+import github.kasuminova.prototypemachinery.api.recipe.index.IRecipeIndexRegistry
+import github.kasuminova.prototypemachinery.api.recipe.index.RecipeIndex
+import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndexFactory
 import github.kasuminova.prototypemachinery.impl.recipe.index.type.EnergyRequirementIndex
 import github.kasuminova.prototypemachinery.impl.recipe.index.type.ItemRequirementIndex
 import java.util.concurrent.ConcurrentHashMap
-
-import github.kasuminova.prototypemachinery.api.recipe.index.IRecipeIndexRegistry
 
 /**
  * # Recipe Index Registry Implementation
@@ -51,7 +50,7 @@ public object RecipeIndexRegistry : IRecipeIndexRegistry {
             if (recipes.isEmpty()) continue
 
             val typeIndices = mutableListOf<github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndex>()
-            
+
             for (factory in factories) {
                 val index = factory.create(type, recipes)
                 if (index != null) {

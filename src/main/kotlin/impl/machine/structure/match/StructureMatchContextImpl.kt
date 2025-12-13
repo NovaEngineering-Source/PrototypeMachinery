@@ -2,9 +2,9 @@ package github.kasuminova.prototypemachinery.impl.machine.structure.match
 
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
+import github.kasuminova.prototypemachinery.api.machine.structure.StructureInstance
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureInstanceData
 import github.kasuminova.prototypemachinery.api.machine.structure.match.StructureMatchContext
-import github.kasuminova.prototypemachinery.api.machine.structure.StructureInstance
 
 public class StructureMatchContextImpl(
     override val machine: MachineInstance

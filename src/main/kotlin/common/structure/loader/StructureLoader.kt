@@ -6,7 +6,8 @@ import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrien
 import github.kasuminova.prototypemachinery.api.machine.structure.pattern.StructurePattern
 import github.kasuminova.prototypemachinery.api.machine.structure.pattern.predicate.BlockPredicate
 import github.kasuminova.prototypemachinery.common.registry.StructureRegisterer
-import github.kasuminova.prototypemachinery.common.structure.serialization.*
+import github.kasuminova.prototypemachinery.common.structure.serialization.StructureData
+import github.kasuminova.prototypemachinery.common.structure.serialization.StructurePatternElementData
 import github.kasuminova.prototypemachinery.impl.machine.structure.SliceStructure
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
 import github.kasuminova.prototypemachinery.impl.machine.structure.TemplateStructure
@@ -14,7 +15,6 @@ import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.Simpl
 import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.StatedBlockPredicate
 import kotlinx.serialization.json.Json
 import net.minecraft.block.Block
-import net.minecraft.init.Blocks
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.ResourceLocation
 import net.minecraft.util.math.BlockPos
@@ -91,7 +91,7 @@ public object StructureLoader {
         for (file in jsonFiles) {
             try {
                 loadStructureDataFile(file, event)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 event.modLog.error("Failed to load structure data from file: ${file.name}", e)
             }
         }
@@ -126,7 +126,7 @@ public object StructureLoader {
                 val structure = convertToMachineStructure(structureData, event)
                 StructureRegisterer.queue(structure)
                 PrototypeMachinery.logger.info("Queued structure '$id' for registration")
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 PrototypeMachinery.logger.error("Failed to convert structure data for '$id'", e)
             }
         }
@@ -192,7 +192,7 @@ public object StructureLoader {
 
         val offset = BlockPos(data.offset.x, data.offset.y, data.offset.z)
         val pattern = convertPattern(data.pattern)
-        
+
         // Resolve child structures by ID
         // 通过 ID 解析子结构
         val children = data.children.mapNotNull { childId ->
@@ -202,18 +202,18 @@ public object StructureLoader {
             if (existing != null) {
                 return@mapNotNull existing
             }
-            
+
             // Then try to get from instance cache (being converted)
             // 然后尝试从实例缓存获取（正在转换的）
             structureInstanceCache[childId]?.let { return@mapNotNull it }
-            
+
             // Finally try to convert from data cache (not yet converted)
             // 最后尝试从数据缓存转换（尚未转换的）
             val childData = structureDataCache[childId]
             if (childData != null) {
                 return@mapNotNull convertToMachineStructure(childData, event, conversionPath)
             }
-            
+
             PrototypeMachinery.logger.warn("Child structure '$childId' not found for structure '${data.id}'")
             null
         }
@@ -233,16 +233,17 @@ public object StructureLoader {
                 validators = emptyList(), // TODO: Support validator deserialization
                 children = children
             )
+
             "slice" -> {
-                val minCount = data.minCount 
+                val minCount = data.minCount
                     ?: throw IllegalArgumentException("Slice structure '${data.id}' must have 'minCount' field")
                 val maxCount = data.maxCount
                     ?: throw IllegalArgumentException("Slice structure '${data.id}' must have 'maxCount' field")
-                
-                val sliceOffset = data.sliceOffset?.let { 
-                    BlockPos(it.x, it.y, it.z) 
+
+                val sliceOffset = data.sliceOffset?.let {
+                    BlockPos(it.x, it.y, it.z)
                 } ?: BlockPos(0, 1, 0) // Default to upward offset
-                
+
                 SliceStructure(
                     id = data.id,
                     orientation = DEFAULT_ORIENTATION,
@@ -255,6 +256,7 @@ public object StructureLoader {
                     children = children
                 )
             }
+
             else -> throw IllegalArgumentException("Unknown structure type: ${data.type}")
         }
 
@@ -311,7 +313,7 @@ public object StructureLoader {
             try {
                 val resourcePath = "/assets/prototypemachinery/structures/examples/$fileName"
                 val inputStream = StructureLoader::class.java.getResourceAsStream(resourcePath)
-                
+
                 if (inputStream != null) {
                     val targetFile = File(examplesDir, fileName)
                     inputStream.use { input ->
@@ -324,7 +326,7 @@ public object StructureLoader {
                 } else {
                     event.modLog.warn("Example structure not found in resources: $fileName")
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 event.modLog.error("Failed to copy example structure: $fileName", e)
             }
         }

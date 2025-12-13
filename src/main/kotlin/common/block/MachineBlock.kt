@@ -148,13 +148,13 @@ public open class MachineBlock(
         hitZ: Float
     ): Boolean {
         if (worldIn.isRemote) {
-            return false
-        }
-        if (worldIn.getTileEntity(pos) !is MachineBlockEntity) {
             return true
         }
-        PrototypeMachineryGUIs.CONTROLLER.open(playerIn, worldIn, pos)
-        return false
+        if (worldIn.getTileEntity(pos) !is MachineBlockEntity) {
+            return false
+        }
+        PrototypeMachineryGUIs.openController(playerIn, worldIn, pos)
+        return true
     }
 
     // endregion

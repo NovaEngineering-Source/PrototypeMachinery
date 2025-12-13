@@ -1,19 +1,18 @@
 package github.kasuminova.prototypemachinery.impl.recipe.requirement.component.system
 
+import github.kasuminova.prototypemachinery.api.ecs.TopologicalComponentNode
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeMap
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentMap
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentType
+import github.kasuminova.prototypemachinery.api.machine.component.system.MachineSystem
 import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidator
 import github.kasuminova.prototypemachinery.api.machine.structure.match.StructureMatchContext
-import github.kasuminova.prototypemachinery.api.ecs.TopologicalComponentNode
-import github.kasuminova.prototypemachinery.api.machine.component.system.MachineSystem
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
-import github.kasuminova.prototypemachinery.api.recipe.selective.SelectiveModifierRegistry
 import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirement
@@ -21,15 +20,16 @@ import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequire
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RequirementTransaction
+import github.kasuminova.prototypemachinery.api.recipe.selective.SelectiveModifierRegistry
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeModifierImpl
 import github.kasuminova.prototypemachinery.impl.recipe.process.RecipeProcessImpl
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.component.SelectiveRequirementComponent
+import net.minecraft.tileentity.TileEntity
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.ResourceLocation
 import net.minecraft.util.math.BlockPos
-import net.minecraft.tileentity.TileEntity
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -174,8 +174,13 @@ class SelectiveRequirementSystemTest {
         override fun start(machine: MachineInstance, component: DummyReqComponent, process: RecipeProcess): RequirementTransaction {
             return object : RequirementTransaction {
                 override val result: ProcessResult = startResult
-                override fun commit() { startCommitCount++ }
-                override fun rollback() { startRollbackCount++ }
+                override fun commit() {
+                    startCommitCount++
+                }
+
+                override fun rollback() {
+                    startRollbackCount++
+                }
             }
         }
 
@@ -197,7 +202,10 @@ class SelectiveRequirementSystemTest {
         override fun acquireTickTransaction(machine: MachineInstance, component: DummyReqComponent, process: RecipeProcess): RequirementTransaction {
             return object : RequirementTransaction {
                 override val result: ProcessResult = ProcessResult.Success
-                override fun commit() { tickCommitCount++ }
+                override fun commit() {
+                    tickCommitCount++
+                }
+
                 override fun rollback() {}
             }
         }

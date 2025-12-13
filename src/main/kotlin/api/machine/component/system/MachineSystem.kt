@@ -1,10 +1,10 @@
 package github.kasuminova.prototypemachinery.api.machine.component.system
 
+import github.kasuminova.prototypemachinery.api.ecs.ComponentSystem
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.api.machine.event.MachineEvent
 import github.kasuminova.prototypemachinery.api.machine.event.MachineTickEvent
-import github.kasuminova.prototypemachinery.api.ecs.ComponentSystem
 
 /**
  * # MachineSystem - Component Processing System (ECS System)

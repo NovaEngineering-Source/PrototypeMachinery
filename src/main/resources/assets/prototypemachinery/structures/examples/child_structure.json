@@ -1,31 +1,31 @@
 {
-    "id": "example_child_structure",
-    "type": "template",
-    "offset": {
+  "id": "example_child_structure",
+  "type": "template",
+  "offset": {
+    "x": 0,
+    "y": 2,
+    "z": 0
+  },
+  "pattern": [
+    {
+      "pos": {
         "x": 0,
-        "y": 2,
+        "y": 0,
         "z": 0
+      },
+      "blockId": "minecraft:glass",
+      "meta": 0
     },
-    "pattern": [
-        {
-            "pos": {
-                "x": 0,
-                "y": 0,
-                "z": 0
-            },
-            "blockId": "minecraft:glass",
-            "meta": 0
-        },
-        {
-            "pos": {
-                "x": 1,
-                "y": 0,
-                "z": 0
-            },
-            "blockId": "minecraft:glass",
-            "meta": 0
-        }
-    ],
-    "validators": [],
-    "children": []
+    {
+      "pos": {
+        "x": 1,
+        "y": 0,
+        "z": 0
+      },
+      "blockId": "minecraft:glass",
+      "meta": 0
+    }
+  ],
+  "validators": [],
+  "children": []
 }

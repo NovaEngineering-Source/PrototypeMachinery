@@ -1,11 +1,12 @@
 package github.kasuminova.prototypemachinery
 
 import github.kasuminova.prototypemachinery.common.CommonProxy
-import github.kasuminova.prototypemachinery.integration.crafttweaker.CraftTweakerExamples
+import github.kasuminova.prototypemachinery.common.handler.CraftTweakerReloadHandler
 import github.kasuminova.prototypemachinery.common.network.NetworkHandler
 import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
 import github.kasuminova.prototypemachinery.common.structure.loader.StructureLoader
 import github.kasuminova.prototypemachinery.impl.scheduler.TaskSchedulerImpl
+import github.kasuminova.prototypemachinery.integration.crafttweaker.CraftTweakerExamples
 import net.minecraftforge.common.MinecraftForge
 import net.minecraftforge.fml.common.Mod
 import net.minecraftforge.fml.common.SidedProxy
@@ -51,6 +52,10 @@ public object PrototypeMachinery {
         // Register scheduler to event bus
         // 注册调度器到事件总线
         MinecraftForge.EVENT_BUS.register(TaskSchedulerImpl)
+
+        // CraftTweaker script reload hook (ZenUtils)
+        // CraftTweaker 脚本热重载钩子（ZenUtils）
+        MinecraftForge.EVENT_BUS.register(CraftTweakerReloadHandler)
 
         // Load structure JSON data (without resolving blocks)
         // 加载结构 JSON 数据（不解析方块）

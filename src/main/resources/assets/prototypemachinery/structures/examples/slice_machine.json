@@ -1,56 +1,56 @@
 {
-    "id": "example_slice_machine",
-    "type": "slice",
-    "offset": {
+  "id": "example_slice_machine",
+  "type": "slice",
+  "offset": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "pattern": [
+    {
+      "pos": {
         "x": 0,
         "y": 0,
         "z": 0
+      },
+      "blockId": "minecraft:stone",
+      "meta": 0
     },
-    "pattern": [
-        {
-            "pos": {
-                "x": 0,
-                "y": 0,
-                "z": 0
-            },
-            "blockId": "minecraft:stone",
-            "meta": 0
-        },
-        {
-            "pos": {
-                "x": 1,
-                "y": 0,
-                "z": 0
-            },
-            "blockId": "minecraft:stone",
-            "meta": 0
-        },
-        {
-            "pos": {
-                "x": 0,
-                "y": 0,
-                "z": 1
-            },
-            "blockId": "minecraft:stone",
-            "meta": 0
-        },
-        {
-            "pos": {
-                "x": 1,
-                "y": 0,
-                "z": 1
-            },
-            "blockId": "minecraft:stone",
-            "meta": 0
-        }
-    ],
-    "minCount": 3,
-    "maxCount": 10,
-    "sliceOffset": {
-        "x": 0,
-        "y": 1,
+    {
+      "pos": {
+        "x": 1,
+        "y": 0,
         "z": 0
+      },
+      "blockId": "minecraft:stone",
+      "meta": 0
     },
-    "validators": [],
-    "children": []
+    {
+      "pos": {
+        "x": 0,
+        "y": 0,
+        "z": 1
+      },
+      "blockId": "minecraft:stone",
+      "meta": 0
+    },
+    {
+      "pos": {
+        "x": 1,
+        "y": 0,
+        "z": 1
+      },
+      "blockId": "minecraft:stone",
+      "meta": 0
+    }
+  ],
+  "minCount": 3,
+  "maxCount": 10,
+  "sliceOffset": {
+    "x": 0,
+    "y": 1,
+    "z": 0
+  },
+  "validators": [],
+  "children": []
 }

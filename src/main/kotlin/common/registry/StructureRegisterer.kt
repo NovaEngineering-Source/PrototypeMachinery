@@ -4,7 +4,6 @@ import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent
-import net.minecraftforge.fml.common.event.FMLPreInitializationEvent
 
 /**
  * Structure registerer for queuing and processing structure registrations.

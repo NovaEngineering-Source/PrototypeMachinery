@@ -1,9 +1,20 @@
 package github.kasuminova.prototypemachinery.common.block.entity
 
+import com.cleanroommc.modularui.api.IGuiHolder
+import com.cleanroommc.modularui.factory.PosGuiData
+import com.cleanroommc.modularui.screen.ModularPanel
+import com.cleanroommc.modularui.screen.UISettings
+import com.cleanroommc.modularui.value.sync.PanelSyncManager
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
+import github.kasuminova.prototypemachinery.api.machine.component.getFirstComponentOfType
+import github.kasuminova.prototypemachinery.api.machine.component.ui.UIProviderComponent
+import github.kasuminova.prototypemachinery.api.ui.definition.PanelDefinition
+import github.kasuminova.prototypemachinery.api.ui.definition.WidgetDefinition
+import github.kasuminova.prototypemachinery.client.gui.DefaultMachineUI
+import github.kasuminova.prototypemachinery.client.gui.UIBuilderHelper
 import github.kasuminova.prototypemachinery.common.util.warnWithBlockEntity
 import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 import github.kasuminova.prototypemachinery.impl.scheduler.TaskSchedulerImpl
@@ -14,7 +25,7 @@ import net.minecraft.util.EnumFacing
 import net.minecraft.util.ITickable
 import net.minecraft.util.ResourceLocation
 
-public class MachineBlockEntity() : BlockEntity(), ITickable {
+public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiData> {
 
     public lateinit var machine: MachineInstanceImpl
         private set
@@ -181,6 +192,28 @@ public class MachineBlockEntity() : BlockEntity(), ITickable {
                 PrototypeMachinery.logger.warnWithBlockEntity("MachineBlockEntity validated but machine instance is not initialized.", this)
             }
         }
+    }
+
+    // ======================== IGuiHolder Implementation ========================
+
+    override fun buildUI(data: PosGuiData, syncManager: PanelSyncManager, settings: UISettings): ModularPanel {
+        // First, try to get UIProviderComponent from the machine's components
+        // 首先，尝试从机器的组件中获取 UIProviderComponent
+        val uiProvider = machine.componentMap.getFirstComponentOfType<UIProviderComponent>()
+
+        if (uiProvider != null) {
+            return uiProvider.buildPanel(syncManager)
+        }
+
+        // Then: script/mod overrides (UIRegistry)
+        val regDef: WidgetDefinition? = PrototypeMachineryAPI.machineUIRegistry.resolve(machine.type.id)
+        if (regDef is PanelDefinition) {
+            return UIBuilderHelper.buildPanel(regDef, syncManager, this)
+        }
+
+        // Default fallback UI if no definition is provided
+        // 如果没有定义 UI，则显示默认备用界面
+        return DefaultMachineUI.build(this, syncManager)
     }
 
 }

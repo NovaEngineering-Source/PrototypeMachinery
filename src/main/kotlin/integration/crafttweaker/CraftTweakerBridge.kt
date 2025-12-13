@@ -1,7 +1,5 @@
 package github.kasuminova.prototypemachinery.integration.crafttweaker
 
-import github.kasuminova.prototypemachinery.api.machine.MachineType
-import github.kasuminova.prototypemachinery.integration.crafttweaker.wrapper.MachineTypeWrapper
 import net.minecraft.util.ResourceLocation
 
 /**
@@ -9,12 +7,6 @@ import net.minecraft.util.ResourceLocation
  * CraftTweaker 与内部 API 的桥接（预览用胶水层）。
  */
 public interface ICraftTweakerBridge {
-
-    /**
-     * Convert CraftTweaker machine definition to internal type.
-     * 将 CraftTweaker 机器定义转换为内部类型。
-     */
-    public fun toInternalMachineType(ctMachineType: ICraftTweakerMachineType): MachineType
 
     /**
      * Create a builder for a machine type by ID.
@@ -36,10 +28,6 @@ public interface ICraftTweakerBridge {
  * CraftTweaker 桥的默认实现。
  */
 public object CraftTweakerBridge : ICraftTweakerBridge {
-
-    override fun toInternalMachineType(ctMachineType: ICraftTweakerMachineType): MachineType {
-        return MachineTypeWrapper(ctMachineType)
-    }
 
     override fun createBuilder(id: ResourceLocation): CraftTweakerMachineTypeBuilder {
         return CraftTweakerMachineTypeBuilder(id)

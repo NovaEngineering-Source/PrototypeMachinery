@@ -34,7 +34,7 @@ public interface IRecipeIndexRegistry {
      * @return The index, or null if no index was built for this machine type.
      */
     public fun getIndex(machineType: MachineType): RecipeIndex?
-    
+
     public companion object {
         /**
          * The singleton instance of the recipe index registry.

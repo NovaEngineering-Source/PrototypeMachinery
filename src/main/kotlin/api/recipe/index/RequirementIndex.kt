@@ -1,7 +1,7 @@
 package github.kasuminova.prototypemachinery.api.recipe.index
 
-import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
+import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 
 /**
  * Represents an index for a specific type of requirement (e.g., Item, Fluid, Energy).

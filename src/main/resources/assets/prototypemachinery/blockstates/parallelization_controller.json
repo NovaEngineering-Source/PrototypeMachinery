@@ -1,64 +1,203 @@
 {
   "variants": {
-    "inventory": { "model": "prototypemachinery:item/parallelization_controller" },
-    "facing=north,formed=false,twist=north": { "model": "prototypemachinery:parallelization_controller" },
-    "facing=north,formed=false,twist=east":  { "model": "prototypemachinery:parallelization_controller", "y": 90 },
-    "facing=north,formed=false,twist=south": { "model": "prototypemachinery:parallelization_controller", "y": 180 },
-    "facing=north,formed=false,twist=west":  { "model": "prototypemachinery:parallelization_controller", "y": 270 },
-    
-    "facing=east,formed=false,twist=north":  { "model": "prototypemachinery:parallelization_controller", "y": 90 },
-    "facing=east,formed=false,twist=east":   { "model": "prototypemachinery:parallelization_controller", "y": 180 },
-    "facing=east,formed=false,twist=south":  { "model": "prototypemachinery:parallelization_controller", "y": 270 },
-    "facing=east,formed=false,twist=west":   { "model": "prototypemachinery:parallelization_controller" },
-
-    "facing=south,formed=false,twist=north": { "model": "prototypemachinery:parallelization_controller", "y": 180 },
-    "facing=south,formed=false,twist=east":  { "model": "prototypemachinery:parallelization_controller", "y": 270 },
-    "facing=south,formed=false,twist=south": { "model": "prototypemachinery:parallelization_controller" },
-    "facing=south,formed=false,twist=west":  { "model": "prototypemachinery:parallelization_controller", "y": 90 },
-
-    "facing=west,formed=false,twist=north":  { "model": "prototypemachinery:parallelization_controller", "y": 270 },
-    "facing=west,formed=false,twist=east":   { "model": "prototypemachinery:parallelization_controller" },
-    "facing=west,formed=false,twist=south":  { "model": "prototypemachinery:parallelization_controller", "y": 90 },
-    "facing=west,formed=false,twist=west":   { "model": "prototypemachinery:parallelization_controller", "y": 180 },
-
-    "facing=up,formed=false,twist=north":    { "model": "prototypemachinery:parallelization_controller", "x": 90 },
-    "facing=up,formed=false,twist=east":     { "model": "prototypemachinery:parallelization_controller", "x": 90, "y": 90 },
-    "facing=up,formed=false,twist=south":    { "model": "prototypemachinery:parallelization_controller", "x": 90, "y": 180 },
-    "facing=up,formed=false,twist=west":     { "model": "prototypemachinery:parallelization_controller", "x": 90, "y": 270 },
-
-    "facing=down,formed=false,twist=north":  { "model": "prototypemachinery:parallelization_controller", "x": 270 },
-    "facing=down,formed=false,twist=east":   { "model": "prototypemachinery:parallelization_controller", "x": 270, "y": 90 },
-    "facing=down,formed=false,twist=south":  { "model": "prototypemachinery:parallelization_controller", "x": 270, "y": 180 },
-    "facing=down,formed=false,twist=west":   { "model": "prototypemachinery:parallelization_controller", "x": 270, "y": 270 },
-
-    "facing=north,formed=true,twist=north": { "model": "prototypemachinery:block_factory_controller" },
-    "facing=north,formed=true,twist=east":  { "model": "prototypemachinery:block_factory_controller", "y": 90 },
-    "facing=north,formed=true,twist=south": { "model": "prototypemachinery:block_factory_controller", "y": 180 },
-    "facing=north,formed=true,twist=west":  { "model": "prototypemachinery:block_factory_controller", "y": 270 },
-    
-    "facing=east,formed=true,twist=north":  { "model": "prototypemachinery:block_factory_controller", "y": 90 },
-    "facing=east,formed=true,twist=east":   { "model": "prototypemachinery:block_factory_controller", "y": 180 },
-    "facing=east,formed=true,twist=south":  { "model": "prototypemachinery:block_factory_controller", "y": 270 },
-    "facing=east,formed=true,twist=west":   { "model": "prototypemachinery:block_factory_controller" },
-
-    "facing=south,formed=true,twist=north": { "model": "prototypemachinery:block_factory_controller", "y": 180 },
-    "facing=south,formed=true,twist=east":  { "model": "prototypemachinery:block_factory_controller", "y": 270 },
-    "facing=south,formed=true,twist=south": { "model": "prototypemachinery:block_factory_controller" },
-    "facing=south,formed=true,twist=west":  { "model": "prototypemachinery:block_factory_controller", "y": 90 },
-
-    "facing=west,formed=true,twist=north":  { "model": "prototypemachinery:block_factory_controller", "y": 270 },
-    "facing=west,formed=true,twist=east":   { "model": "prototypemachinery:block_factory_controller" },
-    "facing=west,formed=true,twist=south":  { "model": "prototypemachinery:block_factory_controller", "y": 90 },
-    "facing=west,formed=true,twist=west":   { "model": "prototypemachinery:block_factory_controller", "y": 180 },
-
-    "facing=up,formed=true,twist=north":    { "model": "prototypemachinery:block_factory_controller", "x": 90 },
-    "facing=up,formed=true,twist=east":     { "model": "prototypemachinery:block_factory_controller", "x": 90, "y": 90 },
-    "facing=up,formed=true,twist=south":    { "model": "prototypemachinery:block_factory_controller", "x": 90, "y": 180 },
-    "facing=up,formed=true,twist=west":     { "model": "prototypemachinery:block_factory_controller", "x": 90, "y": 270 },
-
-    "facing=down,formed=true,twist=north":  { "model": "prototypemachinery:block_factory_controller", "x": 270 },
-    "facing=down,formed=true,twist=east":   { "model": "prototypemachinery:block_factory_controller", "x": 270, "y": 90 },
-    "facing=down,formed=true,twist=south":  { "model": "prototypemachinery:block_factory_controller", "x": 270, "y": 180 },
-    "facing=down,formed=true,twist=west":   { "model": "prototypemachinery:block_factory_controller", "x": 270, "y": 270 }
+    "inventory": {
+      "model": "prototypemachinery:item/parallelization_controller"
+    },
+    "facing=north,formed=false,twist=north": {
+      "model": "prototypemachinery:parallelization_controller"
+    },
+    "facing=north,formed=false,twist=east": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 90
+    },
+    "facing=north,formed=false,twist=south": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 180
+    },
+    "facing=north,formed=false,twist=west": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 270
+    },
+    "facing=east,formed=false,twist=north": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 90
+    },
+    "facing=east,formed=false,twist=east": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 180
+    },
+    "facing=east,formed=false,twist=south": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 270
+    },
+    "facing=east,formed=false,twist=west": {
+      "model": "prototypemachinery:parallelization_controller"
+    },
+    "facing=south,formed=false,twist=north": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 180
+    },
+    "facing=south,formed=false,twist=east": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 270
+    },
+    "facing=south,formed=false,twist=south": {
+      "model": "prototypemachinery:parallelization_controller"
+    },
+    "facing=south,formed=false,twist=west": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 90
+    },
+    "facing=west,formed=false,twist=north": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 270
+    },
+    "facing=west,formed=false,twist=east": {
+      "model": "prototypemachinery:parallelization_controller"
+    },
+    "facing=west,formed=false,twist=south": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 90
+    },
+    "facing=west,formed=false,twist=west": {
+      "model": "prototypemachinery:parallelization_controller",
+      "y": 180
+    },
+    "facing=up,formed=false,twist=north": {
+      "model": "prototypemachinery:parallelization_controller",
+      "x": 90
+    },
+    "facing=up,formed=false,twist=east": {
+      "model": "prototypemachinery:parallelization_controller",
+      "x": 90,
+      "y": 90
+    },
+    "facing=up,formed=false,twist=south": {
+      "model": "prototypemachinery:parallelization_controller",
+      "x": 90,
+      "y": 180
+    },
+    "facing=up,formed=false,twist=west": {
+      "model": "prototypemachinery:parallelization_controller",
+      "x": 90,
+      "y": 270
+    },
+    "facing=down,formed=false,twist=north": {
+      "model": "prototypemachinery:parallelization_controller",
+      "x": 270
+    },
+    "facing=down,formed=false,twist=east": {
+      "model": "prototypemachinery:parallelization_controller",
+      "x": 270,
+      "y": 90
+    },
+    "facing=down,formed=false,twist=south": {
+      "model": "prototypemachinery:parallelization_controller",
+      "x": 270,
+      "y": 180
+    },
+    "facing=down,formed=false,twist=west": {
+      "model": "prototypemachinery:parallelization_controller",
+      "x": 270,
+      "y": 270
+    },
+    "facing=north,formed=true,twist=north": {
+      "model": "prototypemachinery:block_factory_controller"
+    },
+    "facing=north,formed=true,twist=east": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 90
+    },
+    "facing=north,formed=true,twist=south": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 180
+    },
+    "facing=north,formed=true,twist=west": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 270
+    },
+    "facing=east,formed=true,twist=north": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 90
+    },
+    "facing=east,formed=true,twist=east": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 180
+    },
+    "facing=east,formed=true,twist=south": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 270
+    },
+    "facing=east,formed=true,twist=west": {
+      "model": "prototypemachinery:block_factory_controller"
+    },
+    "facing=south,formed=true,twist=north": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 180
+    },
+    "facing=south,formed=true,twist=east": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 270
+    },
+    "facing=south,formed=true,twist=south": {
+      "model": "prototypemachinery:block_factory_controller"
+    },
+    "facing=south,formed=true,twist=west": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 90
+    },
+    "facing=west,formed=true,twist=north": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 270
+    },
+    "facing=west,formed=true,twist=east": {
+      "model": "prototypemachinery:block_factory_controller"
+    },
+    "facing=west,formed=true,twist=south": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 90
+    },
+    "facing=west,formed=true,twist=west": {
+      "model": "prototypemachinery:block_factory_controller",
+      "y": 180
+    },
+    "facing=up,formed=true,twist=north": {
+      "model": "prototypemachinery:block_factory_controller",
+      "x": 90
+    },
+    "facing=up,formed=true,twist=east": {
+      "model": "prototypemachinery:block_factory_controller",
+      "x": 90,
+      "y": 90
+    },
+    "facing=up,formed=true,twist=south": {
+      "model": "prototypemachinery:block_factory_controller",
+      "x": 90,
+      "y": 180
+    },
+    "facing=up,formed=true,twist=west": {
+      "model": "prototypemachinery:block_factory_controller",
+      "x": 90,
+      "y": 270
+    },
+    "facing=down,formed=true,twist=north": {
+      "model": "prototypemachinery:block_factory_controller",
+      "x": 270
+    },
+    "facing=down,formed=true,twist=east": {
+      "model": "prototypemachinery:block_factory_controller",
+      "x": 270,
+      "y": 90
+    },
+    "facing=down,formed=true,twist=south": {
+      "model": "prototypemachinery:block_factory_controller",
+      "x": 270,
+      "y": 180
+    },
+    "facing=down,formed=true,twist=west": {
+      "model": "prototypemachinery:block_factory_controller",
+      "x": 270,
+      "y": 270
+    }
   }
 }

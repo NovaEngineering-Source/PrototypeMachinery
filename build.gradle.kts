@@ -158,9 +158,15 @@ dependencies {
         implementation("com.cleanroommc:assetmover:2.5")
     }
 
-    implementation(rfg.deobf("curse.maven:modularui-624243:7102461-sources-7102463"))
-    implementation(rfg.deobf("curse.maven:had-enough-items-557549:7282920"))
+    implementation("com.cleanroommc:modularui:3.0.6") {
+        isTransitive = false
+    }
     implementation("CraftTweaker2:CraftTweaker2-MC1120-Main:1.12-4.+")
+    implementation(rfg.deobf("curse.maven:had-enough-items-557549:7282920"))
+    // ZenUtils for zs reload support
+    implementation(rfg.deobf("curse.maven:zenutil-401178:7304021"))
+    // ZenUtils dependency
+    runtimeOnly(rfg.deobf("curse.maven:configanytime-870276:5212709"))
 
     // linux only
     if (System.getProperty("os.name").lowercase().contains("linux")) {

@@ -68,7 +68,7 @@ public object CraftTweakerExamples {
                 } else {
                     event.modLog.warn("Example script not found in resources: $fileName")
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 event.modLog.error("Failed to copy example script: $fileName", e)
             }
         }

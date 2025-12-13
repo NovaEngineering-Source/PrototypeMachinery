@@ -5,14 +5,14 @@ import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttribu
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeMap
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeModifier
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeType
-import github.kasuminova.prototypemachinery.api.recipe.selective.SelectiveContext
-import github.kasuminova.prototypemachinery.api.recipe.selective.SelectiveModifierRegistry
 import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.process.component.RecipeProcessComponent
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RequirementTransaction
+import github.kasuminova.prototypemachinery.api.recipe.selective.SelectiveContext
+import github.kasuminova.prototypemachinery.api.recipe.selective.SelectiveModifierRegistry
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeInstanceImpl
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeModifierImpl
@@ -99,7 +99,11 @@ public object SelectiveRequirementSystem : RecipeRequirementSystem.Tickable<Sele
         }
     }
 
-    override fun acquireTickTransaction(machine: MachineInstance, component: SelectiveRequirementComponent, process: RecipeProcess): RequirementTransaction {
+    override fun acquireTickTransaction(
+        machine: MachineInstance,
+        component: SelectiveRequirementComponent,
+        process: RecipeProcess
+    ): RequirementTransaction {
         val state = getOrCreateState(process)
         val selectedIndex = state.getSelectedIndex(component.id) ?: -1
         if (selectedIndex < 0) {

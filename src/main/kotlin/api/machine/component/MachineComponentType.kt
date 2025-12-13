@@ -73,10 +73,14 @@ public interface MachineComponentType<C : MachineComponent> {
      * The system that processes components of this type.
      * Determines how components behave during ticks and events.
      * 
+     * Returns null if the component does not require tick processing or event handling.
+     * 
      * 处理此类型组件的系统。
      * 决定组件在 tick 和事件期间的行为方式。
+     * 
+     * 如果组件不需要 tick 或事件处理，则返回 null。
      */
-    public val system: MachineSystem<C>
+    public val system: MachineSystem<C>?
 
     /**
      * The dependencies of this component type.

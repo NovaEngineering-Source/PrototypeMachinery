@@ -128,4 +128,25 @@ public interface MachineComponentMap : TopologicalComponentMap<MachineComponentT
      */
     public fun <C : MachineComponent> getByInstanceOf(clazz: Class<out C>): Collection<C>
 
+    /**
+     * Get the first component that is an instance of the given class.
+     * Convenience method for when only one component of a type is expected.
+     * 
+     * 获取给定类的第一个实例组件。
+     * 当只期望一种类型的组件时使用的便捷方法。
+     * 
+     * @return The first matching component, or null if none found / 第一个匹配的组件，如果未找到则为 null
+     */
+    public fun <C : MachineComponent> getFirstComponentOfType(clazz: Class<out C>): C? {
+        return getByInstanceOf(clazz).firstOrNull()
+    }
+
+}
+
+/**
+ * Extension function to get the first component of a type using reified generics.
+ * 使用具体化泛型获取第一个指定类型组件的扩展函数。
+ */
+public inline fun <reified C : MachineComponent> MachineComponentMap.getFirstComponentOfType(): C? {
+    return getFirstComponentOfType(C::class.java)
 }

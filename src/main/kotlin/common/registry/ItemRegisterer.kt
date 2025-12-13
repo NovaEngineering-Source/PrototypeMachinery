@@ -36,15 +36,15 @@ internal object ItemRegisterer {
                     // Use the same registry name as the block
                     // 使用与方块相同的注册名称
                     registryName = machineBlock.registryName
-                    
+
                     // Set unlocalized name for i18n
                     // 设置本地化名称用于国际化
                     translationKey = machineBlock.translationKey
                 }
-                
+
                 event.registry.register(itemBlock)
                 PrototypeMachinery.logger.info("Registered machine item: ${itemBlock.registryName}")
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 PrototypeMachinery.logger.error(
                     "Failed to register machine item for block: ${machineBlock.registryName}",
                     e

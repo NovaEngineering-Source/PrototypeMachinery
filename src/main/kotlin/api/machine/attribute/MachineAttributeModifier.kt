@@ -36,8 +36,10 @@ public interface MachineAttributeModifier {
     public enum class Operation {
         /** Add `amount` to the current value. / 将 `amount` 加到当前值上。 */
         ADDITION,
+
         /** Add `base * amount` to the current value. / 将 `base * amount` 加到当前值上。 */
         MULTIPLY_BASE,
+
         /** Multiply current value by `(1 + amount)`. / 将当前值乘以 `(1 + amount)`。 */
         MULTIPLY_TOTAL,
     }

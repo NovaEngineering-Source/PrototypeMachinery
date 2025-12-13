@@ -57,7 +57,7 @@ public class PMItemKeyImpl(
     }
 
     public override fun asPMKey(): PMKey<ItemStack> = this
-    
+
     public override fun toString(): String = "${count}x${uniqueKey.item.registryName}"
 
 }

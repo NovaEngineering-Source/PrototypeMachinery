@@ -9,6 +9,7 @@ PrototypeMachinery 是一个基于 Minecraft Forge 1.12.2 的多方块机械框�
 - 提供 **可声明式定义** 的多方块结构（通过 JSON 结构文件）
 - 提供 **可扩展的机器类型系统**（MachineType + MachineInstance）
 - 支持 **并发执行的机器调度系统**（TaskScheduler + ISchedulable）
+- 提供 **可脚本化的 UI 与交互系统**（ModularUI + WidgetDefinition + UIRegistry/UIBindings/UI Actions）
 - 通过 **CraftTweaker 集成** 暴露给脚本侧进行机器注册与配置
 
 当前代码处于“预览/基础设施搭建”阶段，已经搭好完整的骨架，方便后续逐步填充具体逻辑。
@@ -51,6 +52,8 @@ PrototypeMachinery 是一个基于 Minecraft Forge 1.12.2 的多方块机械框�
 #### 2.1.2 组件系统与执行槽位
 
 - **组件抽象**：`MachineComponent` + `MachineComponentType` + `MachineSystem` 组合描述“机器有哪些能力、由哪个系统按 tick 驱动”。系统间的执行顺序通过拓扑排序自动管理。
+  - `MachineComponentType.system` 允许为 `null`：代表该组件不需要 tick/event 系统（例如纯数据存储组件）。
+  - `MachineComponentMapImpl` 会在计算 `systems` / tick 顺序时自动过滤掉 `system == null` 的组件。
 - **配方处理组件**：`FactoryRecipeProcessorComponent` 是当前的核心执行槽位，职责：
   - 维护 `activeProcesses`（正在运行的配方进程）
   - 控制 `maxConcurrentProcesses`（并发配额，默认取 `StandardMachineAttributes.MAX_CONCURRENT_PROCESSES`）
@@ -300,10 +303,16 @@ fun validate(context: StructureMatchContext, offset: BlockPos): Boolean
 - `integration/crafttweaker/CraftTweakerMachineTypeBuilder.kt`
 - `integration/crafttweaker/zenclass/ZenMachineTypeBuilder.kt`
 - `integration/crafttweaker/zenclass/ZenMachineRegistry.kt`
+- `integration/crafttweaker/zenclass/data/ZenMachineData.kt`
+- `integration/crafttweaker/zenclass/ui/PMUI.kt`
+- `integration/crafttweaker/zenclass/ui/UIRegistry.kt`
+- `integration/crafttweaker/zenclass/ui/UIBindings.kt`
 - `integration/crafttweaker/zenclass/ZenSelectiveContext.kt`
 - `integration/crafttweaker/zenclass/ZenSelectiveModifiers.kt`
 - `common/integration/crafttweaker/CraftTweakerExamples.kt`
+- `common/handler/CraftTweakerReloadHandler.kt`
 - 资源脚本示例：`assets/prototypemachinery/scripts/examples/machine_registration.zs`
+- 资源脚本示例：`assets/prototypemachinery/scripts/examples/machine_ui_example.zs`
 
 #### ICraftTweakerMachineType
 
@@ -325,6 +334,8 @@ fun validate(context: StructureMatchContext, offset: BlockPos): Boolean
 - `addComponentType(componentType: MachineComponentType<*>)`
 - `build(): ICraftTweakerMachineType` — 返回延迟加载结构的实现 `CraftTweakerMachineTypeImpl`
 
+补充：`CraftTweakerMachineTypeBuilder` 会默认包含 `ZSDataComponentType`，确保脚本侧一定有可用的“机器数据组件”（UI bindings / 自定义数据写回依赖它）。
+
 `CraftTweakerMachineTypeImpl`：
 - 持有 `structureProvider: () -> MachineStructure`
 - `override val structure` 使用 `by lazy` 延迟解析
@@ -339,6 +350,56 @@ ZenScript 暴露类：`@ZenClass("mods.prototypemachinery.MachineTypeBuilder")`
 - `structure(String structureId)` — 字符串重载，对应内部的 ID 解析版本
 - `addComponentType(MachineComponentType)`
 - `internal fun build(): ICraftTweakerMachineType`
+
+#### 2.4.1 脚本数据：MachineData / ZSDataComponent
+
+为了让脚本侧能以类似 NBT/Map 的方式存取机器数据，本项目提供了两层抽象：
+
+- **ZenScript 数据容器**：`mods.prototypemachinery.data.MachineData`（实现：`integration/crafttweaker/zenclass/data/ZenMachineData.kt`）
+  - 底层使用 `NBTTagCompound` 存储，便于序列化与网络同步。
+  - 支持 `data["key"]` / `data.key` 的读写（`INDEXGET/INDEXSET` + member getter/setter）。
+  - 提供常用类型化访问器：`getDouble/setDouble`、`getInt/setInt`、`getBool/setBool`、`getString/setString`。
+- **机器组件承载**：`ZSDataComponent`（机器级）与 `ZSDataProcessComponent`（进程级）
+  - 组件实现会在数据变更时触发 `MachineInstance.syncComponent(...)`，将同步粒度简化为“组件级全量同步”。
+  - 这类组件的 `system` 为 `null`，不参与 tick 驱动，仅作为“可序列化 + 可同步的数据容器”。
+
+#### 2.4.2 脚本 UI：PMUI / UIRegistry / UIBindings
+
+本项目引入了一套“定义式 UI + 运行时覆盖”的脚本接口，主要由三个入口组成：
+
+- **UI 构建 DSL**：`mods.prototypemachinery.ui.PMUI`
+  - 提供 `Panel/Row/Column/Grid` 等布局构建器，以及 Button/Slider/ProgressBar/DynamicText/Slot 等组件构建器。
+  - 脚本构建结果会被编译为 `WidgetDefinition`（见 `api/ui/definition/*`）。
+- **UI 注册表**：`mods.prototypemachinery.ui.UIRegistry`
+  - 将脚本构建的 UI 注册到 `PrototypeMachineryAPI.machineUIRegistry`。
+  - 支持 `priority`：优先级更高的注册会覆盖较低优先级；相同优先级下后注册覆盖先注册。
+- **数据绑定注册表**：`mods.prototypemachinery.ui.UIBindings`
+  - 将 UI 中使用的字符串 key 解析为服务端 getter / setter，并接入 ModularUI 的同步值（如 `DoubleSyncValue`）。
+  - 常见用法是把 Slider 的写入回传服务端，并存到 `ZSDataComponent` 中。
+
+运行时 UI 的选择顺序（见 `MachineBlockEntity.buildUI`）：
+1) 机器组件中的 `UIProviderComponent`（如果机器类型通过组件提供了 UI）
+2) `MachineUIRegistry`（脚本/模组运行时注册、可覆盖）
+3) `MachineType.uiDefinition`（机器类型静态默认 UI）
+4) `DefaultMachineUI`（内置默认 UI）
+
+#### 2.4.3 UI 行为（client -> server）：UIActionRegistry
+
+为了支持“按钮点击/快捷操作”等需要 client -> server 的交互，本项目提供：
+
+- `PrototypeMachineryAPI.uiActionRegistry`：按 `machineId + actionKey`（或全局 actionKey）注册处理器。
+- 网络包：`common/network/PacketMachineAction.kt` 将 `pos + actionKey + payload(NBT)` 从客户端发送到服务端并执行。
+- 内置回退动作：`prototypemachinery:toggle_bool:<bindingKey>`
+  - 若未注册显式 action，会尝试解析一个可写的 bool binding 并将其取反。
+
+#### 2.4.4 CraftTweaker 脚本热重载（ZenUtils）
+
+为适配 CraftTweaker 脚本 reload（依赖 ZenUtils 的 `ScriptReloadEvent`），项目在 PreInit 中注册了 `CraftTweakerReloadHandler`：
+
+- 在 `ScriptReloadEvent.Pre` 阶段自动清理以下注册表，避免脚本重复加载导致堆叠：
+  - `MachineUIRegistry`
+  - `UIBindingRegistry`
+  - `UIActionRegistry`
 
 #### 示例脚本与自动复制
 
@@ -448,6 +509,9 @@ ZenScript 暴露类：`@ZenClass("mods.prototypemachinery.MachineTypeBuilder")`
 - `TaskSchedulerImpl` 监听 `ServerTickEvent`（END），按 `ExecutionMode` 分流：
   - `MAIN_THREAD`：事件线程直接执行
   - `CONCURRENT`：投递至固定大小线程池
+- **Scheduling Affinity（并发亲和分组）**：为降低并发执行时的资源竞争风险，引入 `SchedulingAffinity`。
+  - 任务可提供一组“亲和 key”，调度器会把共享任意 key 的任务分到同一单线程 lane 中执行（同组串行、组间并行）。
+  - `MachineInstanceImpl` 通过遍历组件中的 `AffinityKeyProvider` 来收集 key（并缓存，组件表变更时自动失效）。
 - 支持自动重启线程池以兼容单人游戏多次加载；`shutdown()` 在 `PrototypeMachinery.serverStopping` 调用。
 - `MachineInstanceImpl` 默认 `ExecutionMode.CONCURRENT`，在 `MachineBlockEntity.initialize` 时注册调度，在 `invalidate` 时移除。
 
@@ -464,6 +528,9 @@ ZenScript 暴露类：`@ZenClass("mods.prototypemachinery.MachineTypeBuilder")`
 - **`recipeRequirementRegistry`**: 配方需求类型与系统注册。
 - **`selectiveModifierRegistry`**: 选择性需求修改器注册。
 - **`taskScheduler`**: 任务调度器。
+- **`machineUIRegistry`**: 机器 UI 运行时注册/覆盖（脚本/模组）。
+- **`uiBindingRegistry`**: UI 数据绑定注册与解析（key -> getter/setter）。
+- **`uiActionRegistry`**: UI 行为注册与处理（client -> server）。
 
 推荐在 Java/Kotlin 代码中始终通过此入口点访问各子系统，而非直接使用实现类。
 
@@ -471,18 +538,83 @@ ZenScript 暴露类：`@ZenClass("mods.prototypemachinery.MachineTypeBuilder")`
 
 为了解决 Minecraft 原生对象（如 `ItemStack`）作为 Map 键时性能低下且易出错（可变性）的问题，引入了类似 AE2 的资源键系统：
 
-- **核心目标**：提供不可变、内存唯一（Interned）的资源标识符，用于高性能查找与缓存。
-- **PMKey 接口**：所有资源键的基类。
-- **PMKeyType**：负责管理键的生命周期与驻留池。
-  - 使用 `WeakHashMap` 实现自动去重与内存回收。
-  - 确保逻辑相同的资源（如相同 Item/Meta/NBT 的物品）在内存中仅存在一个 `PMKey` 实例。
-  - 允许使用 **引用相等性 (`===`)** 代替对象相等性 (`equals`)，极大提升比较性能。
-- **ItemStackKey 实现**：
-  - 针对物品栈的深度优化实现。
-  - **哈希策略**：结合 `System.identityHashCode(Item)` 与 Metadata 进行位运算，大幅降低哈希冲突率；NBT 哈希被缓存以避免重复计算。
-  - **安全性**：构造时深拷贝 NBT，确保键的不可变性。
+核心思想：将“可变的资源对象”（`ItemStack` / `FluidStack`）拆分为 **不可变的唯一原型 (UniqueKey)** + **可变数量 (count)** 两部分。
 
-此系统是 **配方索引系统** 的基石，确保了在处理大量配方与物品时的检索效率。
+- **核心目标**：提供不可变、内存唯一（Interned）的资源标识符，用于高性能查找与缓存。
+- **PMKey**：所有资源键的基类（`api/key/PMKey.kt`）。
+  - `count: Long` 表示数量（对物品是 item count；对流体是 mB）。
+  - `internalHashCode` 必须仅由唯一原型导出，忽略 `count`。
+- **PMKeyType**：键类型与反序列化入口（`api/key/PMKeyType.kt`）。
+
+#### 2.8.1 PMItemKey（ItemStack）
+
+相关文件：
+- `impl/key/item/PMItemKey.kt`
+- `impl/key/item/PMItemKeyImpl.kt`
+- `impl/key/item/PMItemKeyType.kt`
+- `impl/key/item/UniquePMItemKey.kt`
+
+要点：
+- **唯一原型**：`UniquePMItemKey` 持有一个 `ItemStack` 原型，并基于 `Item + meta + NBT` 计算哈希。
+  - 哈希策略结合 `System.identityHashCode(Item)` 与 meta 位运算，并融合 NBT hash，降低冲突。
+  - `equals` 使用 `ItemStack.areItemStacksEqual`（比较 Item/meta/NBT）。
+- **驻留 (Interning)**：`PMItemKeyType` 使用 `WeakHashMap<UniquePMItemKey, WeakReference<UniquePMItemKey>>`。
+  - 通过“临时 key 查找规范 key”的方式去重。
+  - 为避免引用可变 NBT，intern 时对原型执行 `copy()`（深拷贝）。
+  - 允许在 `PMItemKeyImpl.equals` 中使用 `uniqueKey === other.uniqueKey`（引用相等），以获得更快比较。
+- **数量语义**：`PMItemKeyImpl.count` 为逻辑数量；`get()` 会将数量钳制到 `Int.MAX_VALUE` 以生成可用的 `ItemStack`。
+
+#### 2.8.2 PMFluidKey（FluidStack）
+
+相关文件：
+- `impl/key/fluid/PMFluidKey.kt`
+- `impl/key/fluid/PMFluidKeyImpl.kt`
+- `impl/key/fluid/PMFluidKeyType.kt`
+- `impl/key/fluid/UniquePMFluidKey.kt`
+
+要点：
+- **唯一原型**：`UniquePMFluidKey` 持有一个 `FluidStack` 原型。
+  - 哈希策略：`System.identityHashCode(Fluid)` 与 NBT hash 组合。
+  - `equals` 使用 `FluidStack.isFluidEqual`（比较 Fluid 与 NBT，忽略 amount）。
+- **驻留 (Interning)**：`PMFluidKeyType` 同样使用 `WeakHashMap<UniquePMFluidKey, WeakReference<UniquePMFluidKey>>`。
+  - intern 时将 `amount` 临时归一化为 1，再构建 key；入池前用 `copy()` 深拷贝，避免持有可变引用。
+  - 生成 `PMFluidKeyImpl` 时，`count` 以 mB 计。
+- **序列化**：
+  - `PMFluidKeyImpl.writeNBT` 写入 `FluidStack` 数据并附加 `PMCount`。
+  - `PMFluidKeyType.readNBT` 通过 `FluidStack.loadFluidStackFromNBT` 反序列化，并读取 `PMCount`（若不存在则回退为原 amount）。
+
+此系统是 **配方索引系统** 的基石，确保了在处理大量物品/流体资源时的检索效率与稳定性。
+
+### 2.9 默认原生 UI（ModularUI）
+
+为机器提供了一个“开箱即用”的默认 GUI，并为后续整合包/扩展开发预留了空间。
+
+相关文件与资源：
+- `src/main/kotlin/client/gui/DefaultMachineUI.kt`
+- `src/main/resources/assets/prototypemachinery/textures/gui/gui_controller_a.png`（主页面背景）
+- `src/main/resources/assets/prototypemachinery/textures/gui/gui_controller_b.png`（扩展页面背景）
+- `src/main/resources/assets/prototypemachinery/textures/gui/states.png`（标签页按钮贴图）
+
+已实现的 UI 功能：
+- **双标签页结构**：使用 `PagedWidget` + `PageButton` 实现页面切换。
+  - 默认打开为 **主页面**。
+  - 切换页时自动切换面板背景（A/B 两张 controller 贴图）。
+- **主页面（Page 1）**：
+  - 包含玩家物品栏（`SlotGroupWidget.playerInventory(...)`）。
+  - 预留了机器信息区与 4x4 网格槽位（当前为占位演示，便于后续接入真实组件槽位）。
+- **扩展页面（Page 2）**：
+  - 使用 `gui_controller_b.png` 背景。
+  - **不包含玩家物品栏**，保留为空白内容区，方便整合包作者/机器扩展在此添加自定义控件。
+- **隐藏原版槽位背景**：通过 `SlotGroupWidget.SlotConsumer` 将 `ItemSlot.background(IDrawable.EMPTY)` 应用于玩家背包槽位，避免原版 slot 框干扰整体风格。
+- **标签页贴图与状态**：
+  - 标签按钮使用 `states.png` 右下角提供的预设贴图。
+  - 每个 Tab 使用 3 张贴图：未选中 / 悬停 / 选中；两个 Tab 合计 6 张贴图（按从左到右的顺序取样）。
+  - `DefaultMachineUI.kt` 内将坐标与尺寸集中到“Texture Configuration”代码块，便于运行时进行像素级微调与调试。
+
+UI 的最终来源按以下优先级解析（见 `MachineBlockEntity.buildUI`）：
+1) `UIProviderComponent`（机器组件提供 UI）
+2) `MachineUIRegistry`（脚本/模组运行时覆盖）
+3) `DefaultMachineUI`（内置默认 UI）
 
 ## 3. 生命周期与加载顺序
 
@@ -493,7 +625,9 @@ ZenScript 暴露类：`@ZenClass("mods.prototypemachinery.MachineTypeBuilder")`
 
 2. **PreInit** — `PrototypeMachinery.preInit`：
    - 初始化日志与元数据
+   - `NetworkHandler.init()` 注册网络包（机器同步、UI actions）
    - 注册调度器到 `MinecraftForge.EVENT_BUS`
+   - 注册 CraftTweaker 脚本 reload 钩子（ZenUtils）
    - `StructureLoader.loadStructureData(event)`
      - 加载/复制结构 JSON
    - `CraftTweakerExamples.initialize(event)`

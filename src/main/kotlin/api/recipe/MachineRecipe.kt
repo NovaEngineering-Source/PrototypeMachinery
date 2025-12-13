@@ -1,8 +1,8 @@
 package github.kasuminova.prototypemachinery.api.recipe
 
+import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirement
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
-import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 
 /**
  * # MachineRecipe - Recipe Definition

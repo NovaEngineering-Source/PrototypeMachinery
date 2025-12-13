@@ -6,7 +6,6 @@ import net.minecraft.item.ItemStack
 import net.minecraft.nbt.NBTTagCompound
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import java.util.ArrayList
 import java.util.Collections
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit

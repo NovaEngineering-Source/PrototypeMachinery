@@ -27,10 +27,10 @@ public object PMItemKeyType : PMKeyType {
     public override fun readNBT(nbt: NBTTagCompound): PMKey<ItemStack>? {
         val stack = ItemStack(nbt)
         if (stack.isEmpty) return null
-        
+
         val unique = getUniqueKey(stack)
         val count = if (nbt.hasKey("PMCount")) nbt.getLong("PMCount") else stack.count.toLong()
-        
+
         return PMItemKeyImpl(unique, count)
     }
 
@@ -55,7 +55,7 @@ public object PMItemKeyType : PMKeyType {
     // 2. Get from map.
     // 3. If exists and not null, return it.
     // 4. If not, put temp -> WeakRef(temp) and return temp.
-    
+
     // 用于驻留 UniqueItemStackKeys 的缓存。
     // 我们使用 WeakHashMap，其中 Key 是 UniqueItemStackKey 本身。
     // 由于 UniqueItemStackKey 基于内容实现 equals/hashCode，

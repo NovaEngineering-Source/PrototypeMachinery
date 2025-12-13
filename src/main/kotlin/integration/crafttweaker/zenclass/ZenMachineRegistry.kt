@@ -44,8 +44,7 @@ public class ZenMachineRegistry private constructor() {
         @ZenMethod
         public fun register(builder: ZenMachineTypeBuilder) {
             val ctMachineType = builder.build()
-            val machineType = CraftTweakerBridge.toInternalMachineType(ctMachineType)
-            MachineTypeRegisterer.queue(machineType)
+            MachineTypeRegisterer.queue(ctMachineType)
         }
     }
 

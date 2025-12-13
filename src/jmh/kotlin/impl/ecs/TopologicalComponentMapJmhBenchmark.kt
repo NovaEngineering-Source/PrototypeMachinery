@@ -1,8 +1,18 @@
 package github.kasuminova.prototypemachinery.impl.ecs
 
-import org.openjdk.jmh.annotations.*
-import java.util.concurrent.TimeUnit
+import org.openjdk.jmh.annotations.Benchmark
+import org.openjdk.jmh.annotations.BenchmarkMode
+import org.openjdk.jmh.annotations.Fork
+import org.openjdk.jmh.annotations.Level
+import org.openjdk.jmh.annotations.Measurement
+import org.openjdk.jmh.annotations.Mode
+import org.openjdk.jmh.annotations.OutputTimeUnit
+import org.openjdk.jmh.annotations.Scope
+import org.openjdk.jmh.annotations.Setup
+import org.openjdk.jmh.annotations.State
+import org.openjdk.jmh.annotations.Warmup
 import java.util.Random
+import java.util.concurrent.TimeUnit
 
 @State(Scope.Thread)
 @BenchmarkMode(Mode.AverageTime)
@@ -50,7 +60,7 @@ open class TopologicalComponentMapJmhBenchmark {
         // Use a local random to avoid sharing state, though Scope.Thread handles it.
         // Re-seeding for consistency
         val localRandom = Random(12345)
-        
+
         for (i in 0 until count) {
             val deps = mutableSetOf<Int>()
             if (i > 0) {
