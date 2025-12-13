@@ -47,6 +47,10 @@
 - **首跑结构示例**：若 `config/prototypemachinery/structures/` 为空，会复制 `assets/.../structures/examples/` 到 `config/.../structures/examples/`。
 - **结构文件组织**：推荐按子目录分类（例如 `structures/components/`），loader 采用递归扫描。
 
+- **Kotlin / API 规范**：
+   - 项目启用了 Kotlin `explicitApi()`：公共 API 需显式声明可见性与类型（见 `build.gradle.kts`）。
+   - 根包包含 `package.kt`（`src/main/kotlin/package.kt`），用于统一根包声明；一般不需要把包路径设计得过深，避免冗长且难维护的嵌套包。
+
 ---
 
 ## 5. 总结

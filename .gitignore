@@ -26,3 +26,6 @@ logs
 
 # Kotlin generated files
 .kotlin
+
+# VS Code
+*.code-workspace
