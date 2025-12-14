@@ -1,12 +1,13 @@
 {
-  "parent": "block/cube",
-  "textures": {
-    "particle": "prototypemachinery:blocks/block_casing_plain_top",
-    "down": "prototypemachinery:blocks/block_casing_plain_down",
-    "up": "prototypemachinery:blocks/block_casing_plain_top",
-    "north": "prototypemachinery:blocks/block_casing_plain_side",
-    "east": "prototypemachinery:blocks/block_casing_plain_side",
-    "south": "prototypemachinery:blocks/block_casing_plain_side",
-    "west": "prototypemachinery:blocks/block_casing_plain_side"
-  }
+	"credit": "Made with WI_8614_ice X:@wi8614ice @wi8614art QQ:1463599076",
+    "parent": "block/cube",
+    "textures": {
+        "particle": "prototypemachinery:blocks/block_casing_side",
+        "down": "prototypemachinery:blocks/block_casing_down",
+        "up": "prototypemachinery:blocks/block_casing_top",
+        "north": "prototypemachinery:blocks/block_casing_side",
+        "east": "prototypemachinery:blocks/block_casing_side",
+        "south": "prototypemachinery:blocks/block_casing_side",
+        "west": "prototypemachinery:blocks/block_casing_side"
+    }
 }
