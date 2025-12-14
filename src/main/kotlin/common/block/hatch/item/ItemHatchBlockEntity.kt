@@ -56,12 +56,11 @@ public class ItemHatchBlockEntity(
         val oldStorage = storage
         val newStorage = createStorage(newConfig)
 
-        // Migrate existing resources into the new storage (will be clamped by limits).
-        for (key in oldStorage.getAllResources()) {
-            val amount = oldStorage.getAmount(key)
-            if (amount > 0L) {
-                newStorage.insert(key, amount, false)
-            }
+        // Migrate per-slot to avoid double-counting when the same key exists in multiple slots.
+        for (slot in 0 until oldStorage.slotCount) {
+            val key = oldStorage.getSlot(slot) ?: continue
+            val amount = oldStorage.extractFromSlot(slot, Long.MAX_VALUE, true)
+            if (amount > 0L) newStorage.insert(key, amount, false)
         }
 
         this.config = newConfig

@@ -31,20 +31,31 @@ public class FluidIOHatchCombinedHandler(
     override fun fill(resource: FluidStack?, doFill: Boolean): Int {
         if (resource == null || resource.amount <= 0) return 0
         // Always fill to input storage
-        val inserted = blockEntity.inputStorage.insertFluid(resource, !doFill)
+        val limit = blockEntity.maxInputRate
+        val amount = if (limit <= 0L) resource.amount else resource.amount.coerceAtMost(limit.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        if (amount <= 0) return 0
+        val stack = if (amount == resource.amount) resource else resource.copy().apply { this.amount = amount }
+        val inserted = blockEntity.inputStorage.insertFluid(stack, !doFill)
         return inserted.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 
     override fun drain(resource: FluidStack?, doDrain: Boolean): FluidStack? {
         if (resource == null || resource.amount <= 0) return null
         // Always drain from output storage
-        return blockEntity.outputStorage.extractFluidResult(resource, resource.amount, !doDrain)
+        val limit = blockEntity.maxOutputRate
+        val amount = if (limit <= 0L) resource.amount else resource.amount.coerceAtMost(limit.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        if (amount <= 0) return null
+        val stack = if (amount == resource.amount) resource else resource.copy().apply { this.amount = amount }
+        return blockEntity.outputStorage.extractFluidResult(stack, stack.amount, !doDrain)
     }
 
     override fun drain(maxDrain: Int, doDrain: Boolean): FluidStack? {
         if (maxDrain <= 0) return null
         // Always drain from output storage
-        return blockEntity.outputStorage.drain(maxDrain, !doDrain)
+        val limit = blockEntity.maxOutputRate
+        val amount = if (limit <= 0L) maxDrain else maxDrain.coerceAtMost(limit.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        if (amount <= 0) return null
+        return blockEntity.outputStorage.drain(amount, !doDrain)
     }
 
     private class InputTankProperty(

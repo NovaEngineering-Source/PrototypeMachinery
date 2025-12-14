@@ -19,19 +19,13 @@ public class ItemIOHatchOutputHandler(
 ) : IItemHandler {
 
     override fun getSlots(): Int {
-        return blockEntity.outputStorage.maxTypes
+        return blockEntity.outputStorage.slotCount
     }
 
     override fun getStackInSlot(slot: Int): ItemStack {
         val storage = blockEntity.outputStorage
-        val keys = storage.getAllResources().toList()
-        if (slot >= keys.size) {
-            return ItemStack.EMPTY
-        }
-        val key = keys[slot]
-        val pmKey = key as? PMItemKey ?: return ItemStack.EMPTY
-        val count = storage.getAmount(key)
-        return pmKey.uniqueKey.createStack(count.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        val key = storage.getSlot(slot) ?: return ItemStack.EMPTY
+        return key.get()
     }
 
     override fun insertItem(slot: Int, stack: ItemStack, simulate: Boolean): ItemStack {
@@ -41,17 +35,15 @@ public class ItemIOHatchOutputHandler(
 
     override fun extractItem(slot: Int, amount: Int, simulate: Boolean): ItemStack {
         val storage = blockEntity.outputStorage
-        val keys = storage.getAllResources().toList()
-        if (slot >= keys.size) {
-            return ItemStack.EMPTY
-        }
-        val key = keys[slot]
-        val pmKey = key as? PMItemKey ?: return ItemStack.EMPTY
-        val extracted = storage.extract(key, amount.toLong(), simulate)
-        if (extracted <= 0) {
-            return ItemStack.EMPTY
-        }
-        return pmKey.uniqueKey.createStack(extracted.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        val key = storage.getSlot(slot) ?: return ItemStack.EMPTY
+        val template = (key as? PMItemKey)?.uniqueKey?.createStack(1) ?: key.get().copy().apply { count = 1 }
+
+        val extracted = storage.extractFromSlot(slot, amount.toLong(), simulate)
+        if (extracted <= 0L) return ItemStack.EMPTY
+
+        val result = template.copy()
+        result.count = extracted.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        return result
     }
 
     override fun getSlotLimit(slot: Int): Int {

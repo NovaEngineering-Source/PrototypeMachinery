@@ -26,9 +26,8 @@ public class ItemHatchItemHandler(
     override fun getSlots(): Int = config.slotCount
 
     override fun getStackInSlot(slot: Int): ItemStack {
-        val resources = storage.getAllResources().toList()
-        if (slot !in resources.indices) return ItemStack.EMPTY
-        return resources[slot].get()
+        val key = storage.getSlot(slot) ?: return ItemStack.EMPTY
+        return key.get()
     }
 
     override fun insertItem(slot: Int, stack: ItemStack, simulate: Boolean): ItemStack {
@@ -55,16 +54,21 @@ public class ItemHatchItemHandler(
             return ItemStack.EMPTY // Input hatches cannot output items
         }
 
-        val resources = storage.getAllResources().toList()
-        if (slot !in resources.indices) return ItemStack.EMPTY
+        val key = storage.getSlot(slot) ?: return ItemStack.EMPTY
+        val template = (key as? github.kasuminova.prototypemachinery.impl.key.item.PMItemKey)
+            ?.uniqueKey
+            ?.createStack(1)
+            ?: key.get().copy().apply { count = 1 }
 
-        val resource = resources[slot]
-        return storage.extractStackResult(resource.get(), amount, simulate)
+        val extracted = storage.extractFromSlot(slot, amount.toLong(), simulate)
+        if (extracted <= 0L) return ItemStack.EMPTY
+        val result = template.copy()
+        result.count = extracted.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        return result
     }
 
     override fun getSlotLimit(slot: Int): Int {
-        // Return Int.MAX_VALUE since we support large stacks internally
-        return Int.MAX_VALUE
+        return storage.maxCountPerType.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 
     override fun isItemValid(slot: Int, stack: ItemStack): Boolean {

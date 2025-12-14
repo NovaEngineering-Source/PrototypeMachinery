@@ -26,7 +26,11 @@ public class FluidIOHatchInputHandler(
 
     override fun fill(resource: FluidStack?, doFill: Boolean): Int {
         if (resource == null || resource.amount <= 0) return 0
-        val inserted = blockEntity.inputStorage.insertFluid(resource, !doFill)
+        val limit = blockEntity.maxInputRate
+        val amount = if (limit <= 0L) resource.amount else resource.amount.coerceAtMost(limit.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        if (amount <= 0) return 0
+        val stack = if (amount == resource.amount) resource else resource.copy().apply { this.amount = amount }
+        val inserted = blockEntity.inputStorage.insertFluid(stack, !doFill)
         return inserted.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 

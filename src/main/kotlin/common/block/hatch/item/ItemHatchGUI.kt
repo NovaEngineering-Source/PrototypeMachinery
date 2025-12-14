@@ -3,6 +3,7 @@ package github.kasuminova.prototypemachinery.common.block.hatch.item
 import com.cleanroommc.modularui.api.drawable.IDrawable
 import com.cleanroommc.modularui.api.drawable.IKey
 import com.cleanroommc.modularui.api.widget.IWidget
+import com.cleanroommc.modularui.api.widget.Interactable
 import com.cleanroommc.modularui.drawable.UITexture
 import com.cleanroommc.modularui.factory.PosGuiData
 import com.cleanroommc.modularui.screen.ModularPanel
@@ -13,16 +14,18 @@ import com.cleanroommc.modularui.widgets.SlotGroupWidget
 import com.cleanroommc.modularui.widgets.ToggleButton
 import com.cleanroommc.modularui.widgets.layout.Column
 import com.cleanroommc.modularui.widgets.layout.Grid
-import com.cleanroommc.modularui.widgets.layout.Row
-import github.kasuminova.prototypemachinery.client.gui.scroll.PMVerticalScrollData
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.key.PMKey
 import github.kasuminova.prototypemachinery.client.gui.builder.UITextures
+import github.kasuminova.prototypemachinery.client.gui.scroll.PMVerticalScrollData
 import github.kasuminova.prototypemachinery.client.gui.sync.ResourceSlotSyncHandler
+import github.kasuminova.prototypemachinery.client.gui.widget.InsetBorderWidget
+import github.kasuminova.prototypemachinery.client.gui.widget.PMSmoothGrid
 import github.kasuminova.prototypemachinery.client.gui.widget.ResourceSlotWidget
 import github.kasuminova.prototypemachinery.common.block.hatch.HatchTier
 import github.kasuminova.prototypemachinery.common.block.hatch.HatchType
 import github.kasuminova.prototypemachinery.impl.key.item.PMItemKeyType
+import net.minecraft.client.Minecraft
 import net.minecraft.item.ItemStack
 import net.minecraft.util.ResourceLocation
 import java.util.function.BooleanSupplier
@@ -133,6 +136,14 @@ public object ItemHatchGUI {
         val tier = config.tier
         val hatchType = config.hatchType
 
+        // Register sync handler for storage early so we can reuse it in multiple widgets.
+        val storageSyncHandler: ResourceSlotSyncHandler<PMKey<ItemStack>> = ResourceSlotSyncHandler(
+            hatch.storage,
+            keyWriter = { key, nbt -> key.writeNBT(nbt) },
+            keyReader = { nbt -> PMItemKeyType.readNBT(nbt) as? PMKey<ItemStack> }
+        )
+        syncManager.syncValue("storage", storageSyncHandler)
+
         val spec = getTextureSpec(hatchType, tier)
         val guiWidth = spec.uiWidth
         val guiHeight = spec.uiHeight
@@ -148,15 +159,23 @@ public object ItemHatchGUI {
         panel.child(
             IKey.lang(hatch.blockType.translationKey + ".name")
                 .asWidget()
-                .pos(8, 6)
+                .pos(65, 7)
         )
 
         // Main content area
-        panel.child(buildMainContent(hatch, syncManager, config, tier))
+        panel.child(buildMainContent(hatch, config, tier, storageSyncHandler))
 
-        // Player inventory
+        // Slot grid inset border (foreground).
+        val gridSpec = getGridSpec(tier)
         panel.child(
-            SlotGroupWidget.playerInventory(HIDE_PLAYER_INV_BG)
+            InsetBorderWidget()
+                .pos(26, 25)
+                .size(gridSpec.columns * SLOT_SIZE, gridSpec.visibleRows * SLOT_SIZE)
+        )
+
+        // Player inventory (Shift-click -> quick insert into storage)
+        panel.child(
+            buildPlayerInventoryWithQuickInsert(storageSyncHandler)
                 .pos(26, guiHeight - 81 - 4)
         )
 
@@ -168,26 +187,19 @@ public object ItemHatchGUI {
 
     private fun buildMainContent(
         hatch: ItemHatchBlockEntity,
-        syncManager: PanelSyncManager,
         config: ItemHatchConfig,
-        tier: HatchTier
+        tier: HatchTier,
+        storageSyncHandler: ResourceSlotSyncHandler<PMKey<ItemStack>>
     ): IWidget {
         val slotCount = config.slotCount
         val canInsert = config.hatchType != HatchType.OUTPUT
-        val canExtract = config.hatchType != HatchType.INPUT
-
-        // Register sync handler for storage
-        val storageSyncHandler: ResourceSlotSyncHandler<PMKey<ItemStack>> = ResourceSlotSyncHandler(
-            hatch.storage,
-            keyWriter = { key, nbt -> key.writeNBT(nbt) },
-            keyReader = { nbt -> PMItemKeyType.readNBT(nbt) as? PMKey<ItemStack> }
-        )
-        syncManager.syncValue("storage", storageSyncHandler)
+        // UX: allow players to click items out even from INPUT hatches.
+        val canExtract = true
 
         val gridSpec = getGridSpec(tier)
         val totalRows = (slotCount + gridSpec.columns - 1) / gridSpec.columns
 
-        val grid = Grid()
+        val grid = PMSmoothGrid()
             .pos(26, 25)
             // Reserve space for the custom scrollbar strip so slots won't be clipped.
             .size(gridSpec.columns * SLOT_SIZE + PMVerticalScrollData.RESERVED_THICKNESS, gridSpec.visibleRows * SLOT_SIZE)
@@ -208,6 +220,73 @@ public object ItemHatchGUI {
         )
 
         return grid
+    }
+
+    private fun buildPlayerInventoryWithQuickInsert(
+        storageSyncHandler: ResourceSlotSyncHandler<PMKey<ItemStack>>
+    ): SlotGroupWidget {
+        val slotConsumer = HIDE_PLAYER_INV_BG
+        val slotGroupWidget = SlotGroupWidget()
+        slotGroupWidget.coverChildren()
+        slotGroupWidget.name("player_inventory")
+
+        val key = "player"
+
+        // Hotbar (0..8)
+        for (i in 0 until 9) {
+            val invIndex = i
+            val slot = object : com.cleanroommc.modularui.widgets.slot.ItemSlot() {
+                override fun onMousePressed(mouseButton: Int): Interactable.Result {
+                    if (Interactable.hasShiftDown()) {
+                        val player = Minecraft.getMinecraft().player
+                        if (player != null && player.inventory.itemStack.isEmpty) {
+                            val stack = getSlot().stack
+                            if (!stack.isEmpty) {
+                                storageSyncHandler.requestQuickMoveInsertFromPlayerInventory(invIndex, mouseButton)
+                                return Interactable.Result.SUCCESS
+                            }
+                        }
+                    }
+                    return super.onMousePressed(mouseButton)
+                }
+            }
+
+            slotGroupWidget.child(
+                slotConsumer.apply(invIndex, slot)
+                    .syncHandler(key, invIndex)
+                    .pos(i * 18, 3 * 18 + 4)
+                    .name("slot_$invIndex")
+            )
+        }
+
+        // Main inventory (9..35)
+        for (i in 0 until 27) {
+            val invIndex = i + 9
+            val slot = object : com.cleanroommc.modularui.widgets.slot.ItemSlot() {
+                override fun onMousePressed(mouseButton: Int): Interactable.Result {
+                    if (Interactable.hasShiftDown()) {
+                        val player = Minecraft.getMinecraft().player
+                        if (player != null && player.inventory.itemStack.isEmpty) {
+                            val stack = getSlot().stack
+                            if (!stack.isEmpty) {
+                                storageSyncHandler.requestQuickMoveInsertFromPlayerInventory(invIndex, mouseButton)
+                                return Interactable.Result.SUCCESS
+                            }
+                        }
+                    }
+                    return super.onMousePressed(mouseButton)
+                }
+            }
+
+            slotGroupWidget.child(
+                slotConsumer.apply(invIndex, slot)
+                    .syncHandler(key, invIndex)
+                    .pos(i % 9 * 18, i / 9 * 18)
+                    .name("slot_$invIndex")
+            )
+        }
+
+        return slotGroupWidget
     }
 
     private fun buildControlButtons(

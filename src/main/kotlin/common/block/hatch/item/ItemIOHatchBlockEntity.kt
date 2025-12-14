@@ -71,12 +71,14 @@ public class ItemIOHatchBlockEntity(
         val newInput = createInputStorage(newConfig)
         val newOutput = createOutputStorage(newConfig)
 
-        for (key in oldInput.getAllResources()) {
-            val amount = oldInput.getAmount(key)
+        for (slot in 0 until oldInput.slotCount) {
+            val key = oldInput.getSlot(slot) ?: continue
+            val amount = oldInput.extractFromSlot(slot, Long.MAX_VALUE, true)
             if (amount > 0L) newInput.insert(key, amount, false)
         }
-        for (key in oldOutput.getAllResources()) {
-            val amount = oldOutput.getAmount(key)
+        for (slot in 0 until oldOutput.slotCount) {
+            val key = oldOutput.getSlot(slot) ?: continue
+            val amount = oldOutput.extractFromSlot(slot, Long.MAX_VALUE, true)
             if (amount > 0L) newOutput.insert(key, amount, false)
         }
 

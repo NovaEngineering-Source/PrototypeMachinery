@@ -44,6 +44,47 @@ public class EnergyHatchBlockEntity(
     )
 
     /**
+     * Max input rate (FE/t). 0 means "use default" (i.e. config.maxTransfer).
+     * 最大输入速率（FE/t）。0 表示使用默认值（即 config.maxTransfer）。
+     */
+    private var maxInputRateInternal: Long = 0L
+
+    public var maxInputRate: Long
+        get() = maxInputRateInternal
+        set(value) {
+            maxInputRateInternal = value.coerceAtLeast(0L)
+            updateTransferLimits()
+            markDirty()
+            notifyClientUpdate()
+        }
+
+    /**
+     * Max output rate (FE/t). 0 means "use default" (i.e. config.maxTransfer).
+     * 最大输出速率（FE/t）。0 表示使用默认值（即 config.maxTransfer）。
+     */
+    private var maxOutputRateInternal: Long = 0L
+
+    public var maxOutputRate: Long
+        get() = maxOutputRateInternal
+        set(value) {
+            maxOutputRateInternal = value.coerceAtLeast(0L)
+            updateTransferLimits()
+            markDirty()
+            notifyClientUpdate()
+        }
+
+    private fun effectiveRate(userRate: Long): Long {
+        // 0 => default (config.maxTransfer), otherwise clamp to config.maxTransfer.
+        val base = config.maxTransfer.coerceAtLeast(0L)
+        return if (userRate <= 0L) base else minOf(userRate, base)
+    }
+
+    private fun updateTransferLimits() {
+        storage.maxReceive = if (config.hatchType != HatchType.OUTPUT) effectiveRate(maxInputRateInternal) else 0L
+        storage.maxExtract = if (config.hatchType != HatchType.INPUT) effectiveRate(maxOutputRateInternal) else 0L
+    }
+
+    /**
      * Applies a new config to this hatch at runtime.
      * Updates storage parameters in-place.
      */
@@ -52,8 +93,7 @@ public class EnergyHatchBlockEntity(
 
         this.config = newConfig
         storage.capacity = newConfig.capacity
-        storage.maxReceive = if (newConfig.hatchType != HatchType.OUTPUT) newConfig.maxTransfer else 0L
-        storage.maxExtract = if (newConfig.hatchType != HatchType.INPUT) newConfig.maxTransfer else 0L
+        updateTransferLimits()
 
         // Clamp stored energy to new capacity.
         storage.setEnergy(storage.energy)
@@ -89,6 +129,8 @@ public class EnergyHatchBlockEntity(
         compound.setTag("Storage", storage.writeNBT(NBTTagCompound()))
         compound.setBoolean("AutoInput", autoInput)
         compound.setBoolean("AutoOutput", autoOutput)
+        compound.setLong("MaxInRate", maxInputRateInternal)
+        compound.setLong("MaxOutRate", maxOutputRateInternal)
         compound.setInteger("Tier", config.tier.tier)
         compound.setString("HatchType", config.hatchType.name)
         compound.setLong("Capacity", config.capacity)
@@ -100,6 +142,9 @@ public class EnergyHatchBlockEntity(
         super.readFromNBT(compound)
         autoInput = compound.getBoolean("AutoInput")
         autoOutput = compound.getBoolean("AutoOutput")
+        // Don't trigger notifyClientUpdate() during load; assign backing fields directly.
+        maxInputRateInternal = if (compound.hasKey("MaxInRate")) compound.getLong("MaxInRate") else 0L
+        maxOutputRateInternal = if (compound.hasKey("MaxOutRate")) compound.getLong("MaxOutRate") else 0L
 
         val tierLevel = if (compound.hasKey("Tier")) compound.getInteger("Tier") else config.tier.tier
         val hatchType = runCatching {
@@ -114,8 +159,7 @@ public class EnergyHatchBlockEntity(
 
         // Apply config limits (authoritative) and then restore energy amount.
         storage.capacity = config.capacity
-        storage.maxReceive = if (config.hatchType != HatchType.OUTPUT) config.maxTransfer else 0L
-        storage.maxExtract = if (config.hatchType != HatchType.INPUT) config.maxTransfer else 0L
+        updateTransferLimits()
         storage.setEnergy(energyFromNbt)
     }
 

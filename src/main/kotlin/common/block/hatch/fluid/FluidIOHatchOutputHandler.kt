@@ -31,12 +31,19 @@ public class FluidIOHatchOutputHandler(
 
     override fun drain(resource: FluidStack?, doDrain: Boolean): FluidStack? {
         if (resource == null || resource.amount <= 0) return null
-        return blockEntity.outputStorage.extractFluidResult(resource, resource.amount, !doDrain)
+        val limit = blockEntity.maxOutputRate
+        val amount = if (limit <= 0L) resource.amount else resource.amount.coerceAtMost(limit.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        if (amount <= 0) return null
+        val stack = if (amount == resource.amount) resource else resource.copy().apply { this.amount = amount }
+        return blockEntity.outputStorage.extractFluidResult(stack, stack.amount, !doDrain)
     }
 
     override fun drain(maxDrain: Int, doDrain: Boolean): FluidStack? {
         if (maxDrain <= 0) return null
-        return blockEntity.outputStorage.drain(maxDrain, !doDrain)
+        val limit = blockEntity.maxOutputRate
+        val amount = if (limit <= 0L) maxDrain else maxDrain.coerceAtMost(limit.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        if (amount <= 0) return null
+        return blockEntity.outputStorage.drain(amount, !doDrain)
     }
 
     private class OutputTankProperty(

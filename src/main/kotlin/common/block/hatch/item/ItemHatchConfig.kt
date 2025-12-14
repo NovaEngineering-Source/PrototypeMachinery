@@ -31,7 +31,8 @@ public data class ItemHatchConfig(
             val hatchTier = HatchTier.fromTier(tier)
             val (slots, maxStack) = when (tier) {
                 1 -> 1 to 64L
-                2 -> 2 to 64L
+                // Tier 2 has 2 type-slots; allow storing two full stacks of the same item type.
+                2 -> 2 to 128L
                 3 -> 4 to 128L
                 4 -> 9 to 256L
                 5 -> 16 to 512L
@@ -95,7 +96,8 @@ public data class ItemIOHatchConfig(
             val hatchTier = HatchTier.fromTier(tier)
             val (inputSlots, outputSlots, inputMax, outputMax) = when (tier) {
                 1 -> Quad(1, 1, 64L, 64L)
-                2 -> Quad(1, 1, 64L, 64L)
+                // Tier 2: allow two full stacks per type for both input/output storages.
+                2 -> Quad(1, 1, 128L, 128L)
                 3 -> Quad(2, 2, 128L, 128L)
                 4 -> Quad(4, 4, 256L, 256L)
                 5 -> Quad(8, 8, 512L, 512L)

@@ -10,33 +10,53 @@ import com.cleanroommc.modularui.utils.Interpolation
 import com.cleanroommc.modularui.widget.scroll.ScrollArea
 import com.cleanroommc.modularui.widget.scroll.VerticalScrollData
 import github.kasuminova.prototypemachinery.PrototypeMachinery
+import github.kasuminova.prototypemachinery.client.gui.scroll.PMThinVerticalScrollData.Companion.RESERVED_THICKNESS
 import net.minecraft.util.ResourceLocation
 import java.util.function.DoubleConsumer
 import kotlin.math.abs
 
 /**
- * Custom vertical scrollbar for PrototypeMachinery hatch UIs.
+ * Thin vertical scrollbar variant for Item IO hatch grids.
+ *
+ * 供物品 IO 仓网格使用的“细版”竖向滚动条。
  *
  * Spec (from states.png):
- * - Offset relative to scroll area: x + 5, y + 1
- * - Sprites: states.png at (146,1), (159,1), (172,1)
+ * - Sprites X: 161 / 169 / 177, Y: 17
  * - Order: normal / hover / pressed
- * - Sprite size: 12x15
+ * - Sprite size: 7x12
+ *
+ * 规格（来自 states.png）：
+ * - 精灵坐标 X：161 / 169 / 177，Y：17
+ * - 顺序：普通 / 悬停 / 按下
+ * - 精灵尺寸：7x12
+ *
+ * NOTE: We keep the same gutter behavior as [PMVerticalScrollData]:
+ * - bar is drawn with an inset offset on the cross axis
+ * - Grid reserves [RESERVED_THICKNESS] so slots won't be clipped
+ *
+ * 注意：此处保持与 [PMVerticalScrollData] 一致的“边槽（gutter）”行为：
+ * - 滚动条在副轴方向会内缩绘制（inset offset）
+ * - 网格侧会预留 [RESERVED_THICKNESS] 的宽度，避免格子/槽位被裁剪
  */
-public class PMVerticalScrollData : VerticalScrollData(false, BAR_W) {
+public class PMThinVerticalScrollData : VerticalScrollData(false, BAR_W) {
 
     public companion object {
-        public const val BAR_OFFSET_X: Int = 5
-        public const val BAR_OFFSET_Y: Int = 0
+        // Keep consistent with the existing scrollbar gutter unless specified otherwise.
+        // 与现有滚动条的边槽行为保持一致（除非另行指定）。
+        public const val BAR_OFFSET_X: Int = 3
+        public const val BAR_OFFSET_Y: Int = PMVerticalScrollData.BAR_OFFSET_Y
 
-        public const val BAR_W: Int = 12
-        public const val BAR_H_SRC: Int = 15
+        public const val BAR_W: Int = 7
+        public const val BAR_H_SRC: Int = 12
 
         /**
-         * Total reserved strip width used by our Grid size so slots won't be clipped by ScrollArea padding.
-         * This must include BAR_OFFSET_X + BAR_W.
+         * Total reserved strip width used by Grid size.
+         * Must include BAR_OFFSET_X + BAR_W.
+         *
+         * 网格在布局计算中预留的总宽度。
+         * 必须包含 BAR_OFFSET_X + BAR_W。
          */
-        public const val RESERVED_THICKNESS: Int = BAR_OFFSET_X + BAR_W // 17
+        public const val RESERVED_THICKNESS: Int = BAR_OFFSET_X + BAR_W
 
         private fun icon(x: Int, y: Int): IDrawable {
             return UITexture.builder()
@@ -46,13 +66,13 @@ public class PMVerticalScrollData : VerticalScrollData(false, BAR_W) {
                 .build()
         }
 
-        private val NORMAL: IDrawable = icon(146, 1)
-        private val HOVER: IDrawable = icon(159, 1)
-        private val PRESSED: IDrawable = icon(172, 1)
+        private val NORMAL: IDrawable = icon(161, 17)
+        private val HOVER: IDrawable = icon(169, 17)
+        private val PRESSED: IDrawable = icon(177, 17)
 
-        /**
-         * Scroll wheel animation tuning.
-         * ModularUI default is quite slow (500ms + QUAD_OUT). For hatch UIs we want snappier, more modern easing.
+        /** See [PMVerticalScrollData] for rationale.
+         *
+         * 具体原因/背景说明见 [PMVerticalScrollData]。
          */
         private const val SCROLL_ANIM_MIN_MS: Int = 180
         private const val SCROLL_ANIM_MAX_MS: Int = 360
@@ -87,7 +107,6 @@ public class PMVerticalScrollData : VerticalScrollData(false, BAR_W) {
             .curve(Interpolation.CUBIC_OUT)
             .bounds(from.toFloat(), x.toFloat())
             .onUpdate(DoubleConsumer { value ->
-                // Stop animation once an edge is hit.
                 if (scrollTo(area, value.toInt())) {
                     scrollAnimator.stop(false)
                 }
@@ -96,15 +115,8 @@ public class PMVerticalScrollData : VerticalScrollData(false, BAR_W) {
         scrollAnimator.animate()
     }
 
-    /**
-     * Fixed thumb length to avoid stretching the sprite.
-     *
-     * Note: ScrollData enforces a minimum length of (thickness + 1). Our thickness is BAR_W,
-     * so min length is 13, which is fine for a 15px sprite.
-     */
     override fun getScrollBarLength(area: ScrollArea): Int {
         val full = getFullVisibleSize(area)
-        // Keep within visible bounds while honoring ScrollData's min length rule.
         val maxLen = (full - 1).coerceAtLeast(getMinLength())
         return BAR_H_SRC.coerceAtMost(maxLen)
     }
@@ -136,16 +148,9 @@ public class PMVerticalScrollData : VerticalScrollData(false, BAR_W) {
         val trackH = getTrackHeight(area)
         val travel = (trackH - yOffsetTop - thumbLen).coerceAtLeast(1)
 
-        // ScrollArea.drag() converts progress -> scroll using:
-        //   progress * (scrollSize - fullVisible + thickness)
-        // but ScrollData clamps scroll to [0, scrollSize - fullVisible].
-        // If we return the raw track progress, the computed scroll will be too large (because of +thickness),
-        // making the thumb "outrun" the mouse and causing a growing offset while dragging.
-        //
-        // Fix: scale progress so that after ScrollArea.drag()'s conversion, the resulting scroll matches
-        // the track mapping based on maxScroll = (scrollSize - fullVisible).
         val raw = (mainAxisPos - BAR_OFFSET_Y - yOffsetTop - clickOffset).toFloat() / travel.toFloat()
 
+        // Match ScrollArea.drag()'s (maxScroll + thickness) mapping while our rendering uses maxScroll.
         val fullVisible = getFullVisibleSize(area, isOtherActive)
         val maxScroll = (getScrollSize() - fullVisible).coerceAtLeast(0)
         val denom = (maxScroll + thickness).coerceAtLeast(1)
@@ -154,7 +159,6 @@ public class PMVerticalScrollData : VerticalScrollData(false, BAR_W) {
     }
 
     override fun onMouseClicked(area: ScrollArea, mainAxisPos: Int, crossAxisPos: Int, button: Int): Boolean {
-        // Keep the standard cross-axis hitbox: right side strip of width = thickness (BAR_W).
         if (isOnAxisStart) {
             if (crossAxisPos > thickness) return false
         } else {
@@ -177,11 +181,8 @@ public class PMVerticalScrollData : VerticalScrollData(false, BAR_W) {
     }
 
     override fun drawScrollbar(area: ScrollArea, context: ModularGuiContext, widgetTheme: WidgetTheme, texture: IDrawable) {
-        // Keep the built-in activation logic (if it isn't active, this method won't be called).
         val isOtherActive = isOtherScrollBarActive(area, true)
 
-        // Reserve strip on the cross-axis so slots are visually separated from the bar.
-        // NOTE: thickness (BAR_W) remains small to avoid ScrollData's min-length rule forcing a taller bar.
         val baseX = if (isOnAxisStart) 0 else area.w() - RESERVED_THICKNESS
         val x = baseX + BAR_OFFSET_X
         val w = BAR_W
@@ -194,7 +195,6 @@ public class PMVerticalScrollData : VerticalScrollData(false, BAR_W) {
         val thumbLen = getScrollBarLength(area)
         val y = getThumbY(area, isOtherActive, thumbLen)
 
-        // Determine state.
         val mx = context.mouseX
         val my = context.mouseY
         val hoveringThumb = mx >= x && mx < x + w && my >= y && my < y + thumbLen
@@ -205,7 +205,6 @@ public class PMVerticalScrollData : VerticalScrollData(false, BAR_W) {
             else -> NORMAL
         }
 
-        // Optional track background: keep it subtle (same as default) but inside the offset track.
         val trackDrawH = (trackH - yOffsetTop).coerceAtLeast(0)
         GuiDraw.drawRect(
             x.toFloat(),
@@ -215,7 +214,6 @@ public class PMVerticalScrollData : VerticalScrollData(false, BAR_W) {
             area.scrollBarBackgroundColor
         )
 
-        // Draw thumb with fixed height to avoid stretching.
         drawable.draw(context, x, y, w, thumbLen, widgetTheme)
     }
 }

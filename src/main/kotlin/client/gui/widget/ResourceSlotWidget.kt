@@ -17,6 +17,7 @@ import github.kasuminova.prototypemachinery.impl.key.item.PMItemKey
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.client.renderer.RenderHelper
+import net.minecraft.item.ItemStack
 
 /**
  * # ResourceSlotWidget - PMKey Resource Slot Widget
@@ -32,6 +33,8 @@ public class ResourceSlotWidget<K : PMKey<*>> : Widget<ResourceSlotWidget<K>>(),
 
     public companion object {
         public const val SIZE: Int = 18
+        // NOTE: we detect double-tap but we do NOT delay the single click anymore.
+        private const val DOUBLE_TAP_WINDOW_MS: Long = 250L
     }
 
     private var syncHandler: ResourceSlotSyncHandler<K>? = null
@@ -39,6 +42,11 @@ public class ResourceSlotWidget<K : PMKey<*>> : Widget<ResourceSlotWidget<K>>(),
     private var background: IDrawable? = null
     private var canInsert: Boolean = true
     private var canExtract: Boolean = true
+
+    // Double-tap detection without delaying single click.
+    private var lastTapAtMs: Long = -1L
+    private var lastTapButton: Int = -1
+    private var ignoreNextTap: Boolean = false
 
     init {
         size(SIZE)
@@ -103,10 +111,11 @@ public class ResourceSlotWidget<K : PMKey<*>> : Widget<ResourceSlotWidget<K>>(),
         // Draw background
         background?.draw(context, 0, 0, area.width, area.height, widgetTheme.theme)
 
-        val resource = getCurrentResource() ?: return
-
-        // Draw the resource
-        drawResource(context, resource)
+        // Draw the resource (if present)
+        val resource = getCurrentResource()
+        if (resource != null) {
+            drawResource(context, resource)
+        }
 
         // Draw hover overlay
         if (isHovering) {
@@ -177,8 +186,25 @@ public class ResourceSlotWidget<K : PMKey<*>> : Widget<ResourceSlotWidget<K>>(),
 
         tooltip.addFromItem(stack)
 
-        // Add count info for large quantities
-        if (key.asPMKey().count > stack.maxStackSize) {
+        val handler = syncHandler
+        if (handler != null) {
+            tooltip.addLine(IKey.str(""))
+            tooltip.addLine(
+                IKey.lang(
+                    "prototypemachinery.gui.resource_slot.types",
+                    handler.getUsedTypes(),
+                    handler.getMaxTypes()
+                )
+            )
+            tooltip.addLine(
+                IKey.lang(
+                    "prototypemachinery.gui.resource_slot.stored",
+                    NumberFormatter.formatWithCommas(key.asPMKey().count),
+                    NumberFormatter.formatWithCommas(handler.getMaxCountPerType())
+                )
+            )
+        } else {
+            // Fallback: still show stored count.
             tooltip.addLine(IKey.str(""))
             tooltip.addLine(
                 IKey.lang(
@@ -192,19 +218,147 @@ public class ResourceSlotWidget<K : PMKey<*>> : Widget<ResourceSlotWidget<K>>(),
     override fun onMousePressed(mouseButton: Int): Interactable.Result {
         val handler = syncHandler ?: return Interactable.Result.IGNORE
 
-        // Handle click interaction
-        handler.handleClick(slotIndex, mouseButton, Interactable.hasShiftDown(), canInsert, canExtract)
+        val shift = Interactable.hasShiftDown()
 
+        // Vanilla-like behavior:
+        // - Left click: extract if cursor is empty (or same item) and extraction is allowed; otherwise insert.
+        // - Right click: extract if allowed.
+        //
+        // This is especially important for INPUT hatches and IO input grids: players expect to be able to
+        // click items out, not only insert.
+        val mc = Minecraft.getMinecraft()
+        val player = mc.player
+        val cursor: ItemStack = player?.inventory?.itemStack ?: ItemStack.EMPTY
+        val resource = getCurrentResource()
+
+        // Shift-click quick move (vanilla-like): when cursor is empty, move extracted items directly
+        // into the player inventory instead of putting them on the cursor.
+        if (shift && cursor.isEmpty && canExtract && resource != null) {
+            handler.requestQuickMoveExtract(slotIndex, mouseButton)
+            // Prevent the subsequent tap callback (on release) from also scheduling an action.
+            ignoreNextTap = true
+            return Interactable.Result.SUCCESS
+        }
+
+        // For normal clicks, accept the interaction on press so ModularUI will call onMouseTapped on release.
         return Interactable.Result.SUCCESS
+    }
+
+    @Suppress("KotlinConstantConditions")
+    private fun performSingleClick(mouseButton: Int, shift: Boolean) {
+        val handler = syncHandler ?: return
+
+        val mc = Minecraft.getMinecraft()
+        val player = mc.player
+        val cursor: ItemStack = player?.inventory?.itemStack ?: ItemStack.EMPTY
+        val resource = getCurrentResource()
+
+        fun canLeftClickExtract(): Boolean {
+            if (!canExtract) return false
+            // If insertion is not possible (e.g. output-only), prefer extraction.
+            if (!canInsert) return resource != null
+            if (resource == null) return false
+            if (cursor.isEmpty) return true
+            // If cursor holds the same item, allow stacking extraction like vanilla.
+            if (resource is PMItemKey) {
+                val template = resource.uniqueKey.createStack(1)
+                return !template.isEmpty && ItemStack.areItemStacksEqual(cursor, template)
+            }
+            return false
+        }
+
+        when (mouseButton) {
+            0 -> {
+                if (canLeftClickExtract()) {
+                    handler.requestExtract(slotIndex, mouseButton, shift)
+                    return
+                }
+                if (canInsert) {
+                    handler.requestInsert(slotIndex, mouseButton, shift)
+                    return
+                }
+            }
+            1 -> {
+                // If the cursor holds an item, right click behaves like vanilla "place one".
+                // Otherwise, right click extracts a single item.
+                if (!cursor.isEmpty && canInsert) {
+                    handler.requestInsert(slotIndex, mouseButton, shift)
+                    return
+                }
+                if (canExtract && resource != null) {
+                    handler.requestExtract(slotIndex, mouseButton, shift)
+                    return
+                }
+            }
+        }
+    }
+
+    override fun onMouseTapped(mouseButton: Int): Interactable.Result {
+        val handler = syncHandler ?: return Interactable.Result.IGNORE
+
+        if (ignoreNextTap) {
+            ignoreNextTap = false
+            return Interactable.Result.SUCCESS
+        }
+
+        val now = Minecraft.getSystemTime()
+        val shift = Interactable.hasShiftDown()
+
+        val isDoubleTap = (mouseButton == lastTapButton) && (lastTapAtMs > 0L) && (now - lastTapAtMs <= DOUBLE_TAP_WINDOW_MS)
+        if (isDoubleTap) {
+            // Consume the double tap; reset state so triple-click won't chain weirdly.
+            lastTapAtMs = -1L
+            lastTapButton = -1
+            performDoubleClick(mouseButton)
+            return Interactable.Result.SUCCESS
+        }
+
+        lastTapAtMs = now
+        lastTapButton = mouseButton
+        performSingleClick(mouseButton, shift)
+        return Interactable.Result.SUCCESS
+    }
+
+    private fun performDoubleClick(mouseButton: Int) {
+        val handler = syncHandler ?: return
+
+        val mc = Minecraft.getMinecraft()
+        val player = mc.player
+        val cursor: ItemStack = player?.inventory?.itemStack ?: ItemStack.EMPTY
+        val resource = getCurrentResource()
+
+        // Double-click action:
+        // - If cursor holds an item and insertion is allowed: insert all matching items from cursor + inventory.
+        // - If cursor is empty and extraction is allowed: extract as many as possible of that resource into inventory.
+        if (!cursor.isEmpty && canInsert) {
+            handler.requestInsertAllSame(slotIndex, mouseButton)
+            return
+        }
+        if (cursor.isEmpty && canExtract && resource != null) {
+            handler.requestExtractAllSame(slotIndex, mouseButton)
+            return
+        }
     }
 
     override fun onMouseScroll(direction: UpOrDown, amount: Int): Boolean {
         val handler = syncHandler ?: return false
 
+        // IMPORTANT UX NOTE:
+        // This widget often lives inside a scrollable Grid (ScrollArea).
+        // If we always consume the mouse wheel event here, the parent scroll widget
+        // will never receive it, forcing users to scroll only on the scrollbar strip.
+        //
+        // Therefore:
+        // - Normal wheel: bubble up (return false) so the parent Grid can scroll.
+        // - Shift + wheel: reserved for per-slot interactions (phantom/quantity adjustment).
+        if (!Interactable.hasShiftDown()) {
+            return false
+        }
+
         // Handle scroll interaction (for phantom slots or quantity adjustment)
         // Map UpOrDown to integer direction (1 for UP, -1 for DOWN)
         val dir = if (direction == UpOrDown.UP) 1 else -1
-        handler.handleScroll(slotIndex, dir, Interactable.hasShiftDown())
+        handler.handleScroll(slotIndex, dir, true)
 
         return true
     }

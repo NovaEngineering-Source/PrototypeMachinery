@@ -24,6 +24,7 @@ import org.apache.logging.log4j.Logger
     acceptedMinecraftVersions = "[1.12.2]",
     dependencies = "required-after:forge@[14.23.5.2847,);" +
             "required-after:forgelin_continuous@[2.1.0.0,);" +
+            "required-after:modularui@[3.0.0,);" +
             "after:crafttweaker@[4.1.20,);" +
             "after:jei@[4.16.0,)",
     modLanguageAdapter = "io.github.chaosunity.forgelin.KotlinAdapter"

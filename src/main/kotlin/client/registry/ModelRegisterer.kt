@@ -1,6 +1,7 @@
 package github.kasuminova.prototypemachinery.client.registry
 
 import github.kasuminova.prototypemachinery.common.registry.BlockRegisterer
+import github.kasuminova.prototypemachinery.common.registry.HatchRegisterer
 import net.minecraft.block.state.IBlockState
 import net.minecraft.client.renderer.block.model.ModelResourceLocation
 import net.minecraft.client.renderer.block.statemap.StateMapperBase
@@ -19,6 +20,7 @@ internal object ModelRegisterer {
     fun onModelRegistry(event: ModelRegistryEvent) {
         registerBlockModels()
         registerItemModels()
+        registerHatchItemModels()
     }
 
     private fun registerBlockModels() {
@@ -54,6 +56,29 @@ internal object ModelRegisterer {
                     ModelResourceLocation(baseLocation, "inventory")
                 )
             }
+        }
+    }
+
+    /**
+     * Explicitly register inventory models for hatch ItemBlocks.
+     *
+     * In some client setups, relying on implicit/default item model resolution can cause
+     * the model geometry to appear while textures end up as missing (purple/black), without
+     * producing a clear missing-texture log.
+     */
+    private fun registerHatchItemModels() {
+        val hatchBlocks = HatchRegisterer.getAllHatchBlocks()
+
+        hatchBlocks.forEach { block ->
+            val item = Item.getItemFromBlock(block) ?: return@forEach
+            val registryName = block.registryName ?: return@forEach
+
+            // Standard ItemBlock model location: models/item/<registry_path>.json (variant: inventory)
+            ModelLoader.setCustomModelResourceLocation(
+                item,
+                0,
+                ModelResourceLocation(registryName, "inventory")
+            )
         }
     }
 }

@@ -3,7 +3,6 @@ package github.kasuminova.prototypemachinery.client.gui.builder.factory
 import com.cleanroommc.modularui.api.widget.IWidget
 import com.cleanroommc.modularui.widget.ParentWidget
 import com.cleanroommc.modularui.widgets.layout.Column
-import com.cleanroommc.modularui.widgets.layout.Grid
 import com.cleanroommc.modularui.widgets.layout.Row
 import github.kasuminova.prototypemachinery.api.ui.definition.ColumnDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.GridDefinition
@@ -11,6 +10,7 @@ import github.kasuminova.prototypemachinery.api.ui.definition.PanelDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.RowDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.WidgetDefinition
 import github.kasuminova.prototypemachinery.client.gui.builder.UIBuildContext
+import github.kasuminova.prototypemachinery.client.gui.widget.PMSmoothGrid
 
 public class LayoutWidgetFactory : WidgetFactory {
 
@@ -110,7 +110,7 @@ public class LayoutWidgetFactory : WidgetFactory {
     }
 
     private fun buildGrid(def: GridDefinition, buildChild: (WidgetDefinition) -> IWidget?): IWidget {
-        val grid = Grid()
+        val grid = PMSmoothGrid()
             .pos(def.x, def.y)
             .minColWidth(18)
             .minRowHeight(18)

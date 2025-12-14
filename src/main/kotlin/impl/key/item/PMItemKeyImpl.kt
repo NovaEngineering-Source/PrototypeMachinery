@@ -51,8 +51,14 @@ public class PMItemKeyImpl(
     }
 
     public override fun get(): ItemStack {
-        // Clamp count to Int max for vanilla ItemStack
-        val stackCount = if (count > Int.MAX_VALUE) Int.MAX_VALUE else count.toInt()
+        // Clamp count for vanilla ItemStack.
+        // We intentionally allow > 64, but keep a safety cap to reduce overflow/compat risks.
+        val cap = Int.MAX_VALUE / 2
+        val stackCount = when {
+            count <= 0L -> 0
+            count > cap.toLong() -> cap
+            else -> count.toInt()
+        }
         return uniqueKey.createStack(stackCount)
     }
 

@@ -19,10 +19,10 @@ public class ItemIOHatchCombinedHandler(
 ) : IItemHandler {
 
     private val inputSlots: Int
-        get() = blockEntity.inputStorage.maxTypes
+        get() = blockEntity.inputStorage.slotCount
 
     private val outputSlots: Int
-        get() = blockEntity.outputStorage.maxTypes
+        get() = blockEntity.outputStorage.slotCount
 
     override fun getSlots(): Int {
         return inputSlots + outputSlots
@@ -38,26 +38,14 @@ public class ItemIOHatchCombinedHandler(
 
     private fun getStackFromInput(slot: Int): ItemStack {
         val storage = blockEntity.inputStorage
-        val keys = storage.getAllResources().toList()
-        if (slot >= keys.size) {
-            return ItemStack.EMPTY
-        }
-        val key = keys[slot]
-        val count = storage.getAmount(key)
-        val pmKey = key as? PMItemKey ?: return ItemStack.EMPTY
-        return pmKey.uniqueKey.createStack(count.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        val key = storage.getSlot(slot) ?: return ItemStack.EMPTY
+        return key.get()
     }
 
     private fun getStackFromOutput(slot: Int): ItemStack {
         val storage = blockEntity.outputStorage
-        val keys = storage.getAllResources().toList()
-        if (slot >= keys.size) {
-            return ItemStack.EMPTY
-        }
-        val key = keys[slot]
-        val count = storage.getAmount(key)
-        val pmKey = key as? PMItemKey ?: return ItemStack.EMPTY
-        return pmKey.uniqueKey.createStack(count.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        val key = storage.getSlot(slot) ?: return ItemStack.EMPTY
+        return key.get()
     }
 
     override fun insertItem(slot: Int, stack: ItemStack, simulate: Boolean): ItemStack {
@@ -81,17 +69,15 @@ public class ItemIOHatchCombinedHandler(
 
         val outputSlot = slot - inputSlots
         val storage = blockEntity.outputStorage
-        val keys = storage.getAllResources().toList()
-        if (outputSlot >= keys.size) {
-            return ItemStack.EMPTY
-        }
-        val key = keys[outputSlot]
-        val pmKey = key as? PMItemKey ?: return ItemStack.EMPTY
-        val extracted = storage.extract(key, amount.toLong(), simulate)
-        if (extracted <= 0) {
-            return ItemStack.EMPTY
-        }
-        return pmKey.uniqueKey.createStack(extracted.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        val key = storage.getSlot(outputSlot) ?: return ItemStack.EMPTY
+        val template = (key as? PMItemKey)?.uniqueKey?.createStack(1) ?: key.get().copy().apply { count = 1 }
+
+        val extracted = storage.extractFromSlot(outputSlot, amount.toLong(), simulate)
+        if (extracted <= 0L) return ItemStack.EMPTY
+
+        val result = template.copy()
+        result.count = extracted.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        return result
     }
 
     override fun getSlotLimit(slot: Int): Int {

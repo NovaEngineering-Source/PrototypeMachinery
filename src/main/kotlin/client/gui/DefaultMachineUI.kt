@@ -14,8 +14,8 @@ import com.cleanroommc.modularui.widgets.PagedWidget
 import com.cleanroommc.modularui.widgets.SlotGroupWidget
 import com.cleanroommc.modularui.widgets.TextWidget
 import com.cleanroommc.modularui.widgets.layout.Column
-import com.cleanroommc.modularui.widgets.layout.Grid
 import com.cleanroommc.modularui.widgets.slot.ItemSlot
+import github.kasuminova.prototypemachinery.client.gui.widget.PMSmoothGrid
 import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
 import net.minecraft.util.ResourceLocation
 import net.minecraftforge.items.ItemStackHandler
@@ -179,7 +179,7 @@ public object DefaultMachineUI {
         )
 
         // Left: 4x4 Grid (Placeholder for machine slots/upgrades)
-        val gridArea = Grid()
+        val gridArea = PMSmoothGrid()
             .pos(138, 173)
             .size(72, 72)
             .matrix(buildGridSlots(4, 4) as List<List<IWidget>>)

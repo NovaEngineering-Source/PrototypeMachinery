@@ -10,10 +10,14 @@ import github.kasuminova.prototypemachinery.common.registry.HatchConfigRegistry
 import github.kasuminova.prototypemachinery.impl.storage.FluidResourceStorage
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.util.EnumFacing
+import net.minecraft.util.ITickable
 import net.minecraft.world.World
 import net.minecraftforge.common.capabilities.Capability
+import net.minecraftforge.fluids.FluidUtil
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler
 import net.minecraftforge.fluids.capability.IFluidHandler
+import net.minecraftforge.items.CapabilityItemHandler
+import net.minecraftforge.items.ItemStackHandler
 
 /**
  * # FluidIOHatchBlockEntity - Fluid IO Hatch Block Entity
@@ -27,7 +31,7 @@ import net.minecraftforge.fluids.capability.IFluidHandler
  */
 public class FluidIOHatchBlockEntity(
     public var config: FluidIOHatchConfig
-) : BlockEntity(), IGuiHolder<PosGuiData> {
+) : BlockEntity(), ITickable, IGuiHolder<PosGuiData> {
 
     // Primary constructor for NBT deserialization
     public constructor() : this(FluidIOHatchConfig.createDefault(1))
@@ -107,10 +111,86 @@ public class FluidIOHatchBlockEntity(
      */
     public var autoOutput: Boolean = false
 
+    /**
+     * Max input rate (mB/t). 0 means unlimited.
+     * 最大输入速率（mB/t）。0 表示不限制。
+     */
+    public var maxInputRate: Long = 0L
+        set(value) {
+            field = value
+            markDirty()
+            notifyClientUpdate()
+        }
+
+    /**
+     * Max output rate (mB/t). 0 means unlimited.
+     * 最大输出速率（mB/t）。0 表示不限制。
+     */
+    public var maxOutputRate: Long = 0L
+        set(value) {
+            field = value
+            markDirty()
+            notifyClientUpdate()
+        }
+
+    /**
+     * 2-slot item handler for fluid containers.
+     * Slot 0: drain container -> input storage
+     * Slot 1: fill container <- output storage
+     */
+    private val containerSlots: ItemStackHandler = object : ItemStackHandler(2) {
+        override fun getSlotLimit(slot: Int): Int = 1
+    }
+
+    public fun getContainerSlots(): ItemStackHandler = containerSlots
+
+    public fun clearFluids() {
+        inputStorage.clear()
+        outputStorage.clear()
+        markDirty()
+        notifyClientUpdate()
+    }
+
     // Capability wrappers
     private val inputHandler: FluidIOHatchInputHandler by lazy { FluidIOHatchInputHandler(this) }
     private val outputHandler: FluidIOHatchOutputHandler by lazy { FluidIOHatchOutputHandler(this) }
     private val combinedHandler: FluidIOHatchCombinedHandler by lazy { FluidIOHatchCombinedHandler(this) }
+
+    override fun update() {
+        val w = world ?: return
+        if (w.isRemote) return
+
+        tryDrainContainerToInput()
+        tryFillContainerFromOutput()
+    }
+
+    private fun tryDrainContainerToInput() {
+        val inStack = containerSlots.getStackInSlot(0)
+        if (inStack.isEmpty) return
+
+        val result = FluidUtil.tryEmptyContainer(inStack, getInputHandler(), Int.MAX_VALUE, null, true)
+        if (!result.isSuccess) return
+
+        val remaining = result.result
+        if (remaining == inStack) return
+
+        containerSlots.setStackInSlot(0, remaining)
+        markDirty()
+    }
+
+    private fun tryFillContainerFromOutput() {
+        val outStack = containerSlots.getStackInSlot(1)
+        if (outStack.isEmpty) return
+
+        val result = FluidUtil.tryFillContainer(outStack, getOutputHandler(), Int.MAX_VALUE, null, true)
+        if (!result.isSuccess) return
+
+        val filled = result.result
+        if (filled == outStack) return
+
+        containerSlots.setStackInSlot(1, filled)
+        markDirty()
+    }
 
     override fun writeToNBT(compound: NBTTagCompound): NBTTagCompound {
         super.writeToNBT(compound)
@@ -118,6 +198,9 @@ public class FluidIOHatchBlockEntity(
         compound.setTag("OutputStorage", outputStorage.writeNBT(NBTTagCompound()))
         compound.setBoolean("AutoInput", autoInput)
         compound.setBoolean("AutoOutput", autoOutput)
+        compound.setLong("MaxInRate", maxInputRate)
+        compound.setLong("MaxOutRate", maxOutputRate)
+        compound.setTag("ContainerSlots", containerSlots.serializeNBT())
         compound.setInteger("Tier", config.tier.tier)
         compound.setInteger("InputTankCount", config.inputTankCount)
         compound.setInteger("OutputTankCount", config.outputTankCount)
@@ -130,6 +213,8 @@ public class FluidIOHatchBlockEntity(
         super.readFromNBT(compound)
         autoInput = compound.getBoolean("AutoInput")
         autoOutput = compound.getBoolean("AutoOutput")
+        maxInputRate = if (compound.hasKey("MaxInRate")) compound.getLong("MaxInRate") else 0L
+        maxOutputRate = if (compound.hasKey("MaxOutRate")) compound.getLong("MaxOutRate") else 0L
 
         val tierLevel = if (compound.hasKey("Tier")) compound.getInteger("Tier") else config.tier.tier
         config = HatchConfigRegistry.getFluidIOHatchConfig(tierLevel)
@@ -142,10 +227,17 @@ public class FluidIOHatchBlockEntity(
         if (compound.hasKey("OutputStorage")) {
             outputStorage.readNBT(compound.getCompoundTag("OutputStorage"))
         }
+
+        if (compound.hasKey("ContainerSlots")) {
+            containerSlots.deserializeNBT(compound.getCompoundTag("ContainerSlots"))
+        }
     }
 
     override fun hasCapability(capability: Capability<*>, facing: EnumFacing?): Boolean {
         if (capability == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY) {
+            return true
+        }
+        if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY) {
             return true
         }
         return super.hasCapability(capability, facing)
@@ -155,6 +247,9 @@ public class FluidIOHatchBlockEntity(
     override fun <T> getCapability(capability: Capability<T>, facing: EnumFacing?): T? {
         if (capability == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY) {
             return combinedHandler as T
+        }
+        if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY) {
+            return containerSlots as T
         }
         return super.getCapability(capability, facing)
     }
@@ -170,6 +265,8 @@ public class FluidIOHatchBlockEntity(
      * 获取用于外部使用的输出处理器。
      */
     public fun getOutputHandler(): IFluidHandler = outputHandler
+
+    public fun getCombinedHandler(): IFluidHandler = combinedHandler
 
     override fun buildUI(data: PosGuiData, syncManager: PanelSyncManager, settings: UISettings): ModularPanel {
         return FluidIOHatchGUI.buildPanel(this, data, syncManager)

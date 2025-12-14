@@ -1,6 +1,5 @@
 package github.kasuminova.prototypemachinery.common.block.hatch.item
 
-import github.kasuminova.prototypemachinery.impl.key.item.PMItemKey
 import net.minecraft.item.ItemStack
 import net.minecraftforge.items.IItemHandler
 
@@ -19,19 +18,13 @@ public class ItemIOHatchInputHandler(
 ) : IItemHandler {
 
     override fun getSlots(): Int {
-        return blockEntity.inputStorage.maxTypes
+        return blockEntity.inputStorage.slotCount
     }
 
     override fun getStackInSlot(slot: Int): ItemStack {
         val storage = blockEntity.inputStorage
-        val keys = storage.getAllResources().toList()
-        if (slot >= keys.size) {
-            return ItemStack.EMPTY
-        }
-        val key = keys[slot]
-        val pmKey = key as? PMItemKey ?: return ItemStack.EMPTY
-        val count = storage.getAmount(key)
-        return pmKey.uniqueKey.createStack(count.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        val key = storage.getSlot(slot) ?: return ItemStack.EMPTY
+        return key.get()
     }
 
     override fun insertItem(slot: Int, stack: ItemStack, simulate: Boolean): ItemStack {
