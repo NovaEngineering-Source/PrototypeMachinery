@@ -39,6 +39,10 @@
 4. 机器方块注册：`common/registry/BlockRegisterer.kt`
 5. UI 覆盖链路：`impl/ui/registry/MachineUIRegistryImpl.kt` + `integration/crafttweaker/zenclass/ui/*`
 
+6. **PMKey / 库存（按类型计数 + 槽位视图）**：
+   - 概念与约定：`docs/PMKey.md`
+   - 存储实现与同步机制（含 SlottedResourceStorage / dirty-slot）：`docs/Storage.md`
+
 ---
 
 ## 4. 维护者提示
@@ -53,12 +57,7 @@
 
 ---
 
-## 5. 总结
-
-PrototypeMachinery 当前已经形成可扩展的基础骨架：结构（JSON）、机器类型、调度器、UI 与脚本扩展点都已就位。
-后续开发建议以 `docs/README.md` 为入口，按需深入各模块实现。
-
-## 4. 未来扩展建议
+## 5. 未来扩展建议
 
 基于当前骨架，未来可以在以下方向扩展：
 
@@ -90,6 +89,6 @@ PrototypeMachinery 当前已经形成可扩展的基础骨架：结构（JSON）
 
 ---
 
-## 5. 总结
+## 6. 总结
 
 当前项目已经具备一个相当完整且可扩展的基础架构，后续只需在既有骨架上填充业务逻辑与更多内容即可。

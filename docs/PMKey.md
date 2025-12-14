@@ -16,8 +16,8 @@ PMKey（PrototypeMachinery Key）用于将“可堆叠资源”统一抽象为�
 
 ## 代码位置
 
-- API：`src/main/kotlin/api/pmkey/*`
-- 实现：`src/main/kotlin/impl/pmkey/*`
+- API：`src/main/kotlin/api/key/*`
+- 实现：`src/main/kotlin/impl/key/*`
 
 （具体类型与构造入口以代码为准；本页更偏“用途与约定”。）
 
@@ -31,3 +31,21 @@ PMKey（PrototypeMachinery Key）用于将“可堆叠资源”统一抽象为�
 更多细节见：
 
 - [资源存储（ResourceStorage / EnergyStorage）](./Storage.md)
+
+## 语义与实现约定（以物品为例）
+
+PMKey 的核心定位是“**类型键 + 数量**”。其中：
+
+- key（类型）必须稳定、可哈希、可序列化
+- count（数量）用于表达库存/存储中的实际数量，通常为 `Long`
+
+以 `ItemStack` 的 PMKey 实现 `PMItemKeyImpl`（`src/main/kotlin/impl/key/item/PMItemKeyImpl.kt`）为例：
+
+- `equals/hashCode` **只基于 unique key（原型）**，刻意忽略 `count`
+	- 因此把 `PMKey` 作为 Map 的 key 时，其语义是“这是什么资源类型”，而不是“类型+数量”的组合键
+- 当需要回落为原版 `ItemStack`（例如用于 GUI 渲染或交互桥接）时，`PMItemKeyImpl.get()` 会对 `ItemStack.count` 做安全钳制（上限约为 `Int.MAX_VALUE / 2`）
+	- 目的：降低 `Int` 溢出与第三方兼容风险
+
+如果你要基于 PMKey 做“按类型聚合计数 + 槽位视图”的库存（例如 Hatch 仓），建议同时阅读：
+
+- `docs/Storage.md`（SlottedResourceStorage / ItemResourceStorage / dirty-slot 增量同步）
