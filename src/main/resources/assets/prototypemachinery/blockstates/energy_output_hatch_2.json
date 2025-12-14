@@ -1,7 +1,7 @@
 {
   "variants": {
     "normal": {
-      "model": "prototypemachinery:energy_output_hatch_2"
+      "model": "prototypemachinery:energy_hatch/output/lv2"
     }
   }
 }

@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "normal": {
+      "model": "prototypemachinery:bus/fluid_output_bus"
+    },
+    "inventory": {
+      "model": "prototypemachinery:item/fluid_output_bus"
+    }
+  }
+}

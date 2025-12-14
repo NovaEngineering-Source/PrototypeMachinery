@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "normal": {
+      "model": "prototypemachinery:gas_hatch/output/lv3"
+    }
+  }
+}

@@ -1,4 +1,5 @@
 {
+  "parent": "block/block",
   "credit": "Made with WI_8614_ice X:@wi8614ice @wi8614art QQ:1463599076",
   "textures": {
     "1": "prototypemachinery:blocks/mix_hatch/io/lv2_top",

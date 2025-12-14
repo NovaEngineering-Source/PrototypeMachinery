@@ -1,0 +1,218 @@
+
+# Machine attributes
+attribute.prototypemachinery.max_concurrent_processes=Max Concurrent Processes
+attribute.prototypemachinery.process_parallelism=Process Parallelism
+attribute.prototypemachinery.process_speed=Process Speed
+attribute.prototypemachinery.energy_efficiency=Energy Efficiency
+
+# Requirement wrapper errors
+error.selective.missing_start_tx=Internal error: missing start transaction for selective wrapper (%s)
+error.selective.invalid_selection=Internal error: selective wrapper (%s) selected invalid index %s
+
+# Hatch GUI
+# Used by multiple Hatch GUIs, including FluidHatchGUI and FluidIOHatchGUI:
+# - Auto Input / Auto Output: toggle buttons
+# - Clear: clears internal storage (fluids/items/energy depending on hatch)
+prototypemachinery.gui.hatch.auto_input=Auto Input
+prototypemachinery.gui.hatch.auto_output=Auto Output
+prototypemachinery.gui.hatch.clear=Clear
+prototypemachinery.gui.hatch.input=Input
+prototypemachinery.gui.hatch.output=Output
+prototypemachinery.gui.hatch.energy.input_rate=Input Rate: %s FE/t
+prototypemachinery.gui.hatch.energy.output_rate=Output Rate: %s FE/t
+
+# Resource slot tooltip
+prototypemachinery.gui.resource_slot.count=Count: %s
+prototypemachinery.gui.resource_slot.types=Slots: %s / %s
+prototypemachinery.gui.resource_slot.stored=Stored: %s / %s
+
+# /////////////////////////////////////////////////////////////////////////////////[Energy Hatch]
+tile.prototypemachinery.energy_input_hatch_1.name=§d[§rEnergy-in-Lv1§d]§r-Energy Input Hatch
+tile.prototypemachinery.energy_input_hatch_2.name=§d[§rEnergy-in-Lv2§d]§r-Energy Input Hatch
+tile.prototypemachinery.energy_input_hatch_3.name=§d[§rEnergy-in-Lv3§d]§r-Energy Input Hatch
+tile.prototypemachinery.energy_input_hatch_4.name=§d[§rEnergy-in-Lv4§d]§r-Energy Input Hatch
+tile.prototypemachinery.energy_input_hatch_5.name=§d[§rEnergy-in-Lv5§d]§r-Energy Input Hatch
+tile.prototypemachinery.energy_input_hatch_6.name=§d[§rEnergy-in-Lv6§d]§r-§bEnergy Input Hatch
+tile.prototypemachinery.energy_input_hatch_7.name=§d[§rEnergy-in-Lv7§d]§r-§bEnergy Input Hatch
+tile.prototypemachinery.energy_input_hatch_8.name=§d[§rEnergy-in-Lv8§d]§r-§bEnergy Input Hatch
+tile.prototypemachinery.energy_input_hatch_9.name=§d[§rEnergy-in-Lv9§d]§r-§b§bEnergy §dInput §6Hatch
+tile.prototypemachinery.energy_input_hatch_10.name=§d[§rEnergy-in-Lv10§d]§r-§cEnergy Input Hatch
+
+tile.prototypemachinery.energy_output_hatch_1.name=§d[§rEnergy-out-Lv1§d]§r-Energy Output Hatch
+tile.prototypemachinery.energy_output_hatch_2.name=§d[§rEnergy-out-Lv2§d]§r-Energy Output Hatch
+tile.prototypemachinery.energy_output_hatch_3.name=§d[§rEnergy-out-Lv3§d]§r-Energy Output Hatch
+tile.prototypemachinery.energy_output_hatch_4.name=§d[§rEnergy-out-Lv4§d]§r-Energy Output Hatch
+tile.prototypemachinery.energy_output_hatch_5.name=§d[§rEnergy-out-Lv5§d]§r-Energy Output Hatch
+tile.prototypemachinery.energy_output_hatch_6.name=§d[§rEnergy-out-Lv6§d]§r-§bEnergy Output Hatch
+tile.prototypemachinery.energy_output_hatch_7.name=§d[§rEnergy-out-Lv7§d]§r-§bEnergy Output Hatch
+tile.prototypemachinery.energy_output_hatch_8.name=§d[§rEnergy-out-Lv8§d]§r-§bEnergy Output Hatch
+tile.prototypemachinery.energy_output_hatch_9.name=§d[§rEnergy-out-Lv9§d]§r-§b§bEnergy §dOutput §6Hatch
+tile.prototypemachinery.energy_output_hatch_10.name=§d[§rEnergy-out-Lv10§d]§r-§cEnergy Output Hatch
+
+tile.prototypemachinery.energy_io_hatch_1.name=§d[§rEnergy-io-Lv1§d]§r-Energy Interaction Hatch
+tile.prototypemachinery.energy_io_hatch_2.name=§d[§rEnergy-io-Lv2§d]§r-Energy Interaction Hatch
+tile.prototypemachinery.energy_io_hatch_3.name=§d[§rEnergy-io-Lv3§d]§r-Energy Interaction Hatch
+tile.prototypemachinery.energy_io_hatch_4.name=§d[§rEnergy-io-Lv4§d]§r-Energy Interaction Hatch
+tile.prototypemachinery.energy_io_hatch_5.name=§d[§rEnergy-io-Lv5§d]§r-Energy Interaction Hatch
+tile.prototypemachinery.energy_io_hatch_6.name=§d[§rEnergy-io-Lv6§d]§r-§bEnergy Interaction Hatch
+tile.prototypemachinery.energy_io_hatch_7.name=§d[§rEnergy-io-Lv7§d]§r-§bEnergy Interaction Hatch
+tile.prototypemachinery.energy_io_hatch_8.name=§d[§rEnergy-io-Lv8§d]§r-§bEnergy Interaction Hatch
+tile.prototypemachinery.energy_io_hatch_9.name=§d[§rEnergy-io-Lv9§d]§r-§bEnergy §dInteraction §6Hatch
+tile.prototypemachinery.energy_io_hatch_10.name=§d[§rEnergy-io-Lv10§d]§r-§cEnergy Interaction Hatch
+
+tile.prototypemachinery.fluxnetwork_link.name=§d[§rEnergy-Flux§d]§r-§bFlux Network Link Node
+
+# /////////////////////////////////////////////////////////////////////////////////[Item Hatch]
+tile.prototypemachinery.item_input_hatch_1.name=§d[§rItem-in-Lv1§d]§r-Item Input Hatch
+tile.prototypemachinery.item_input_hatch_2.name=§d[§rItem-in-Lv2§d]§r-Item Input Hatch
+tile.prototypemachinery.item_input_hatch_3.name=§d[§rItem-in-Lv3§d]§r-Item Input Hatch
+tile.prototypemachinery.item_input_hatch_4.name=§d[§rItem-in-Lv4§d]§r-Item Input Hatch
+tile.prototypemachinery.item_input_hatch_5.name=§d[§rItem-in-Lv5§d]§r-Item Input Hatch
+tile.prototypemachinery.item_input_hatch_6.name=§d[§rItem-in-Lv6§d]§r-§bItem Input Hatch
+tile.prototypemachinery.item_input_hatch_7.name=§d[§rItem-in-Lv7§d]§r-§bItem Input Hatch
+tile.prototypemachinery.item_input_hatch_8.name=§d[§rItem-in-Lv8§d]§r-§bItem Input Hatch
+tile.prototypemachinery.item_input_hatch_9.name=§d[§rItem-in-Lv9§d]§r-§bItem §dInput §6Hatch
+tile.prototypemachinery.item_input_hatch_10.name=§d[§rItem-in-Lv10§d]§r-§cItem Input Hatch
+
+tile.prototypemachinery.item_output_hatch_1.name=§d[§rItem-out-Lv1§d]§r-Item Output Hatch
+tile.prototypemachinery.item_output_hatch_2.name=§d[§rItem-out-Lv2§d]§r-Item Output Hatch
+tile.prototypemachinery.item_output_hatch_3.name=§d[§rItem-out-Lv3§d]§r-Item Output Hatch
+tile.prototypemachinery.item_output_hatch_4.name=§d[§rItem-out-Lv4§d]§r-Item Output Hatch
+tile.prototypemachinery.item_output_hatch_5.name=§d[§rItem-out-Lv5§d]§r-Item Output Hatch
+tile.prototypemachinery.item_output_hatch_6.name=§d[§rItem-out-Lv6§d]§r-§bItem Output Hatch
+tile.prototypemachinery.item_output_hatch_7.name=§d[§rItem-out-Lv7§d]§r-§bItem Output Hatch
+tile.prototypemachinery.item_output_hatch_8.name=§d[§rItem-out-Lv8§d]§r-§bItem Output Hatch
+tile.prototypemachinery.item_output_hatch_9.name=§d[§rItem-out-Lv9§d]§r-§bItem §dOutput §6Hatch
+tile.prototypemachinery.item_output_hatch_10.name=§d[§rItem-out-Lv10§d]§r-§cItem Output Hatch
+
+tile.prototypemachinery.item_io_hatch_1.name=§d[§rItem-io-Lv1§d]§r-Item Interaction Hatch
+tile.prototypemachinery.item_io_hatch_2.name=§d[§rItem-io-Lv2§d]§r-Item Interaction Hatch
+tile.prototypemachinery.item_io_hatch_3.name=§d[§rItem-io-Lv3§d]§r-Item Interaction Hatch
+tile.prototypemachinery.item_io_hatch_4.name=§d[§rItem-io-Lv4§d]§r-Item Interaction Hatch
+tile.prototypemachinery.item_io_hatch_5.name=§d[§rItem-io-Lv5§d]§r-Item Interaction Hatch
+tile.prototypemachinery.item_io_hatch_6.name=§d[§rItem-io-Lv6§d]§r-§bItem Interaction Hatch
+tile.prototypemachinery.item_io_hatch_7.name=§d[§rItem-io-Lv7§d]§r-§bItem Interaction Hatch
+tile.prototypemachinery.item_io_hatch_8.name=§d[§rItem-io-Lv8§d]§r-§bItem Interaction Hatch
+tile.prototypemachinery.item_io_hatch_9.name=§d[§rItem-io-Lv9§d]§r-§bItem §dInteraction §6Hatch
+tile.prototypemachinery.item_io_hatch_10.name=§d[§rItem-io-Lv10§d]§r-§cItem Interaction Hatch
+
+tile.prototypemachinery.item_input_bus.name=§d[§rItem-in-bus§d]§r-§bItem Output Hatch
+tile.prototypemachinery.item_output_bus.name=§d[§rItem-out-bus§d]§r-§bItem Input Hatch
+tile.prototypemachinery.item_io_bus.name=§d[§rItem-io-bus§d]§r-§bItem Interaction Hatch
+
+# /////////////////////////////////////////////////////////////////////////////////[Fluid Hatch]
+tile.prototypemachinery.fluid_input_hatch_1.name=§d[§rFluid-in-Lv1§d]§r-Fluid Input Hatch
+tile.prototypemachinery.fluid_input_hatch_2.name=§d[§rFluid-in-Lv2§d]§r-Fluid Input Hatch
+tile.prototypemachinery.fluid_input_hatch_3.name=§d[§rFluid-in-Lv3§d]§r-Fluid Input Hatch
+tile.prototypemachinery.fluid_input_hatch_4.name=§d[§rFluid-in-Lv4§d]§r-Fluid Input Hatch
+tile.prototypemachinery.fluid_input_hatch_5.name=§d[§rFluid-in-Lv5§d]§r-Fluid Input Hatch
+tile.prototypemachinery.fluid_input_hatch_6.name=§d[§rFluid-in-Lv6§d]§r-§bFluid Input Hatch
+tile.prototypemachinery.fluid_input_hatch_7.name=§d[§rFluid-in-Lv7§d]§r-§bFluid Input Hatch
+tile.prototypemachinery.fluid_input_hatch_8.name=§d[§rFluid-in-Lv8§d]§r-§bFluid Input Hatch
+tile.prototypemachinery.fluid_input_hatch_9.name=§d[§rFluid-in-Lv9§d]§r-§bFluid §dInput §6Hatch
+tile.prototypemachinery.fluid_input_hatch_10.name=§d[§rFluid-in-Lv10§d]§r-§cFluid Input Hatch
+
+tile.prototypemachinery.fluid_output_hatch_1.name=§d[§rFluid-out-Lv1§d]§r-Fluid Output Hatch
+tile.prototypemachinery.fluid_output_hatch_2.name=§d[§rFluid-out-Lv2§d]§r-Fluid Output Hatch
+tile.prototypemachinery.fluid_output_hatch_3.name=§d[§rFluid-out-Lv3§d]§r-Fluid Output Hatch
+tile.prototypemachinery.fluid_output_hatch_4.name=§d[§rFluid-out-Lv4§d]§r-Fluid Output Hatch
+tile.prototypemachinery.fluid_output_hatch_5.name=§d[§rFluid-out-Lv5§d]§r-Fluid Output Hatch
+tile.prototypemachinery.fluid_output_hatch_6.name=§d[§rFluid-out-Lv6§d]§r-§bFluid Output Hatch
+tile.prototypemachinery.fluid_output_hatch_7.name=§d[§rFluid-out-Lv7§d]§r-§bFluid Output Hatch
+tile.prototypemachinery.fluid_output_hatch_8.name=§d[§rFluid-out-Lv8§d]§r-§bFluid Output Hatch
+tile.prototypemachinery.fluid_output_hatch_9.name=§d[§rFluid-out-Lv9§d]§r-§bFluid §dOutput §6Hatch
+tile.prototypemachinery.fluid_output_hatch_10.name=§d[§rFluid-out-Lv10§d]§r-§cFluid Output Hatch
+
+tile.prototypemachinery.fluid_io_hatch_1.name=§d[§rFluid-io-Lv1§d]§r-Fluid Interaction Hatch
+tile.prototypemachinery.fluid_io_hatch_2.name=§d[§rFluid-io-Lv2§d]§r-Fluid Interaction Hatch
+tile.prototypemachinery.fluid_io_hatch_3.name=§d[§rFluid-io-Lv3§d]§r-Fluid Interaction Hatch
+tile.prototypemachinery.fluid_io_hatch_4.name=§d[§rFluid-io-Lv4§d]§r-Fluid Interaction Hatch
+tile.prototypemachinery.fluid_io_hatch_5.name=§d[§rFluid-io-Lv5§d]§r-Fluid Interaction Hatch
+tile.prototypemachinery.fluid_io_hatch_6.name=§d[§rFluid-io-Lv6§d]§r-§bFluid Interaction Hatch
+tile.prototypemachinery.fluid_io_hatch_7.name=§d[§rFluid-io-Lv7§d]§r-§bFluid Interaction Hatch
+tile.prototypemachinery.fluid_io_hatch_8.name=§d[§rFluid-io-Lv8§d]§r-§bFluid Interaction Hatch
+tile.prototypemachinery.fluid_io_hatch_9.name=§d[§rFluid-io-Lv9§d]§r-§bFluid §dInteraction §6Hatch
+tile.prototypemachinery.fluid_io_hatch_10.name=§d[§rFluid-io-Lv10§d]§r-§cFluid Interaction Hatch
+
+tile.prototypemachinery.fluid_input_bus.name=§d[§rFluid-in-bus§d]§r-§bFluid Input Bus
+tile.prototypemachinery.fluid_output_bus.name=§d[§rFluid-out-bus§d]§r-§bFluid Output Bus
+tile.prototypemachinery.fluid_io_bus.name=§d[§rFluid-io-bus§d]§r-§bFluid Interaction Bus
+
+# /////////////////////////////////////////////////////////////////////////////////[Gas Hatch]
+tile.prototypemachinery.gas_input_hatch_1.name=§d[§rGas-in-Lv1§d]§r-Gas Input Hatch
+tile.prototypemachinery.gas_input_hatch_2.name=§d[§rGas-in-Lv2§d]§r-Gas Input Hatch
+tile.prototypemachinery.gas_input_hatch_3.name=§d[§rGas-in-Lv3§d]§r-Gas Input Hatch
+tile.prototypemachinery.gas_input_hatch_4.name=§d[§rGas-in-Lv4§d]§r-Gas Input Hatch
+tile.prototypemachinery.gas_input_hatch_5.name=§d[§rGas-in-Lv5§d]§r-Gas Input Hatch
+tile.prototypemachinery.gas_input_hatch_6.name=§d[§rGas-in-Lv6§d]§r-§bGas Input Hatch
+tile.prototypemachinery.gas_input_hatch_7.name=§d[§rGas-in-Lv7§d]§r-§bGas Input Hatch
+tile.prototypemachinery.gas_input_hatch_8.name=§d[§rGas-in-Lv8§d]§r-§bGas Input Hatch
+tile.prototypemachinery.gas_input_hatch_9.name=§d[§rGas-in-Lv9§d]§r-§bGas §dInput §6Hatch
+tile.prototypemachinery.gas_input_hatch_10.name=§d[§rGas-in-Lv10§d]§r-§cGas Input Hatch
+
+tile.prototypemachinery.gas_output_hatch_1.name=§d[§rGas-out-Lv1§d]§r-Gas Output Hatch
+tile.prototypemachinery.gas_output_hatch_2.name=§d[§rGas-out-Lv2§d]§r-Gas Output Hatch
+tile.prototypemachinery.gas_output_hatch_3.name=§d[§rGas-out-Lv3§d]§r-Gas Output Hatch
+tile.prototypemachinery.gas_output_hatch_4.name=§d[§rGas-out-Lv4§d]§r-Gas Output Hatch
+tile.prototypemachinery.gas_output_hatch_5.name=§d[§rGas-out-Lv5§d]§r-Gas Output Hatch
+tile.prototypemachinery.gas_output_hatch_6.name=§d[§rGas-out-Lv6§d]§r-§bGas Output Hatch
+tile.prototypemachinery.gas_output_hatch_7.name=§d[§rGas-out-Lv7§d]§r-§bGas Output Hatch
+tile.prototypemachinery.gas_output_hatch_8.name=§d[§rGas-out-Lv8§d]§r-§bGas Output Hatch
+tile.prototypemachinery.gas_output_hatch_9.name=§d[§rGas-out-Lv9§d]§r-§bGas §dOutput §6Hatch
+tile.prototypemachinery.gas_output_hatch_10.name=§d[§rGas-out-Lv10§d]§r-§cGas Output Hatch
+
+tile.prototypemachinery.gas_io_hatch_1.name=§d[§rGas-io-Lv1§d]§r-Gas Interaction Hatch
+tile.prototypemachinery.gas_io_hatch_2.name=§d[§rGas-io-Lv2§d]§r-Gas Interaction Hatch
+tile.prototypemachinery.gas_io_hatch_3.name=§d[§rGas-io-Lv3§d]§r-Gas Interaction Hatch
+tile.prototypemachinery.gas_io_hatch_4.name=§d[§rGas-io-Lv4§d]§r-Gas Interaction Hatch
+tile.prototypemachinery.gas_io_hatch_5.name=§d[§rGas-io-Lv5§d]§r-Gas Interaction Hatch
+tile.prototypemachinery.gas_io_hatch_6.name=§d[§rGas-io-Lv6§d]§r-§bGas Interaction Hatch
+tile.prototypemachinery.gas_io_hatch_7.name=§d[§rGas-io-Lv7§d]§r-§bGas Interaction Hatch
+tile.prototypemachinery.gas_io_hatch_8.name=§d[§rGas-io-Lv8§d]§r-§bGas Interaction Hatch
+tile.prototypemachinery.gas_io_hatch_9.name=§d[§rGas-io-Lv9§d]§r-§bGas §dInteraction §6Hatch
+tile.prototypemachinery.gas_io_hatch_10.name=§d[§rGas-io-Lv10§d]§r-§cGas Interaction Hatch
+
+tile.prototypemachinery.gas_input_bus.name=§d[§rGas-in-bus§d]§r-§bGas Input Bus
+tile.prototypemachinery.gas_output_bus.name=§d[§rGas-out-bus§d]§r-§bGas Output Bus
+tile.prototypemachinery.gas_io_bus.name=§d[§rGas-io-bus§d]§r-§bGas Interaction Bus
+
+# /////////////////////////////////////////////////////////////////////////////////[Mix Hatch]
+tile.prototypemachinery.mix_input_hatch_1.name=§d[§rMix-in-Lv1§d]§r-Mix Input Hatch
+tile.prototypemachinery.mix_input_hatch_2.name=§d[§rMix-in-Lv2§d]§r-Mix Input Hatch
+tile.prototypemachinery.mix_input_hatch_3.name=§d[§rMix-in-Lv3§d]§r-Mix Input Hatch
+tile.prototypemachinery.mix_input_hatch_4.name=§d[§rMix-in-Lv4§d]§r-Mix Input Hatch
+tile.prototypemachinery.mix_input_hatch_5.name=§d[§rMix-in-Lv5§d]§r-Mix Input Hatch
+tile.prototypemachinery.mix_input_hatch_6.name=§d[§rMix-in-Lv6§d]§r-§bMix Input Hatch
+tile.prototypemachinery.mix_input_hatch_7.name=§d[§rMix-in-Lv7§d]§r-§bMix Input Hatch
+tile.prototypemachinery.mix_input_hatch_8.name=§d[§rMix-in-Lv8§d]§r-§bMix Input Hatch
+tile.prototypemachinery.mix_input_hatch_9.name=§d[§rMix-in-Lv9§d]§r-§bMix §dInput §6Hatch
+tile.prototypemachinery.mix_input_hatch_10.name=§d[§rMix-in-Lv10§d]§r-§cMix Input Hatch
+
+tile.prototypemachinery.mix_output_hatch_1.name=§d[§rMix-out-Lv1§d]§r-Mix Output Hatch
+tile.prototypemachinery.mix_output_hatch_2.name=§d[§rMix-out-Lv2§d]§r-Mix Output Hatch
+tile.prototypemachinery.mix_output_hatch_3.name=§d[§rMix-out-Lv3§d]§r-Mix Output Hatch
+tile.prototypemachinery.mix_output_hatch_4.name=§d[§rMix-out-Lv4§d]§r-Mix Output Hatch
+tile.prototypemachinery.mix_output_hatch_5.name=§d[§rMix-out-Lv5§d]§r-Mix Output Hatch
+tile.prototypemachinery.mix_output_hatch_6.name=§d[§rMix-out-Lv6§d]§r-§bMix Output Hatch
+tile.prototypemachinery.mix_output_hatch_7.name=§d[§rMix-out-Lv7§d]§r-§bMix Output Hatch
+tile.prototypemachinery.mix_output_hatch_8.name=§d[§rMix-out-Lv8§d]§r-§bMix Output Hatch
+tile.prototypemachinery.mix_output_hatch_9.name=§d[§rMix-out-Lv9§d]§r-§bMix §dOutput §6Hatch
+tile.prototypemachinery.mix_output_hatch_10.name=§d[§rMix-out-Lv10§d]§r-§cMix Output Hatch
+
+tile.prototypemachinery.mix_io_hatch_1.name=§d[§rMix-io-Lv1§d]§r-Mix Interaction Hatch
+tile.prototypemachinery.mix_io_hatch_2.name=§d[§rMix-io-Lv2§d]§r-Mix Interaction Hatch
+tile.prototypemachinery.mix_io_hatch_3.name=§d[§rMix-io-Lv3§d]§r-Mix Interaction Hatch
+tile.prototypemachinery.mix_io_hatch_4.name=§d[§rMix-io-Lv4§d]§r-Mix Interaction Hatch
+tile.prototypemachinery.mix_io_hatch_5.name=§d[§rMix-io-Lv5§d]§r-Mix Interaction Hatch
+tile.prototypemachinery.mix_io_hatch_6.name=§d[§rMix-io-Lv6§d]§r-§bMix Interaction Hatch
+tile.prototypemachinery.mix_io_hatch_7.name=§d[§rMix-io-Lv7§d]§r-§bMix Interaction Hatch
+tile.prototypemachinery.mix_io_hatch_8.name=§d[§rMix-io-Lv8§d]§r-§bMix Interaction Hatch
+tile.prototypemachinery.mix_io_hatch_9.name=§d[§rMix-io-Lv9§d]§r-§bMix §dInteraction §6Hatch
+tile.prototypemachinery.mix_io_hatch_10.name=§d[§rMix-io-Lv10§d]§r-§cMix Interaction Hatch
+
+
+tile.prototypemachinery.mix_input_bus.name=§d[§rMix-in-bus§d]§r-§bMix Input Bus
+tile.prototypemachinery.mix_output_bus.name=§d[§rMix-out-bus§d]§r-§bMix Output Bus
+tile.prototypemachinery.mix_io_bus.name=§d[§rMix-io-bus§d]§r-§bMix Interaction Bus
+
+tile.prototypemachinery.pattern_provider.name=§d[§rPattern-io§d]§r-§bPattern provider

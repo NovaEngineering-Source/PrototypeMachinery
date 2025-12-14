@@ -1,7 +1,10 @@
 {
   "variants": {
     "normal": {
-      "model": "prototypemachinery:item_output_hatch_6"
+      "model": "prototypemachinery:item_hatch/output/lv6"
+    },
+    "inventory": {
+      "model": "prototypemachinery:item/item_output_hatch_6"
     }
   }
 }
