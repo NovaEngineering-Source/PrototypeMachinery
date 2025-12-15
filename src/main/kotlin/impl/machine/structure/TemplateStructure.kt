@@ -13,10 +13,10 @@ public class TemplateStructure(
     override val id: String,
     override val orientation: StructureOrientation,
     override val offset: BlockPos,
-    public val pattern: StructurePattern,
+    override val pattern: StructurePattern,
     override val validators: List<StructureValidator> = emptyList(),
     override val children: List<MachineStructure> = emptyList()
-) : MachineStructure {
+) : github.kasuminova.prototypemachinery.api.machine.structure.TemplateLikeMachineStructure {
     override fun createData(): StructureInstanceData {
         return object : StructureInstanceData {
             override val orientation: StructureOrientation = this@TemplateStructure.orientation
@@ -42,10 +42,24 @@ public class TemplateStructure(
             // 应用偏移以获取实际的起始位置
             val offsetOrigin = origin.add(offset)
 
+            // Fast-fail: pattern area must be loaded before checking predicates.
+            // 快速失败：在检查 predicate 之前，pattern 覆盖范围必须已加载。
+            val world = context.machine.blockEntity.world ?: return false
+            if (!pattern.isAreaLoaded(world, offsetOrigin)) {
+                return false
+            }
+
             // Check if pattern matches
             // 检查模式是否匹配
             for ((relativePos, predicate) in pattern.blocks) {
                 val actualPos = offsetOrigin.add(relativePos)
+
+                // Controller position is reserved and validated elsewhere.
+                // 控制器坐标由外部逻辑验证；pattern 不应占用控制器坐标。
+                if (actualPos == origin) {
+                    continue
+                }
+
                 if (!predicate.matches(context, actualPos)) {
                     return false
                 }

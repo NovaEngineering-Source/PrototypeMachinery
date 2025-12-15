@@ -16,6 +16,7 @@
   - [结构系统总览](./Structures.md)
   - [MachineStructure JSON 配置指南](./StructureJsonGuide.md)
   - [StructureLoader 加载特性说明](./StructureLoadingFeatures.md)
+  - [结构投影预览（客户端）](./StructurePreview.md)
 
 - **注册与生命周期**
   - [机器类型注册（MachineType）与脚本注册](./MachineRegistration.md)

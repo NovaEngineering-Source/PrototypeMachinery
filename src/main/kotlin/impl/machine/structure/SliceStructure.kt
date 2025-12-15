@@ -14,13 +14,13 @@ public class SliceStructure(
     override val id: String,
     override val orientation: StructureOrientation,
     override val offset: BlockPos,
-    public val pattern: StructurePattern,
-    public val minCount: Int,
-    public val maxCount: Int,
-    public val sliceOffset: BlockPos = BlockPos(0, 1, 0),
+    override val pattern: StructurePattern,
+    override val minCount: Int,
+    override val maxCount: Int,
+    override val sliceOffset: BlockPos = BlockPos(0, 1, 0),
     override val validators: List<StructureValidator> = emptyList(),
     override val children: List<MachineStructure> = emptyList()
-) : MachineStructure {
+) : github.kasuminova.prototypemachinery.api.machine.structure.SliceLikeMachineStructure {
 
     override fun createData(): StructureInstanceData = SliceStructureInstanceData(this.orientation)
 
@@ -44,6 +44,9 @@ public class SliceStructure(
             // 应用偏移以获取实际的起始位置
             val offsetOrigin = origin.add(offset)
 
+            // World must be available for chunk-loaded checks.
+            val world = context.machine.blockEntity.world ?: return false
+
             // For slice structures, we need to count how many consecutive matches we can find
             // 对于切片结构，我们需要计算可以找到多少连续匹配
             var matchCount = 0
@@ -54,10 +57,23 @@ public class SliceStructure(
             for (i in 0 until maxCount) {
                 var sliceMatches = true
 
+                // Fast-fail: pattern area must be loaded before checking predicates.
+                // 快速失败：在检查 predicate 之前，pattern 覆盖范围必须已加载。
+                if (!pattern.isAreaLoaded(world, currentPos)) {
+                    return false
+                }
+
                 // Check if pattern matches at current position
                 // 检查模式是否在当前位置匹配
                 for ((relativePos, predicate) in pattern.blocks) {
                     val actualPos = currentPos.add(relativePos)
+
+                    // Controller position is reserved and validated elsewhere.
+                    // 控制器坐标由外部逻辑验证；pattern 不应占用控制器坐标。
+                    if (actualPos == origin) {
+                        continue
+                    }
+
                     if (!predicate.matches(context, actualPos)) {
                         sliceMatches = false
                         break

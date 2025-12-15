@@ -1,19 +1,19 @@
 package github.kasuminova.prototypemachinery.impl.recipe.index.type
 
+import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndex
 import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndexFactory
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
-import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 
 public class EnergyRequirementIndex(
     // Map of Recipe -> Required Energy (per tick or total start cost)
     private val energyRequirements: Map<MachineRecipe, Long>
 ) : RequirementIndex {
 
-    public override fun lookup(machine: MachineInstanceImpl): Set<MachineRecipe>? {
+    public override fun lookup(machine: MachineInstance): Set<MachineRecipe>? {
         // Pseudo-implementation
 
         // 1. Get current energy stored in machine

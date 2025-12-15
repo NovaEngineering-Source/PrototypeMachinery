@@ -1,9 +1,7 @@
 package github.kasuminova.prototypemachinery.impl.recipe.requirement.component.system
 
-import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
-import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementRegistry
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RequirementTransaction
@@ -22,9 +20,8 @@ import github.kasuminova.prototypemachinery.impl.recipe.requirement.component.Ch
 public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<CheckpointRequirementComponent> {
 
     override fun start(
-        machine: MachineInstance,
-        component: CheckpointRequirementComponent,
-        process: RecipeProcess
+        process: RecipeProcess,
+        component: CheckpointRequirementComponent
     ): RequirementTransaction {
         return object : RequirementTransaction {
             override val result: ProcessResult = ProcessResult.Success
@@ -34,9 +31,8 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
     }
 
     override fun onEnd(
-        machine: MachineInstance,
-        component: CheckpointRequirementComponent,
-        process: RecipeProcess
+        process: RecipeProcess,
+        component: CheckpointRequirementComponent
     ): RequirementTransaction {
         return object : RequirementTransaction {
             override val result: ProcessResult = ProcessResult.Success
@@ -46,9 +42,8 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
     }
 
     override fun acquireTickTransaction(
-        machine: MachineInstance,
-        component: CheckpointRequirementComponent,
-        process: RecipeProcess
+        process: RecipeProcess,
+        component: CheckpointRequirementComponent
     ): RequirementTransaction {
         val currentTick = process.status.progress.toInt()
 
@@ -57,7 +52,7 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
         val targetTime = component.time
 
         if (currentTick == targetTime) {
-            return executeFullLifecycle(machine, component.requirement, process)
+            return executeFullLifecycle(process, component.requirement)
         }
 
         return object : RequirementTransaction {
@@ -69,9 +64,8 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
 
     @Suppress("UNCHECKED_CAST")
     private fun <T : RecipeRequirementComponent> executeFullLifecycle(
-        machine: MachineInstance,
-        component: T,
-        process: RecipeProcess
+        process: RecipeProcess,
+        component: T
     ): RequirementTransaction {
         val system = getSystemFor(component) as? RecipeRequirementSystem<T>
             ?: return failure(ProcessResult.Failure("error.system_not_found", listOf(component.type.toString())))
@@ -80,7 +74,7 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
         var overallResult: ProcessResult = ProcessResult.Success
 
         // 1. Start
-        val startTx = system.start(machine, component, process)
+        val startTx = system.start(process, component)
         when (val r = startTx.result) {
             is ProcessResult.Failure -> return failure(r) { startTx.rollback() }
             is ProcessResult.Blocked -> overallResult = r
@@ -90,7 +84,7 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
 
         // 2. Tick (if tickable)
         if (system is RecipeRequirementSystem.Tickable) {
-            val tickTx = system.acquireTickTransaction(machine, component, process)
+            val tickTx = system.acquireTickTransaction(process, component)
             when (val r = tickTx.result) {
                 is ProcessResult.Failure -> {
                     return failure(r) {
@@ -106,7 +100,7 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
         }
 
         // 3. End
-        val endTx = system.onEnd(machine, component, process)
+        val endTx = system.onEnd(process, component)
         when (val r = endTx.result) {
             is ProcessResult.Failure -> {
                 return failure(r) {
@@ -157,6 +151,6 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
     }
 
     private fun getSystemFor(component: RecipeRequirementComponent): RecipeRequirementSystem<*>? {
-        return RecipeRequirementRegistry.getSystem(component.type)
+        return component.type.system
     }
 }

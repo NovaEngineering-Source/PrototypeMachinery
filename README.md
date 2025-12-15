@@ -11,6 +11,7 @@ PrototypeMachinery 是一个面向 **Minecraft 1.12.2 (Forge)** 的模组/框架
 ### 功能概览
 
 - **多方块结构系统（MachineStructure）**：支持结构模式、朝向变换、校验器（Validator），并提供 JSON 加载器
+- **客户端结构投影预览（Structure Projection Preview）**：在世界中投影结构轮廓/幽灵方块用于搭建与调试，支持 **24 向朝向（front+top）** 的锁定/旋转，并带 HUD 提示与本地化
 - **两阶段加载**：PreInit 扫描结构 JSON，PostInit 解析方块引用并注册结构（见 `StructureLoader`）
 - **机器类型注册（MachineType）**：支持代码侧与 CraftTweaker/ZenScript 侧注册，并在 PreInit 统一入库
 - **MachineInstance（ECS 架构）**：机器实例作为 Entity，组件作为 Components，执行逻辑/任务作为 Systems（详见代码注释与 docs）
@@ -28,6 +29,7 @@ PrototypeMachinery 是一个面向 **Minecraft 1.12.2 (Forge)** 的模组/框架
 - 生命周期与加载顺序：[`docs/Lifecycle.md`](./docs/Lifecycle.md)
 - 结构系统：[`docs/Structures.md`](./docs/Structures.md)
 - 结构 JSON 指南：[`docs/StructureJsonGuide.md`](./docs/StructureJsonGuide.md)
+- 结构投影预览（客户端）：[`docs/StructurePreview.md`](./docs/StructurePreview.md)
 - 机器注册：[`docs/MachineRegistration.md`](./docs/MachineRegistration.md)
 - CraftTweaker 集成：[`docs/CraftTweaker.md`](./docs/CraftTweaker.md)
 - UI：[`docs/UI.md`](./docs/UI.md)
@@ -55,6 +57,11 @@ PrototypeMachinery 是一个面向 **Minecraft 1.12.2 (Forge)** 的模组/框架
 
 - 结构 JSON 默认从 `config/prototypemachinery/structures/` 读取
 - 若该目录为空，首次运行会从资源内复制示例到 `config/.../structures/examples/`
+
+补充：仓库内包含一个用于压力测试的“超大结构”示例与生成脚本：
+
+- 生成脚本：`scripts/generate_huge_structure.py`
+- 示例结构（资源内，会被首跑复制到 config）：`src/main/resources/assets/prototypemachinery/structures/examples/huge_preview_64x16x64.json`
 
 详见：[`docs/Structures.md`](./docs/Structures.md)、[`docs/StructureLoadingFeatures.md`](./docs/StructureLoadingFeatures.md)
 
@@ -88,6 +95,8 @@ PrototypeMachinery is a **Minecraft 1.12.2 (Forge)** mod/framework project that 
 - **UI via ModularUI**
 - **CraftTweaker / ZenScript integration**
 
+It also includes a client-side **structure projection preview** tool for building/debugging large multiblocks.
+
 ### Documentation (start here)
 
 - Project overview (entry point): [`PROJECT_OVERVIEW.md`](./PROJECT_OVERVIEW.md)
@@ -98,6 +107,7 @@ Quick links:
 - Lifecycle & load order: [`docs/Lifecycle.md`](./docs/Lifecycle.md)
 - Structures overview: [`docs/Structures.md`](./docs/Structures.md)
 - Structure JSON guide: [`docs/StructureJsonGuide.md`](./docs/StructureJsonGuide.md)
+- Structure preview (client-side): [`docs/StructurePreview.md`](./docs/StructurePreview.md)
 - Machine registration: [`docs/MachineRegistration.md`](./docs/MachineRegistration.md)
 - CraftTweaker integration: [`docs/CraftTweaker.md`](./docs/CraftTweaker.md)
 - UI (ModularUI + script overrides): [`docs/UI.md`](./docs/UI.md)
@@ -125,6 +135,11 @@ This project uses **Gradle + RetroFuturaGradle** (JDK 8 toolchain) for the 1.12.
 
 - Structures are loaded from `config/prototypemachinery/structures/`
 - If the directory is empty, examples will be copied from the mod assets into `config/.../structures/examples/` on first run
+
+Extras for stress-testing:
+
+- Generator script: `scripts/generate_huge_structure.py`
+- Huge example structure (shipped as an asset): `src/main/resources/assets/prototypemachinery/structures/examples/huge_preview_64x16x64.json`
 
 See: [`docs/Structures.md`](./docs/Structures.md), [`docs/StructureLoadingFeatures.md`](./docs/StructureLoadingFeatures.md)
 

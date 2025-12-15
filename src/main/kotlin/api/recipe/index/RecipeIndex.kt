@@ -1,7 +1,7 @@
 package github.kasuminova.prototypemachinery.api.recipe.index
 
+import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
-import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 
 /**
  * Holds all requirement indices for a specific MachineType.
@@ -15,7 +15,7 @@ public class RecipeIndex(
      * @param machine The machine instance.
      * @return A set of recipes that satisfy ALL indexed requirements.
      */
-    public fun lookup(machine: MachineInstanceImpl): Set<MachineRecipe> {
+    public fun lookup(machine: MachineInstance): Set<MachineRecipe> {
         var potentialRecipes: MutableSet<MachineRecipe>? = null
 
         for (index in indices) {

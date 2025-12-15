@@ -1,6 +1,5 @@
 package github.kasuminova.prototypemachinery.api.recipe.requirement.component.system
 
-import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
@@ -73,10 +72,10 @@ public interface RecipeRequirementSystem<C : RecipeRequirementComponent> {
      *         - 当事务被确认采用时调用 commit()。
      *         - 若配方无法开始或整体流程中止，调用 rollback()。
      */
-    public fun start(machine: MachineInstance, component: C, process: RecipeProcess): RequirementTransaction
+    public fun start(process: RecipeProcess, component: C): RequirementTransaction
 
     /** Finalization/cleanup / 完成或清理 */
-    public fun onEnd(machine: MachineInstance, component: C, process: RecipeProcess): RequirementTransaction
+    public fun onEnd(process: RecipeProcess, component: C): RequirementTransaction
 
     /**
      * Tickable requirement extension. Provides transactional per-tick operations.
@@ -93,7 +92,7 @@ public interface RecipeRequirementSystem<C : RecipeRequirementComponent> {
          * - 当本 tick 的事务被确认采用时调用 commit()。
          * - 若本 tick 被拒绝/中止需要撤销变更时调用 rollback()。
          */
-        public fun acquireTickTransaction(machine: MachineInstance, component: C, process: RecipeProcess): RequirementTransaction
+        public fun acquireTickTransaction(process: RecipeProcess, component: C): RequirementTransaction
 
     }
 

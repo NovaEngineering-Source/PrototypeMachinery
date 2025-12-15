@@ -6,13 +6,20 @@ import github.kasuminova.prototypemachinery.api.machine.component.system.Machine
 import github.kasuminova.prototypemachinery.api.machine.component.type.FactoryRecipeProcessorComponent
 import github.kasuminova.prototypemachinery.impl.machine.component.FactoryRecipeProcessorComponentImpl
 import github.kasuminova.prototypemachinery.impl.machine.component.system.FactoryRecipeProcessorSystem
+import github.kasuminova.prototypemachinery.impl.machine.component.system.FactoryRecipeScanningSystem
+import github.kasuminova.prototypemachinery.impl.recipe.RecipeManagerImpl
 import net.minecraft.util.ResourceLocation
 
 public object FactoryRecipeProcessorComponentType : MachineComponentType<FactoryRecipeProcessorComponent> {
 
     override val id: ResourceLocation = ResourceLocation("prototypemachinery", "factory_recipe_processor")
 
-    override val system: MachineSystem<FactoryRecipeProcessorComponent> = FactoryRecipeProcessorSystem
+    override val system: MachineSystem<FactoryRecipeProcessorComponent>? = null
+
+    override val systems: List<MachineSystem<FactoryRecipeProcessorComponent>> = listOf(
+        FactoryRecipeScanningSystem(RecipeManagerImpl),
+        FactoryRecipeProcessorSystem,
+    )
 
     override fun createComponent(machine: MachineInstance): FactoryRecipeProcessorComponent = FactoryRecipeProcessorComponentImpl(
         type = this,

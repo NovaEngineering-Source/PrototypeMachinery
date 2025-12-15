@@ -12,6 +12,7 @@ public class MachineComponentMapImpl : TopologicalComponentMapImpl<MachineCompon
 
     private val _components: MutableMap<MachineComponentType<*>, MachineComponent> = IdentityHashMap()
     private val typesBySystem: MutableMap<Class<out MachineSystem<*>>, MutableSet<MachineComponentType<*>>> = IdentityHashMap()
+    private val systemByClass: MutableMap<Class<out MachineSystem<*>>, MachineSystem<*>> = IdentityHashMap()
 
     override val components: Map<MachineComponentType<*>, MachineComponent>
         get() = _components
@@ -22,7 +23,7 @@ public class MachineComponentMapImpl : TopologicalComponentMapImpl<MachineCompon
             if (_cachedSystemsList == null) {
                 // Derive system order from component topological order, filter out null systems
                 // 从组件拓扑顺序派生系统顺序，过滤掉 null 系统
-                _cachedSystemsList = orderedComponents.mapNotNull { it.key.system }.distinct()
+                _cachedSystemsList = orderedComponents.flatMap { it.key.systems }.distinct()
             }
             return _cachedSystemsList!!
         }
@@ -53,8 +54,14 @@ public class MachineComponentMapImpl : TopologicalComponentMapImpl<MachineCompon
         // 过滤掉没有系统的组件。
         val entries = ArrayList<OrderedTickEntry>(orderedComponents.size)
         for (node in orderedComponents) {
-            val system = node.key.system as? MachineSystem<MachineComponent> ?: continue
-            entries.add(OrderedTickEntry(system, node.component))
+            val systems = node.key.systems
+            if (systems.isEmpty()) continue
+
+            for (sys in systems) {
+                @Suppress("UNCHECKED_CAST")
+                val system = sys as MachineSystem<MachineComponent>
+                entries.add(OrderedTickEntry(system, node.component))
+            }
         }
         val arr = entries.toTypedArray()
 
@@ -68,11 +75,12 @@ public class MachineComponentMapImpl : TopologicalComponentMapImpl<MachineCompon
 
     override fun add(component: MachineComponent) {
         val type = component.type
-        val system = type.system
+        val systems = type.systems
 
-        // Register type for system (if system exists)
-        if (system != null) {
-            val systemClass = system::class.java
+        // Register type for systems
+        for (sys in systems) {
+            val systemClass = sys::class.java
+            systemByClass.putIfAbsent(systemClass, sys)
             typesBySystem.computeIfAbsent(systemClass) { mutableSetOf() }.add(type)
         }
 
@@ -80,9 +88,9 @@ public class MachineComponentMapImpl : TopologicalComponentMapImpl<MachineCompon
         val dependencies = HashSet<MachineComponentType<*>>()
         dependencies.addAll(type.dependencies)
 
-        // 1. Add dependencies based on system.runAfter (if system exists)
-        if (system != null) {
-            for (depSystemClass in system.runAfter) {
+        // 1. Add dependencies based on system.runAfter
+        for (sys in systems) {
+            for (depSystemClass in sys.runAfter) {
                 typesBySystem[depSystemClass]?.let { dependencies.addAll(it) }
             }
         }
@@ -92,35 +100,58 @@ public class MachineComponentMapImpl : TopologicalComponentMapImpl<MachineCompon
 
         _components[type] = component
 
-        // 2. Add reverse dependencies based on system.runBefore (if system exists)
-        if (system != null) {
-            for (dependentSystemClass in system.runBefore) {
+        // 2. Add reverse dependencies based on system.runBefore
+        for (sys in systems) {
+            for (dependentSystemClass in sys.runBefore) {
                 typesBySystem[dependentSystemClass]?.forEach { dependentType ->
-                    addDependency(dependentType, type)
+                    if (dependentType != type) {
+                        addDependency(dependentType, type)
+                    }
                 }
             }
         }
 
         // 3. Handle existing components that should depend on this new component
-        // or that this component should depend on (due to their runBefore)
-        if (system != null) {
-            val systemClass = system::class.java
+        // or that this component should depend on (due to runBefore/runAfter)
+        for (sys in systems) {
+            val systemClass = sys::class.java
+
             for ((otherSystemClass, otherTypes) in typesBySystem) {
                 if (otherSystemClass == systemClass) continue
 
-                val otherSystem = otherTypes.first().system ?: continue
+                val otherSystem = systemByClass[otherSystemClass] ?: continue
 
                 // If other system runs after this system, other types depend on this type
                 if (otherSystem.runAfter.contains(systemClass)) {
                     otherTypes.forEach { otherType ->
-                        addDependency(otherType, type)
+                        if (otherType != type) {
+                            addDependency(otherType, type)
+                        }
                     }
                 }
 
                 // If other system runs before this system, this type depends on other types
                 if (otherSystem.runBefore.contains(systemClass)) {
                     otherTypes.forEach { otherType ->
-                        addDependency(type, otherType)
+                        if (otherType != type) {
+                            addDependency(type, otherType)
+                        }
+                    }
+                }
+
+                // Also apply this system's declared ordering against the other system class.
+                if (sys.runAfter.contains(otherSystemClass)) {
+                    otherTypes.forEach { otherType ->
+                        if (otherType != type) {
+                            addDependency(type, otherType)
+                        }
+                    }
+                }
+                if (sys.runBefore.contains(otherSystemClass)) {
+                    otherTypes.forEach { otherType ->
+                        if (otherType != type) {
+                            addDependency(otherType, type)
+                        }
                     }
                 }
             }
@@ -143,13 +174,14 @@ public class MachineComponentMapImpl : TopologicalComponentMapImpl<MachineCompon
 
     override fun remove(component: MachineComponent) {
         val type = component.type
-        val system = type.system
+        val systems = type.systems
 
-        if (system != null) {
-            val systemClass = system::class.java
+        for (sys in systems) {
+            val systemClass = sys::class.java
             typesBySystem[systemClass]?.remove(type)
             if (typesBySystem[systemClass]?.isEmpty() == true) {
                 typesBySystem.remove(systemClass)
+                systemByClass.remove(systemClass)
             }
         }
 

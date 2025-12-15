@@ -1,5 +1,7 @@
 package github.kasuminova.prototypemachinery.api.recipe
 
+import net.minecraft.util.ResourceLocation
+
 /**
  * # RecipeManager - Recipe Registry and Lookup
  * # RecipeManager - 配方注册与查找
@@ -24,4 +26,26 @@ public interface RecipeManager {
 
     /** Register a new recipe / 注册新配方 */
     public fun register(recipe: MachineRecipe)
+
+    /**
+     * Get recipes by a recipe group.
+     *
+     * 通过配方组获取配方。
+     *
+     * Default implementation falls back to filtering [getAll]. Implementations may override
+     * with an index to avoid O(R) scans.
+     */
+    public fun getByGroup(groupId: ResourceLocation): Collection<MachineRecipe> {
+        return getAll().filter { it.recipeGroups.contains(groupId) }
+    }
+
+    /**
+     * Get recipes by any of the provided groups.
+     *
+     * 通过多个配方组获取配方（并集）。
+     */
+    public fun getByGroups(groupIds: Set<ResourceLocation>): Collection<MachineRecipe> {
+        if (groupIds.isEmpty()) return emptyList()
+        return getAll().filter { recipe -> recipe.recipeGroups.any(groupIds::contains) }
+    }
 }

@@ -1,22 +1,39 @@
 package github.kasuminova.prototypemachinery.impl
 
 import github.kasuminova.prototypemachinery.PrototypeMachinery
+import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeMap
 import github.kasuminova.prototypemachinery.api.machine.component.AffinityKeyProvider
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
+import github.kasuminova.prototypemachinery.api.machine.component.StructureComponent
+import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentProvider
+import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
+import github.kasuminova.prototypemachinery.api.machine.structure.StructureInstance
+import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.scheduler.ExecutionMode
 import github.kasuminova.prototypemachinery.api.scheduler.ISchedulable
 import github.kasuminova.prototypemachinery.api.scheduler.SchedulingAffinity
+import github.kasuminova.prototypemachinery.common.block.MachineBlock
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
+import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
 import github.kasuminova.prototypemachinery.common.network.NetworkHandler
 import github.kasuminova.prototypemachinery.common.network.PacketSyncMachine
+import github.kasuminova.prototypemachinery.common.util.times
 import github.kasuminova.prototypemachinery.common.util.warnWithBlockEntity
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeNbt
 import github.kasuminova.prototypemachinery.impl.machine.component.MachineComponentMapImpl
+import github.kasuminova.prototypemachinery.impl.machine.component.StructureComponentMapImpl
+import github.kasuminova.prototypemachinery.impl.machine.structure.SliceStructure
+import github.kasuminova.prototypemachinery.impl.machine.structure.SliceStructureInstanceData
+import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
+import github.kasuminova.prototypemachinery.impl.machine.structure.TemplateStructure
+import github.kasuminova.prototypemachinery.impl.machine.structure.match.StructureMatchContextImpl
 import net.minecraft.nbt.NBTTagCompound
+import net.minecraft.util.EnumFacing
+import net.minecraft.util.math.BlockPos
 import net.minecraftforge.fml.common.network.NetworkRegistry
 
 public class MachineInstanceImpl(
@@ -26,6 +43,8 @@ public class MachineInstanceImpl(
 
     override val componentMap: MachineComponentMapImpl = MachineComponentMapImpl()
 
+    override val structureComponentMap: StructureComponentMapImpl = StructureComponentMapImpl()
+
     override val attributeMap: MachineAttributeMap = MachineAttributeMapImpl()
 
     @Volatile
@@ -33,6 +52,14 @@ public class MachineInstanceImpl(
 
     @Volatile
     private var formed: Boolean = false
+
+    @Volatile
+    private var lastKnownOrientation: StructureOrientation? = null
+
+    private var nextStructureCheckAt: Long = 0L
+
+    @Volatile
+    private var structureCheckInFlight: Boolean = false
 
     @Volatile
     private var cachedAffinityKeys: Set<Any> = emptySet()
@@ -220,6 +247,202 @@ public class MachineInstanceImpl(
      */
     internal fun setFormed(formed: Boolean) {
         this.formed = formed
+    }
+
+    /**
+     * Server-side controller tick (main thread).
+     *
+     * This is the place to validate/refresh structure and rebuild [structureComponentMap].
+     */
+    internal fun onControllerTick() {
+        val world = blockEntity.world ?: return
+        if (world.isRemote) return
+
+        val now = world.totalWorldTime
+        if (now < nextStructureCheckAt) return
+
+        // Cheap policy: check more aggressively when not formed.
+        nextStructureCheckAt = now + if (formed) 20L else 5L
+
+        // Structure matching is read-only; run it in scheduler's concurrent pool.
+        // Block updates / component rebuild (TileEntity access) are applied on main thread via scheduler.
+        if (!structureCheckInFlight) {
+            scheduleStructureRefresh()
+        }
+    }
+
+    private fun scheduleStructureRefresh() {
+        val world = blockEntity.world ?: return
+        if (world.isRemote) return
+
+        structureCheckInFlight = true
+
+        val controllerPos = blockEntity.pos
+        val state = world.getBlockState(controllerPos)
+
+        val facing = runCatching { state.getValue(MachineBlock.FACING) }.getOrDefault(EnumFacing.NORTH)
+        val twist = (blockEntity as? MachineBlockEntity)?.twist ?: EnumFacing.NORTH
+
+        val orientation = if (facing.axis == EnumFacing.Axis.Y) {
+            StructureOrientation(front = facing, top = twist)
+        } else {
+            StructureOrientation(front = facing, top = EnumFacing.UP)
+        }
+
+        val structure = StructureRegistryImpl.get(type.structure.id, orientation, facing)
+            ?: type.structure.transform { it }
+
+        PrototypeMachineryAPI.taskScheduler.submitTask(
+            Runnable {
+                val context = StructureMatchContextImpl(this)
+                val matched = runCatching { structure.matches(context, controllerPos) }
+                    .onFailure {
+                        PrototypeMachinery.logger.warnWithBlockEntity(
+                            "Error while matching machine structure: machine `${type.id}`",
+                            blockEntity,
+                            it
+                        )
+                    }
+                    .getOrDefault(false)
+
+                val positions: Set<BlockPos> = if (!matched) {
+                    emptySet()
+                } else {
+                    val rootInstance = context.getRootInstance()
+                    if (rootInstance == null) {
+                        emptySet()
+                    } else {
+                        val set = LinkedHashSet<BlockPos>()
+                        collectStructureBlockPositions(structure, rootInstance, controllerPos, set)
+                        set
+                    }
+                }
+
+                PrototypeMachineryAPI.taskScheduler.submitTask(
+                    Runnable {
+                        applyStructureRefreshResult(orientation, matched, positions)
+                    },
+                    ExecutionMode.MAIN_THREAD
+                )
+            },
+            ExecutionMode.CONCURRENT
+        )
+    }
+
+    private fun applyStructureRefreshResult(
+        orientation: StructureOrientation,
+        matched: Boolean,
+        positions: Set<BlockPos>
+    ) {
+        structureCheckInFlight = false
+
+        val world = blockEntity.world ?: return
+        if (world.isRemote) return
+        if (!isActive()) return
+
+        if (!matched) {
+            if (formed) {
+                setFormed(false)
+                structureComponentMap.replaceAll(emptyList())
+                (blockEntity as? MachineBlockEntity)?.sync()
+            }
+            lastKnownOrientation = orientation
+            return
+        }
+
+        // Only rebuild when needed.
+        val shouldRebuild = !formed || lastKnownOrientation != orientation
+        if (shouldRebuild) {
+            val components = buildStructureDerivedComponents(positions)
+            structureComponentMap.replaceAll(components)
+        }
+
+        if (!formed) {
+            setFormed(true)
+            (blockEntity as? MachineBlockEntity)?.sync()
+        }
+
+        lastKnownOrientation = orientation
+    }
+
+    private fun buildStructureDerivedComponents(positions: Set<BlockPos>): List<StructureComponent> {
+        val world = blockEntity.world ?: return emptyList()
+        if (world.isRemote) return emptyList()
+
+        val components = ArrayList<StructureComponent>(positions.size)
+        for (pos in positions) {
+            val te = world.getTileEntity(pos) ?: continue
+
+            val provider = te as? StructureComponentProvider ?: continue
+            runCatching {
+                components.addAll(provider.createStructureComponents(this))
+            }.onFailure {
+                PrototypeMachinery.logger.warnWithBlockEntity(
+                    "Error while creating structure components for machine `${type.id}`",
+                    blockEntity,
+                    it
+                )
+            }
+        }
+
+        return components
+    }
+
+    private fun collectStructureBlockPositions(
+        structure: MachineStructure,
+        instance: StructureInstance,
+        origin: BlockPos,
+        out: MutableSet<BlockPos>
+    ) {
+        val offsetOrigin = origin.add(structure.offset)
+
+        when (structure) {
+            is TemplateStructure -> {
+                for (relativePos in structure.pattern.blocks.keys) {
+                    out.add(offsetOrigin.add(relativePos))
+                }
+
+                for (child in structure.children) {
+                    val childInstances = instance.children[child].orEmpty()
+                    for (childInstance in childInstances) {
+                        collectStructureBlockPositions(child, childInstance, offsetOrigin, out)
+                    }
+                }
+            }
+
+            is SliceStructure -> {
+                val matchedCount = (instance.data as? SliceStructureInstanceData)?.matchedCount ?: 0
+                val count = matchedCount.coerceAtLeast(0)
+
+                var current = offsetOrigin
+                for (i in 0 until count) {
+                    for (relativePos in structure.pattern.blocks.keys) {
+                        out.add(current.add(relativePos))
+                    }
+                    current = current.add(structure.sliceOffset)
+                }
+
+                val accumulatedOffset = structure.sliceOffset * (count - 1).coerceAtLeast(0)
+                val childOrigin = offsetOrigin.add(accumulatedOffset)
+
+                for (child in structure.children) {
+                    val childInstances = instance.children[child].orEmpty()
+                    for (childInstance in childInstances) {
+                        collectStructureBlockPositions(child, childInstance, childOrigin, out)
+                    }
+                }
+            }
+
+            else -> {
+                // Unknown structure implementation: fallback to children traversal only.
+                for (child in structure.children) {
+                    val childInstances = instance.children[child].orEmpty()
+                    for (childInstance in childInstances) {
+                        collectStructureBlockPositions(child, childInstance, offsetOrigin, out)
+                    }
+                }
+            }
+        }
     }
 
 }

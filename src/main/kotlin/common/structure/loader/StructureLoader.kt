@@ -216,7 +216,7 @@ public object StructureLoader {
         conversionPath.add(data.id)
 
         val offset = BlockPos(data.offset.x, data.offset.y, data.offset.z)
-        val pattern = convertPattern(data.pattern)
+        val pattern = convertPattern(data.id, offset, data.pattern)
 
         // Resolve child structures by ID
         // 通过 ID 解析子结构
@@ -296,11 +296,22 @@ public object StructureLoader {
      * Convert pattern elements to StructurePattern.
      * 将模式元素转换为 StructurePattern。
      */
-    private fun convertPattern(elements: List<StructurePatternElementData>): StructurePattern {
+    private fun convertPattern(structureId: String, offset: BlockPos, elements: List<StructurePatternElementData>): StructurePattern {
         val blocks = mutableMapOf<BlockPos, BlockPredicate>()
 
         for (element in elements) {
             val pos = BlockPos(element.pos.x, element.pos.y, element.pos.z)
+
+            // Reserve controller position: when offset is 0/0/0, pattern's (0,0,0) would overlap controller.
+            // 预留控制器位置：当 offset 为 0/0/0 时，pattern 的 (0,0,0) 会与控制器重叠。
+            if (offset == BlockPos.ORIGIN && pos == BlockPos.ORIGIN) {
+                PrototypeMachinery.logger.warn(
+                    "Ignoring pattern element at (0,0,0) for structure '$structureId' because it overlaps controller position. " +
+                        "Please move it to offset or remove it from JSON pattern."
+                )
+                continue
+            }
+
             val blockId = ResourceLocation(element.blockId)
             val block = Block.REGISTRY.getObject(blockId)
 

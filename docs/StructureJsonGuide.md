@@ -10,6 +10,11 @@
 
 加载器会扫描该目录下的 `.json` 文件（实现细节见 `common/structure/loader/StructureLoader.kt`）。
 
+补充说明：
+
+- 加载器会对 `config/prototypemachinery/structures/` **递归扫描**所有 `.json` 文件（支持子目录分类）。
+- 若目录为空，首次运行会从资源内复制示例结构到 `config/.../structures/examples/`，然后再次扫描，确保首跑就有可用示例。
+
 ## JSON Schema（对应 StructureData）
 
 对应的数据类定义位于：
@@ -28,8 +33,8 @@
 
 #### 预留字段（现状说明）
 
-- `validators`（Array<String>）：当前 JSON loader **不会**反序列化为 `StructureValidator`（实现中为 `emptyList()`，见 `StructureLoader` 的 TODO）。
-- `pattern[].nbt`（Object）：字段存在于 `StructurePatternElementData`，但当前 `StructureLoader.convertPattern(...)` **不会使用**该字段（仅依据 `blockId/meta`）。
+- `validators`（Array<String>）：当前 JSON loader **不会**反序列化为 `StructureValidator`（实现中为 `emptyList()`，见 `StructureLoader` 中的 TODO）。
+- `pattern[].nbt`（Object）：字段存在于 `StructurePatternElementData`，但当前 `StructureLoader.convertPattern(...)` **不会使用**该字段（目前主要依据 `blockId/meta` 生成 predicate）。
 
 ### pattern 元素
 
@@ -135,3 +140,4 @@
 - [结构系统总览](./Structures.md)
 - [StructureLoader 加载特性说明](./StructureLoadingFeatures.md)
 - 资源内示例结构：`src/main/resources/assets/prototypemachinery/structures/examples/`
+  - 压力测试用超大示例：`huge_preview_64x16x64.json`（可用 `scripts/generate_huge_structure.py` 重新生成）

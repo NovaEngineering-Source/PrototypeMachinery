@@ -5,8 +5,13 @@ import com.cleanroommc.modularui.factory.PosGuiData
 import com.cleanroommc.modularui.screen.ModularPanel
 import com.cleanroommc.modularui.screen.UISettings
 import com.cleanroommc.modularui.value.sync.PanelSyncManager
+import github.kasuminova.prototypemachinery.api.machine.MachineInstance
+import github.kasuminova.prototypemachinery.api.machine.component.StructureComponent
+import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentProvider
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 import github.kasuminova.prototypemachinery.common.registry.HatchConfigRegistry
+import github.kasuminova.prototypemachinery.common.util.IOType
+import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureFluidStorageContainerComponent
 import github.kasuminova.prototypemachinery.impl.storage.FluidResourceStorage
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.util.EnumFacing
@@ -31,7 +36,7 @@ import net.minecraftforge.items.ItemStackHandler
  */
 public class FluidIOHatchBlockEntity(
     public var config: FluidIOHatchConfig
-) : BlockEntity(), ITickable, IGuiHolder<PosGuiData> {
+) : BlockEntity(), ITickable, IGuiHolder<PosGuiData>, StructureComponentProvider {
 
     // Primary constructor for NBT deserialization
     public constructor() : this(FluidIOHatchConfig.createDefault(1))
@@ -270,6 +275,13 @@ public class FluidIOHatchBlockEntity(
 
     override fun buildUI(data: PosGuiData, syncManager: PanelSyncManager, settings: UISettings): ModularPanel {
         return FluidIOHatchGUI.buildPanel(this, data, syncManager)
+    }
+
+    override fun createStructureComponents(machine: MachineInstance): Collection<StructureComponent> {
+        return listOf(
+            StructureFluidStorageContainerComponent(owner = machine, provider = this, storage = inputStorage, allowed = setOf(IOType.INPUT)),
+            StructureFluidStorageContainerComponent(owner = machine, provider = this, storage = outputStorage, allowed = setOf(IOType.OUTPUT))
+        )
     }
 
 }

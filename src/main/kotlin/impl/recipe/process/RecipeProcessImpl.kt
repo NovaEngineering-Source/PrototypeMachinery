@@ -11,7 +11,9 @@ import github.kasuminova.prototypemachinery.api.recipe.process.component.RecipeP
 import github.kasuminova.prototypemachinery.impl.ecs.TopologicalComponentMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeNbt
 import github.kasuminova.prototypemachinery.impl.machine.attribute.OverlayMachineAttributeMapImpl
+import github.kasuminova.prototypemachinery.impl.recipe.process.component.RecipeProcessComponentTypeRegistry
 import net.minecraft.nbt.NBTTagCompound
+import net.minecraft.util.ResourceLocation
 import java.util.concurrent.ThreadLocalRandom
 
 public class RecipeProcessImpl(
@@ -79,6 +81,22 @@ public class RecipeProcessImpl(
 
         if (nbt.hasKey("Components")) {
             val componentsTag = nbt.getCompoundTag("Components")
+
+            // Ensure all known components are created before deserializing.
+            // This enables restoring process components from saved NBT.
+            runCatching {
+                val keys = componentsTag.keySet.toMutableList().sorted()
+                for (key in keys) {
+                    val type = runCatching { ResourceLocation(key) }.getOrNull()?.let { RecipeProcessComponentTypeRegistry.get(it) }
+                        ?: continue
+
+                    if (!components.contains(type)) {
+                        val created = type.createComponent(this)
+                        components.addTail(type, created)
+                    }
+                }
+            }
+
             components.orderedComponents.forEach { node ->
                 val component = node.component
                 val key = component.type.id.toString()

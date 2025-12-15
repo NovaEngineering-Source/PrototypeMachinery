@@ -303,6 +303,22 @@ public class ItemResourceStorage(
     }
 
     /**
+     * Returns a snapshot of distinct resource types with their TOTAL amounts.
+     *
+     * Unlike [getAllResources] (which returns a per-slot view), this returns one entry per type.
+     *
+     * 返回“按类型聚合”的资源快照（每种类型一个条目，count 为总量）。
+     *
+     * 与按槽位视图的 [getAllResources] 不同，该方法返回每种类型仅一个条目。
+     */
+    public fun getResourceTypes(): Collection<PMKey<ItemStack>> {
+        if (totals.isEmpty()) return emptyList()
+        // Snapshot to keep iteration stable.
+        val snap: Map<UniquePMItemKey, Long> = HashMap(totals)
+        return snap.map { (u, total) -> PMItemKeyImpl(u, total) }
+    }
+
+    /**
      * Extracts a specific amount of items matching the stack (by type).
      * Returns the extracted ItemStack.
      */

@@ -4,6 +4,6 @@ import github.kasuminova.prototypemachinery.api.recipe.process.component.RecipeP
 
 public interface ParallelProcessComponent : RecipeProcessComponent {
 
-    public val parallelism: Int
+    public val parallelism: Long
 
 }

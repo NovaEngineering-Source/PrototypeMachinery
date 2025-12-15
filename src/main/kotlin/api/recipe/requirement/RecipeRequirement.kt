@@ -35,12 +35,6 @@ public interface RecipeRequirement {
     public val data: RecipeRequirementData
 
     /**
-     * Priority for evaluation (higher checked first).
-     * 评估优先级（越高越先检查）。
-     */
-    public val priority: Int get() = 0
-
-    /**
      * List of modifiers to apply to this requirement.
      * 应用于此需求的修改器列表。
      *

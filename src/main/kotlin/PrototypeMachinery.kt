@@ -1,10 +1,12 @@
 package github.kasuminova.prototypemachinery
 
+import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.common.CommonProxy
 import github.kasuminova.prototypemachinery.common.handler.CraftTweakerReloadHandler
 import github.kasuminova.prototypemachinery.common.network.NetworkHandler
 import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
 import github.kasuminova.prototypemachinery.common.structure.loader.StructureLoader
+import github.kasuminova.prototypemachinery.impl.recipe.index.RecipeIndexRegistry
 import github.kasuminova.prototypemachinery.impl.scheduler.TaskSchedulerImpl
 import github.kasuminova.prototypemachinery.integration.crafttweaker.CraftTweakerExamples
 import net.minecraftforge.common.MinecraftForge
@@ -86,6 +88,22 @@ public object PrototypeMachinery {
         // Process structures and resolve block references
         // 处理结构并解析方块引用
         StructureLoader.processStructures(event)
+
+        // Build recipe indices after all machine types / recipes are registered.
+        // 在所有机器类型/配方注册完成后构建配方索引。
+        // TODO: Replace the fallback "accept all" behavior when recipe groups become mandatory.
+        RecipeIndexRegistry.buildIndices(
+            machineTypes = PrototypeMachineryAPI.machineTypeRegistry.all(),
+            recipeLookup = { type ->
+                val groups = type.recipeGroups
+                val manager = PrototypeMachineryAPI.recipeManager
+                if (groups.isEmpty()) {
+                    emptyList()
+                } else {
+                    manager.getByGroups(groups).toList()
+                }
+            }
+        )
 
         proxy.postInit()
     }

@@ -1,19 +1,19 @@
 package github.kasuminova.prototypemachinery.impl.recipe.index.type
 
+import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndex
 import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndexFactory
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
-import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 import github.kasuminova.prototypemachinery.impl.key.item.PMItemKey
 
 public class ItemRequirementIndex(
     private val index: Map<PMItemKey, Set<MachineRecipe>>
 ) : RequirementIndex {
 
-    public override fun lookup(machine: MachineInstanceImpl): Set<MachineRecipe>? {
+    public override fun lookup(machine: MachineInstance): Set<MachineRecipe>? {
         // Pseudo-implementation as per prompt
 
         // 1. Get all ItemContainerComponents from the machine

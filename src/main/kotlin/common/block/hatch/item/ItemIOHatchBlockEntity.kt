@@ -5,8 +5,13 @@ import com.cleanroommc.modularui.factory.PosGuiData
 import com.cleanroommc.modularui.screen.ModularPanel
 import com.cleanroommc.modularui.screen.UISettings
 import com.cleanroommc.modularui.value.sync.PanelSyncManager
+import github.kasuminova.prototypemachinery.api.machine.MachineInstance
+import github.kasuminova.prototypemachinery.api.machine.component.StructureComponent
+import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentProvider
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 import github.kasuminova.prototypemachinery.common.registry.HatchConfigRegistry
+import github.kasuminova.prototypemachinery.common.util.IOType
+import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureItemStorageContainerComponent
 import github.kasuminova.prototypemachinery.impl.storage.ItemResourceStorage
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.util.EnumFacing
@@ -27,7 +32,7 @@ import net.minecraftforge.items.IItemHandler
  */
 public class ItemIOHatchBlockEntity(
     public var config: ItemIOHatchConfig
-) : BlockEntity(), IGuiHolder<PosGuiData> {
+) : BlockEntity(), IGuiHolder<PosGuiData>, StructureComponentProvider {
 
     // Primary constructor for NBT deserialization
     public constructor() : this(ItemIOHatchConfig.createDefault(1))
@@ -176,6 +181,13 @@ public class ItemIOHatchBlockEntity(
 
     override fun buildUI(data: PosGuiData, syncManager: PanelSyncManager, settings: UISettings): ModularPanel {
         return ItemIOHatchGUI.buildPanel(this, data, syncManager)
+    }
+
+    override fun createStructureComponents(machine: MachineInstance): Collection<StructureComponent> {
+        return listOf(
+            StructureItemStorageContainerComponent(owner = machine, provider = this, storage = inputStorage, allowed = setOf(IOType.INPUT)),
+            StructureItemStorageContainerComponent(owner = machine, provider = this, storage = outputStorage, allowed = setOf(IOType.OUTPUT))
+        )
     }
 
 }

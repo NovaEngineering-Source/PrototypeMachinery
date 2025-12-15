@@ -7,6 +7,7 @@ import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttribu
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentMap
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentType
+import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentMap
 import github.kasuminova.prototypemachinery.api.machine.component.system.MachineSystem
 import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
@@ -15,7 +16,6 @@ import github.kasuminova.prototypemachinery.api.machine.structure.match.Structur
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
-import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirement
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
@@ -24,6 +24,7 @@ import github.kasuminova.prototypemachinery.api.recipe.selective.SelectiveModifi
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeModifierImpl
+import github.kasuminova.prototypemachinery.impl.machine.component.StructureComponentMapImpl
 import github.kasuminova.prototypemachinery.impl.recipe.process.RecipeProcessImpl
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.component.SelectiveRequirementComponent
 import net.minecraft.tileentity.TileEntity
@@ -64,7 +65,7 @@ class SelectiveRequirementSystemTest {
             modifierIds = emptyList(),
         )
 
-        val tx = SelectiveRequirementSystem.start(machine, wrapper, process)
+        val tx = SelectiveRequirementSystem.start(process, wrapper)
 
         // selection probes: blocked -> commit, failure -> rollback, success chosen but not committed yet
         assertEquals(1, blocked.startCommitCount)
@@ -94,11 +95,11 @@ class SelectiveRequirementSystemTest {
             modifierIds = emptyList(),
         )
 
-        SelectiveRequirementSystem.start(machine, wrapper, process).commit()
+        SelectiveRequirementSystem.start(process, wrapper).commit()
 
         // Tick should use the first candidate only
-        SelectiveRequirementSystem.acquireTickTransaction(machine, wrapper, process).commit()
-        SelectiveRequirementSystem.acquireTickTransaction(machine, wrapper, process).commit()
+        SelectiveRequirementSystem.acquireTickTransaction(process, wrapper).commit()
+        SelectiveRequirementSystem.acquireTickTransaction(process, wrapper).commit()
 
         assertEquals(2, first.tickCommitCount)
         assertEquals(0, second.tickCommitCount)
@@ -127,7 +128,7 @@ class SelectiveRequirementSystemTest {
             modifierIds = listOf("speedup"),
         )
 
-        SelectiveRequirementSystem.start(machine, wrapper, process).commit()
+        SelectiveRequirementSystem.start(process, wrapper).commit()
 
         val speedEntry = process.attributeMap.attributes.entries.firstOrNull {
             it.key.id == github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachineAttributes.PROCESS_SPEED.id
@@ -135,7 +136,7 @@ class SelectiveRequirementSystemTest {
         assertNotNull(speedEntry)
         assertTrue(speedEntry!!.value.modifiers.isNotEmpty(), "expected speed modifiers to be applied")
 
-        SelectiveRequirementSystem.onEnd(machine, wrapper, process).commit()
+        SelectiveRequirementSystem.onEnd(process, wrapper).commit()
 
         val speedEntryAfter = process.attributeMap.attributes.entries.firstOrNull {
             it.key.id == github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachineAttributes.PROCESS_SPEED.id
@@ -147,7 +148,7 @@ class SelectiveRequirementSystemTest {
     private fun dummyProcess(machine: MachineInstance): RecipeProcess {
         val recipe = object : MachineRecipe {
             override val id: String = "dummy"
-            override val requirements: Map<RecipeRequirementType<*>, List<RecipeRequirement>> = emptyMap()
+            override val requirements: Map<RecipeRequirementType<*>, List<RecipeRequirementComponent>> = emptyMap()
         }
         return RecipeProcessImpl(machine, recipe, seed = 42L)
     }
@@ -171,7 +172,7 @@ class SelectiveRequirementSystemTest {
         var startCommitCount: Int = 0
         var startRollbackCount: Int = 0
 
-        override fun start(machine: MachineInstance, component: DummyReqComponent, process: RecipeProcess): RequirementTransaction {
+        override fun start(process: RecipeProcess, component: DummyReqComponent): RequirementTransaction {
             return object : RequirementTransaction {
                 override val result: ProcessResult = startResult
                 override fun commit() {
@@ -184,7 +185,7 @@ class SelectiveRequirementSystemTest {
             }
         }
 
-        override fun onEnd(machine: MachineInstance, component: DummyReqComponent, process: RecipeProcess): RequirementTransaction {
+        override fun onEnd(process: RecipeProcess, component: DummyReqComponent): RequirementTransaction {
             return object : RequirementTransaction {
                 override val result: ProcessResult = ProcessResult.Success
                 override fun commit() {}
@@ -199,7 +200,7 @@ class SelectiveRequirementSystemTest {
 
         var tickCommitCount: Int = 0
 
-        override fun acquireTickTransaction(machine: MachineInstance, component: DummyReqComponent, process: RecipeProcess): RequirementTransaction {
+        override fun acquireTickTransaction(process: RecipeProcess, component: DummyReqComponent): RequirementTransaction {
             return object : RequirementTransaction {
                 override val result: ProcessResult = ProcessResult.Success
                 override fun commit() {
@@ -232,6 +233,8 @@ class SelectiveRequirementSystemTest {
         override val blockEntity: BlockEntity = object : TileEntity() {}
 
         override val componentMap: MachineComponentMap = DummyMachineComponentMap()
+
+        override val structureComponentMap: StructureComponentMap = StructureComponentMapImpl()
 
         override val attributeMap: MachineAttributeMap = MachineAttributeMapImpl()
 

@@ -88,6 +88,20 @@ public interface MachineType {
     public val componentTypes: Set<MachineComponentType<*>>
 
     /**
+     * Recipe groups accepted by this machine type.
+     *
+     * 该机器类型可处理的配方组。
+     *
+     * When non-empty, scanning/indexing may restrict candidate recipes to these groups.
+     * If empty, implementations may treat it as "accept all" (fallback to global recipe list).
+     *
+     * 当集合非空时，扫描/索引可将候选配方限制在这些组内。
+     * 当为空时，可视为“不过滤”（回退到全局配方）。
+     */
+    public val recipeGroups: Set<ResourceLocation>
+        get() = emptySet()
+
+    /**
      * Optional custom model location for the controller block.
      * If null, the default model will be used.
      * 

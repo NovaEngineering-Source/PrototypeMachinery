@@ -5,9 +5,14 @@ import com.cleanroommc.modularui.factory.PosGuiData
 import com.cleanroommc.modularui.screen.ModularPanel
 import com.cleanroommc.modularui.screen.UISettings
 import com.cleanroommc.modularui.value.sync.PanelSyncManager
+import github.kasuminova.prototypemachinery.api.machine.MachineInstance
+import github.kasuminova.prototypemachinery.api.machine.component.StructureComponent
+import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentProvider
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 import github.kasuminova.prototypemachinery.common.block.hatch.HatchType
 import github.kasuminova.prototypemachinery.common.registry.HatchConfigRegistry
+import github.kasuminova.prototypemachinery.common.util.IOType
+import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureEnergyContainerComponent
 import github.kasuminova.prototypemachinery.impl.storage.EnergyStorageImpl
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.util.EnumFacing
@@ -28,7 +33,7 @@ import net.minecraftforge.energy.IEnergyStorage
  */
 public class EnergyHatchBlockEntity(
     public var config: EnergyHatchConfig
-) : BlockEntity(), IGuiHolder<PosGuiData> {
+) : BlockEntity(), IGuiHolder<PosGuiData>, StructureComponentProvider {
 
     // Primary constructor for NBT deserialization
     public constructor() : this(EnergyHatchConfig.createDefault(1))
@@ -186,6 +191,15 @@ public class EnergyHatchBlockEntity(
 
     override fun buildUI(data: PosGuiData, syncManager: PanelSyncManager, settings: UISettings): ModularPanel {
         return EnergyHatchGUI.buildPanel(this, data, syncManager)
+    }
+
+    override fun createStructureComponents(machine: MachineInstance): Collection<StructureComponent> {
+        val allowed = when (config.hatchType) {
+            HatchType.INPUT -> setOf(IOType.INPUT)
+            HatchType.OUTPUT -> setOf(IOType.OUTPUT)
+            HatchType.IO -> setOf(IOType.INPUT, IOType.OUTPUT)
+        }
+        return listOf(StructureEnergyContainerComponent(owner = machine, provider = this, storage = getEnergyStorage(), allowed = allowed))
     }
 
 }

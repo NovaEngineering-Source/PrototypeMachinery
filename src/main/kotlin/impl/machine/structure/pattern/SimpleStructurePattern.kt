@@ -8,6 +8,36 @@ import net.minecraft.util.math.BlockPos
 public class SimpleStructurePattern(
     override val blocks: Map<BlockPos, BlockPredicate>
 ) : StructurePattern {
+
+    private val boundsMinMax: Pair<BlockPos, BlockPos> = run {
+        if (blocks.isEmpty()) {
+            val zero = BlockPos(0, 0, 0)
+            zero to zero
+        } else {
+            var minX = Int.MAX_VALUE
+            var minY = Int.MAX_VALUE
+            var minZ = Int.MAX_VALUE
+            var maxX = Int.MIN_VALUE
+            var maxY = Int.MIN_VALUE
+            var maxZ = Int.MIN_VALUE
+            for (pos in blocks.keys) {
+                if (pos.x < minX) minX = pos.x
+                if (pos.y < minY) minY = pos.y
+                if (pos.z < minZ) minZ = pos.z
+                if (pos.x > maxX) maxX = pos.x
+                if (pos.y > maxY) maxY = pos.y
+                if (pos.z > maxZ) maxZ = pos.z
+            }
+            BlockPos(minX, minY, minZ) to BlockPos(maxX, maxY, maxZ)
+        }
+    }
+
+    override val minPos: BlockPos
+        get() = boundsMinMax.first
+
+    override val maxPos: BlockPos
+        get() = boundsMinMax.second
+
     override fun transform(rotation: (EnumFacing) -> EnumFacing): StructurePattern {
         val newBlocks = mutableMapOf<BlockPos, BlockPredicate>()
         for ((pos, predicate) in blocks) {

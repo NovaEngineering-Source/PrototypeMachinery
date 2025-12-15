@@ -42,7 +42,8 @@ import org.jetbrains.annotations.ApiStatus
 @ApiStatus.Experimental
 public object SelectiveRequirementSystem : RecipeRequirementSystem.Tickable<SelectiveRequirementComponent> {
 
-    override fun start(machine: MachineInstance, component: SelectiveRequirementComponent, process: RecipeProcess): RequirementTransaction {
+    override fun start(process: RecipeProcess, component: SelectiveRequirementComponent): RequirementTransaction {
+        val machine = process.owner
         val state = getOrCreateState(process)
 
         // If already decided (e.g. re-entry), just no-op.
@@ -51,7 +52,7 @@ public object SelectiveRequirementSystem : RecipeRequirementSystem.Tickable<Sele
             return noOpSuccess()
         }
 
-        val selection = selectCandidateForStart(machine, component, process)
+        val selection = selectCandidateForStart(process, component)
         state.setSelectedIndex(component.id, selection.selectedIndex)
 
         if (selection.selectedIndex < 0) {
@@ -100,9 +101,8 @@ public object SelectiveRequirementSystem : RecipeRequirementSystem.Tickable<Sele
     }
 
     override fun acquireTickTransaction(
-        machine: MachineInstance,
-        component: SelectiveRequirementComponent,
-        process: RecipeProcess
+        process: RecipeProcess,
+        component: SelectiveRequirementComponent
     ): RequirementTransaction {
         val state = getOrCreateState(process)
         val selectedIndex = state.getSelectedIndex(component.id) ?: -1
@@ -120,11 +120,11 @@ public object SelectiveRequirementSystem : RecipeRequirementSystem.Tickable<Sele
             return noOpSuccess()
         }
 
-        val tx = system.acquireTickTransaction(machine, chosen, process)
+        val tx = system.acquireTickTransaction(process, chosen)
         return wrap(tx)
     }
 
-    override fun onEnd(machine: MachineInstance, component: SelectiveRequirementComponent, process: RecipeProcess): RequirementTransaction {
+    override fun onEnd(process: RecipeProcess, component: SelectiveRequirementComponent): RequirementTransaction {
         val state = getOrCreateState(process)
         val selectedIndex = state.getSelectedIndex(component.id) ?: -1
         if (selectedIndex < 0) {
@@ -137,7 +137,7 @@ public object SelectiveRequirementSystem : RecipeRequirementSystem.Tickable<Sele
         val system = systemFor(chosen)
             ?: return failure(ProcessResult.Failure("error.system_not_found", listOf(chosen.type.toString())))
 
-        val tx = system.onEnd(machine, chosen, process)
+        val tx = system.onEnd(process, chosen)
 
         return object : RequirementTransaction {
             override val result: ProcessResult = tx.result
@@ -160,9 +160,8 @@ public object SelectiveRequirementSystem : RecipeRequirementSystem.Tickable<Sele
     )
 
     private fun selectCandidateForStart(
-        machine: MachineInstance,
-        component: SelectiveRequirementComponent,
         process: RecipeProcess,
+        component: SelectiveRequirementComponent,
     ): StartSelection {
         if (component.candidates.isEmpty()) {
             return StartSelection(selectedIndex = -1)
@@ -171,7 +170,7 @@ public object SelectiveRequirementSystem : RecipeRequirementSystem.Tickable<Sele
         component.candidates.forEachIndexed { idx, candidate ->
             val system = systemFor(candidate) ?: return@forEachIndexed
 
-            val tx = system.start(machine, candidate, process)
+            val tx = system.start(process, candidate)
 
             when (tx.result) {
                 is ProcessResult.Success -> return StartSelection(idx, tx)

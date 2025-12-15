@@ -3,6 +3,7 @@ package github.kasuminova.prototypemachinery.api.machine
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeMap
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentMap
+import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentMap
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 
@@ -99,6 +100,15 @@ public interface MachineInstance {
      */
     public val componentMap: MachineComponentMap
 
+    /**
+     * Components provided by the currently formed structure.
+     *
+     * 当前已形成结构所提供的组件视图（例如各类容器/端口）。
+     *
+     * - 该表应在结构刷新/形成期间重建
+     * - 不包含 systems 概念
+     */
+    public val structureComponentMap: StructureComponentMap
     /**
      * Map of dynamic attributes affecting machine behavior.
      * Attributes can be modified at runtime (e.g., speed, efficiency, consumption).

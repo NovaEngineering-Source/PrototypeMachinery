@@ -83,6 +83,19 @@ public interface MachineComponentType<C : MachineComponent> {
     public val system: MachineSystem<C>?
 
     /**
+     * Systems that process components of this type.
+     *
+     * Processing order matters. Implementations may override this to provide multiple systems.
+     *
+     * 此组件类型绑定的系统列表。
+     * 顺序有意义；实现可以通过重写此属性绑定多个系统。
+     *
+     * Default implementation is derived from [system] for backward compatibility.
+     */
+    public val systems: List<MachineSystem<C>>
+        get() = system?.let { listOf(it) } ?: emptyList()
+
+    /**
      * The dependencies of this component type.
      * Used for topological sorting of components and systems.
      *

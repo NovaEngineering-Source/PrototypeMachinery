@@ -9,6 +9,27 @@ attribute.prototypemachinery.energy_efficiency=Energy Efficiency
 error.selective.missing_start_tx=Internal error: missing start transaction for selective wrapper (%s)
 error.selective.invalid_selection=Internal error: selective wrapper (%s) selected invalid index %s
 
+# Structure preview (debug)
+pm.preview.started=Structure preview started: %s at (%s, %s, %s)
+pm.preview.stopped=Structure preview stopped.
+pm.preview.unknown_structure=Unknown structure id: %s
+
+# Key bindings: structure projection preview
+key.pm.preview.lock_orientation=Lock/Unlock Projection Orientation
+key.pm.preview.rotate_positive=Rotate Projection (+)
+key.pm.preview.rotate_negative=Rotate Projection (-)
+
+# Projection preview HUD
+pm.projection.mode.following=Follow
+pm.projection.mode.locked=Locked
+pm.projection.hud.orientation_status=Projection orientation: %s (front=%s, top=%s)  [R lock/unlock, [ ] rotate, Shift=Pitch, Ctrl=Roll]
+pm.projection.chat.locked=Projection orientation: locked (front=%s, top=%s)
+pm.projection.chat.following=Projection orientation: following player
+pm.projection.chat.rotated=Projection orientation: %s/%s (axis=%s)
+pm.projection.hud.requirement.exact=Preview requirement: %s (%s:%s)
+pm.projection.hud.requirement.exact_fallback=Preview requirement: %s:%s
+pm.projection.hud.requirement.generic=Preview requirement: %s
+
 # Hatch GUI
 # Used by multiple Hatch GUIs, including FluidHatchGUI and FluidIOHatchGUI:
 # - Auto Input / Auto Output: toggle buttons

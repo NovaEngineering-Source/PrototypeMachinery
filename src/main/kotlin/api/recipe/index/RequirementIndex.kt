@@ -1,7 +1,7 @@
 package github.kasuminova.prototypemachinery.api.recipe.index
 
+import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
-import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 
 /**
  * Represents an index for a specific type of requirement (e.g., Item, Fluid, Energy).
@@ -15,5 +15,5 @@ public interface RequirementIndex {
      * @return A set of potential recipes, or null if this index cannot filter any recipes (e.g., no relevant inputs).
      *         Returning an empty set means no recipes match the current state.
      */
-    public fun lookup(machine: MachineInstanceImpl): Set<MachineRecipe>?
+    public fun lookup(machine: MachineInstance): Set<MachineRecipe>?
 }

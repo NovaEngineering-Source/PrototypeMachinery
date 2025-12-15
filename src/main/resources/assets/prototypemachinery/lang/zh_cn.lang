@@ -9,6 +9,27 @@ attribute.prototypemachinery.energy_efficiency=能量效率
 error.selective.missing_start_tx=内部错误：选择性包装器（%s）缺少 start 事务
 error.selective.invalid_selection=内部错误：选择性包装器（%s）选择了无效索引 %s
 
+# 结构预览（调试）
+pm.preview.started=结构预览已启动：%s，锚点 (%s, %s, %s)
+pm.preview.stopped=结构预览已停止。
+pm.preview.unknown_structure=未知结构 ID：%s
+
+# 按键绑定：结构投影预览
+key.pm.preview.lock_orientation=锁定/解锁投影朝向
+key.pm.preview.rotate_positive=旋转投影（+）
+key.pm.preview.rotate_negative=旋转投影（-）
+
+# 结构投影预览 HUD
+pm.projection.mode.following=跟随
+pm.projection.mode.locked=锁定
+pm.projection.hud.orientation_status=投影朝向: %s (front=%s, top=%s)  [R 锁定/解锁, [ ] 旋转, Shift=Pitch, Ctrl=Roll]
+pm.projection.chat.locked=结构投影朝向：已锁定 (front=%s, top=%s)
+pm.projection.chat.following=结构投影朝向：跟随玩家
+pm.projection.chat.rotated=结构投影朝向：%s/%s (轴=%s)
+pm.projection.hud.requirement.exact=预览需求: %s (%s:%s)
+pm.projection.hud.requirement.exact_fallback=预览需求: %s:%s
+pm.projection.hud.requirement.generic=预览需求: %s
+
 # 仓位 GUI
 # 多个 Hatch GUI 共用（包括流体仓 FluidHatchGUI、流体 IO 仓 FluidIOHatchGUI）：
 # - 自动输入 / 自动输出：开关按钮 tooltip

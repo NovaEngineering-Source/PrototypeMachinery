@@ -35,8 +35,23 @@
 
 lang 文件位置：
 
-- 英文：`src/main/resources/assets/prototypemachinery/lang/en_US.lang`
-- 中文：`src/main/resources/assets/prototypemachinery/lang/zh_CN.lang`
+- 英文：`src/main/resources/assets/prototypemachinery/lang/en_us.lang`
+- 中文：`src/main/resources/assets/prototypemachinery/lang/zh_cn.lang`
+
+### 结构投影预览（客户端）相关 i18n
+
+结构投影预览功能（HUD/聊天提示/调试命令）使用以下命名空间：
+
+- 调试命令 `/pm_preview`：`pm.preview.*`
+  - 例如：`pm.preview.started` / `pm.preview.stopped` / `pm.preview.unknown_structure`
+- 投影 HUD / 提示：`pm.projection.*`
+  - 例如：`pm.projection.hud.orientation_status`、`pm.projection.chat.locked`
+- 按键绑定名称：`key.pm.preview.*`
+  - `key.pm.preview.lock_orientation`
+  - `key.pm.preview.rotate_positive`
+  - `key.pm.preview.rotate_negative`
+
+> 备注：按键绑定的 key 若缺少翻译，会在“控制设置”里显示原始 key 字符串。为了可用性，建议中英文都补齐。
 
 ### Hatch 控件通用文案（新界面也会用到）
 

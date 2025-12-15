@@ -81,6 +81,12 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
             pendingSync = false
         }
 
+        // Structure refresh / formation should run on the main thread.
+        // 结构刷新/形成应当在主线程执行（避免并发 tick 线程访问 world）。
+        if (!world.isRemote && ::machine.isInitialized) {
+            machine.onControllerTick()
+        }
+
         tickElapsed++
     }
 
