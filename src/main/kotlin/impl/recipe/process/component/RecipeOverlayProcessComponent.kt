@@ -24,6 +24,7 @@ import org.jetbrains.annotations.ApiStatus
  *
  * 目前只覆盖“参数类”变更（例如 per-tick 消耗/产出、ignore_output_full、输入/输出列表等），
  * 不直接修改 MachineRecipe 本体。
+ * TODO 提供注册表形式功能以对接其他类型。
  */
 @ApiStatus.Experimental
 public class RecipeOverlayProcessComponent(
