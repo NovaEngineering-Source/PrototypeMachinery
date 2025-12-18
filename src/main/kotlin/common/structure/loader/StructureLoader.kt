@@ -334,6 +334,8 @@ public object StructureLoader {
             "simple_machine.json",
             "slice_machine.json",
             "complex_machine.json",
+            "recipe_processor_machine.json",
+            "recipe_processor_machine_with_hatches.json",
             "child_structure.json",
             "parent_with_child.json",
             "README.md"

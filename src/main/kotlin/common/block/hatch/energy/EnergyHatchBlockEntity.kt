@@ -195,8 +195,8 @@ public class EnergyHatchBlockEntity(
 
     override fun createStructureComponents(machine: MachineInstance): Collection<StructureComponent> {
         val allowed = when (config.hatchType) {
-            HatchType.INPUT -> setOf(IOType.INPUT)
-            HatchType.OUTPUT -> setOf(IOType.OUTPUT)
+            HatchType.INPUT -> setOf(IOType.OUTPUT)
+            HatchType.OUTPUT -> setOf(IOType.INPUT)
             HatchType.IO -> setOf(IOType.INPUT, IOType.OUTPUT)
         }
         return listOf(StructureEnergyContainerComponent(owner = machine, provider = this, storage = getEnergyStorage(), allowed = allowed))

@@ -1,9 +1,13 @@
 package github.kasuminova.prototypemachinery.client.gui
 
 import com.cleanroommc.modularui.api.ITheme
+import com.cleanroommc.modularui.api.UpOrDown
 import com.cleanroommc.modularui.api.drawable.IDrawable
 import com.cleanroommc.modularui.api.widget.IWidget
+import com.cleanroommc.modularui.api.widget.Interactable
+import com.cleanroommc.modularui.api.widget.Interactable.Result
 import com.cleanroommc.modularui.drawable.Rectangle
+import com.cleanroommc.modularui.drawable.Stencil
 import com.cleanroommc.modularui.drawable.UITexture
 import com.cleanroommc.modularui.screen.ModularPanel
 import com.cleanroommc.modularui.theme.WidgetThemeEntry
@@ -15,10 +19,18 @@ import com.cleanroommc.modularui.widgets.SlotGroupWidget
 import com.cleanroommc.modularui.widgets.TextWidget
 import com.cleanroommc.modularui.widgets.layout.Column
 import com.cleanroommc.modularui.widgets.slot.ItemSlot
+import github.kasuminova.prototypemachinery.api.machine.component.getFirstComponentOfType
+import github.kasuminova.prototypemachinery.api.machine.component.type.FactoryRecipeProcessorComponent
+import github.kasuminova.prototypemachinery.client.gui.sync.FactoryRecipeProgressSyncHandler
 import github.kasuminova.prototypemachinery.client.gui.widget.PMSmoothGrid
 import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
+import net.minecraft.client.Minecraft
+import net.minecraft.client.renderer.GlStateManager
+import net.minecraft.client.resources.I18n
 import net.minecraft.util.ResourceLocation
 import net.minecraftforge.items.ItemStackHandler
+import kotlin.math.roundToInt
+import java.awt.Rectangle as AwtRectangle
 
 /**
  * Default native UI provider for machines.
@@ -48,9 +60,65 @@ public object DefaultMachineUI {
     // Texture Configuration
     // ==========================================
     private val STATES_LOC = ResourceLocation("prototypemachinery", "textures/gui/states.png")
+    private val CONTROLLER_STATES_LOC = ResourceLocation("prototypemachinery", "textures/gui/gui_controller_states.png")
     private const val TEX_SIZE = 256
     private const val TAB_W = 21
     private const val TAB_H = 22
+
+    // ==========================================
+    // Recipe progress list (FactoryRecipeProcessor)
+    // ==========================================
+    private const val RECIPE_LIST_X = 27
+    private const val RECIPE_LIST_Y = 8
+    private const val RECIPE_LIST_W = 89
+    private const val RECIPE_LIST_H = 238
+
+    private const val RECIPE_ENTRY_W = 89
+    private const val RECIPE_ENTRY_H = 33
+    private const val RECIPE_LIST_VISIBLE = 7
+
+    // Scroll handle (states.png) - user requested: normal/hover/pressed at (146,1)/(159,1)/(172,1), W38 H15.
+    private const val RECIPE_SCROLL_OFFSET_X = 4
+    private const val RECIPE_SCROLL_OFFSET_Y = 0
+    private const val RECIPE_SCROLL_HANDLE_W = 38
+    private const val RECIPE_SCROLL_HANDLE_H = 15
+    private const val RECIPE_SCROLL_TEX_W = 13
+    private const val RECIPE_SCROLL_TEX_H = 15
+
+    private val RECIPE_SCROLL_HANDLE_NORMAL: IDrawable = UITexture.builder()
+        .location(STATES_LOC)
+        .imageSize(TEX_SIZE, TEX_SIZE)
+        .subAreaXYWH(146, 1, RECIPE_SCROLL_TEX_W, RECIPE_SCROLL_TEX_H)
+        .build()
+
+    private val RECIPE_SCROLL_HANDLE_HOVER: IDrawable = UITexture.builder()
+        .location(STATES_LOC)
+        .imageSize(TEX_SIZE, TEX_SIZE)
+        .subAreaXYWH(159, 1, RECIPE_SCROLL_TEX_W, RECIPE_SCROLL_TEX_H)
+        .build()
+
+    private val RECIPE_SCROLL_HANDLE_PRESSED: IDrawable = UITexture.builder()
+        .location(STATES_LOC)
+        .imageSize(TEX_SIZE, TEX_SIZE)
+        .subAreaXYWH(172, 1, RECIPE_SCROLL_TEX_W, RECIPE_SCROLL_TEX_H)
+        .build()
+
+    // Background: X0 Y0 W89 H33
+    private val RECIPE_ENTRY_BG: IDrawable = UITexture.builder()
+        .location(CONTROLLER_STATES_LOC)
+        .imageSize(256, 256)
+        .subAreaXYWH(0, 0, RECIPE_ENTRY_W, RECIPE_ENTRY_H)
+        .build()
+
+    // Foreground (progress): X0 Y34, same size. Cached by width for cheap clipping.
+    private val RECIPE_ENTRY_FG_BY_W: Array<IDrawable> = Array(RECIPE_ENTRY_W + 1) { w ->
+        if (w <= 0) IDrawable.EMPTY
+        else UITexture.builder()
+            .location(CONTROLLER_STATES_LOC)
+            .imageSize(256, 256)
+            .subAreaXYWH(0, 34, w, RECIPE_ENTRY_H)
+            .build()
+    }
 
     // Coordinates for Tab 1 (Main) - Order: Inactive, Hover, Active
     private const val TAB_1_X = 185
@@ -125,13 +193,12 @@ public object DefaultMachineUI {
         // ==========================================
         // Paged Content Area
         // ==========================================
-        @Suppress("UNCHECKED_CAST")
         val pagedWidget = PagedWidget()
             .pos(0, 0)
             .size(384, 256)
-            .controller(pageController) as PagedWidget<*>
+            .controller(pageController)
 
-        pagedWidget.addPage(buildMainPage(machine))
+        pagedWidget.addPage(buildMainPage(machine, syncManager))
         pagedWidget.addPage(buildExtensionPage(machine))
 
         // Update background based on active page
@@ -153,9 +220,24 @@ public object DefaultMachineUI {
      * Build the main page with player inventory.
      * 构建包含玩家物品栏的主界面。
      */
-    private fun buildMainPage(machine: MachineBlockEntity): IWidget {
+    private fun buildMainPage(machine: MachineBlockEntity, syncManager: PanelSyncManager): IWidget {
         val page = Column()
             .size(384, 256)
+
+        // ==========================================
+        // Recipe progress list (FactoryRecipeProcessorComponent only)
+        // ==========================================
+        val hasFactoryProcessor = machine.machine.componentMap.getFirstComponentOfType<FactoryRecipeProcessorComponent>() != null
+        if (hasFactoryProcessor) {
+            val recipeSync = FactoryRecipeProgressSyncHandler(machine)
+            syncManager.syncValue("factoryRecipeProgress", recipeSync)
+
+            page.child(
+                FactoryRecipeProgressListWidget(recipeSync)
+                    .pos(RECIPE_LIST_X, RECIPE_LIST_Y)
+                    .size(RECIPE_LIST_W, RECIPE_LIST_H)
+            )
+        }
 
         // Main Content Area
         val mainContent = Column()
@@ -193,6 +275,213 @@ public object DefaultMachineUI {
         page.child(playerInvWidget)
 
         return page
+    }
+
+    private class FactoryRecipeProgressListWidget(
+        private val sync: FactoryRecipeProgressSyncHandler
+    ) : com.cleanroommc.modularui.widget.Widget<FactoryRecipeProgressListWidget>(), Interactable {
+
+        private var scrollIndex: Int = 0
+        private var dragging: Boolean = false
+        private var dragOffsetY: Int = 0
+
+        override fun draw(context: com.cleanroommc.modularui.screen.viewport.ModularGuiContext, widgetTheme: WidgetThemeEntry<*>) {
+            val maxSlots = sync.getMaxSlots().coerceAtLeast(0)
+            val maxScroll = (maxSlots - RECIPE_LIST_VISIBLE).coerceAtLeast(0)
+            if (scrollIndex > maxScroll) scrollIndex = maxScroll
+
+            // Clip list area (including scrollbar) to avoid bleeding into surrounding UI.
+            Stencil.applyAtZero(AwtRectangle(0, 0, area.width, area.height), context)
+            try {
+                val entriesBySlot = sync.getEntries().associateBy { it.slotIndex }
+
+                for (row in 0 until RECIPE_LIST_VISIBLE) {
+                    val slotIndex = scrollIndex + row
+                    if (slotIndex >= maxSlots) break
+
+                    val y = row * RECIPE_ENTRY_H
+                    drawRecipeEntry(context, widgetTheme, slotIndex, y, entriesBySlot[slotIndex])
+                }
+
+                drawScrollHandle(context, widgetTheme, maxScroll)
+            } finally {
+                Stencil.remove()
+            }
+
+            super.draw(context, widgetTheme)
+        }
+
+        private fun drawRecipeEntry(
+            context: com.cleanroommc.modularui.screen.viewport.ModularGuiContext,
+            widgetTheme: WidgetThemeEntry<*>,
+            slotIndex: Int,
+            y: Int,
+            entry: FactoryRecipeProgressSyncHandler.Entry?
+        ) {
+            // Background
+            RECIPE_ENTRY_BG.draw(context, 0, y, RECIPE_ENTRY_W, RECIPE_ENTRY_H, widgetTheme.theme)
+
+            val percent = (entry?.percent ?: 0).coerceIn(0, 100)
+            val isError = entry?.isError ?: false
+            val rawMsg = entry?.message.orEmpty()
+
+            // Foreground (progress) - clip by selecting a pre-sliced drawable.
+            val fgW = ((percent / 100.0) * RECIPE_ENTRY_W).toInt().coerceIn(0, RECIPE_ENTRY_W)
+            if (fgW > 0) {
+                RECIPE_ENTRY_FG_BY_W[fgW].draw(context, 0, y, fgW, RECIPE_ENTRY_H, widgetTheme.theme)
+            }
+
+            // Text overlay
+            val mc = Minecraft.getMinecraft()
+            val fr = mc.fontRenderer
+
+            GlStateManager.pushMatrix()
+            GlStateManager.translate(0f, 0f, 200f)
+
+            val slotText = "#${slotIndex + 1}"
+            val percentText = if (entry == null) "" else "$percent%"
+
+            val statusText = when {
+                entry == null -> I18n.format("prototypemachinery.gui.recipe_progress.idle")
+                isError -> {
+                    if (rawMsg.isBlank()) {
+                        I18n.format("prototypemachinery.gui.recipe_progress.error")
+                    } else {
+                        I18n.format("prototypemachinery.gui.recipe_progress.error_with_message", rawMsg)
+                    }
+                }
+                rawMsg.isBlank() -> I18n.format("prototypemachinery.gui.recipe_progress.running")
+                else -> rawMsg
+            }
+
+            val titleColor = 0xFFFFFF
+            val percentColor = if (entry == null) 0xAAAAAA else if (isError) 0xFF5555 else 0x55FF55
+            val statusColor = if (entry == null) 0xAAAAAA else if (isError) 0xFF5555 else 0xFFFFFF
+
+            // Row 1: #X (left) + percent (right)
+            fr.drawString(slotText, 4f, (y + 4).toFloat(), titleColor, false)
+            if (percentText.isNotBlank()) {
+                val pw = fr.getStringWidth(percentText)
+                fr.drawString(percentText, (RECIPE_ENTRY_W - 4 - pw).toFloat(), (y + 4).toFloat(), percentColor, false)
+            }
+
+            // Row 2: status (trim)
+            val maxW = RECIPE_ENTRY_W - 8
+            val trimmed = fr.trimStringToWidth(statusText, maxW)
+            fr.drawString(trimmed, 4f, (y + 16).toFloat(), statusColor, false)
+
+            GlStateManager.popMatrix()
+        }
+
+        private fun drawScrollHandle(
+            context: com.cleanroommc.modularui.screen.viewport.ModularGuiContext,
+            widgetTheme: WidgetThemeEntry<*>,
+            maxScroll: Int
+        ) {
+            if (maxScroll <= 0) return
+
+            val trackX = area.width - RECIPE_SCROLL_OFFSET_X - RECIPE_SCROLL_HANDLE_W
+            val trackY = RECIPE_SCROLL_OFFSET_Y
+            val trackH = (area.height - RECIPE_SCROLL_OFFSET_Y * 2).coerceAtLeast(1)
+            val usableH = (trackH - RECIPE_SCROLL_HANDLE_H).coerceAtLeast(1)
+
+            val frac = scrollIndex.toDouble() / maxScroll.toDouble()
+            val handleY = trackY + (usableH * frac).roundToInt()
+
+            val localX = context.mouseX
+            val localY = context.mouseY
+            val hoveringHandle =
+                localX in trackX until (trackX + RECIPE_SCROLL_HANDLE_W) &&
+                    localY in handleY until (handleY + RECIPE_SCROLL_HANDLE_H)
+
+            val handleDrawable = when {
+                dragging -> RECIPE_SCROLL_HANDLE_PRESSED
+                hoveringHandle -> RECIPE_SCROLL_HANDLE_HOVER
+                else -> RECIPE_SCROLL_HANDLE_NORMAL
+            }
+
+            handleDrawable.draw(context, trackX, handleY, RECIPE_SCROLL_HANDLE_W, RECIPE_SCROLL_HANDLE_H, getActiveWidgetTheme(widgetTheme, hoveringHandle))
+        }
+
+        override fun onMouseScroll(direction: UpOrDown, amount: Int): Boolean {
+            if (!isHovering) return false
+
+            val maxSlots = sync.getMaxSlots().coerceAtLeast(0)
+            val maxScroll = (maxSlots - RECIPE_LIST_VISIBLE).coerceAtLeast(0)
+            if (maxScroll <= 0) return false
+
+            val delta = if (direction == UpOrDown.UP) -amount else amount
+            val next = (scrollIndex + delta).coerceIn(0, maxScroll)
+            if (next == scrollIndex) {
+                // keep consuming the wheel to avoid accidental scrolling of the underlying screen
+                return true
+            }
+            scrollIndex = next
+            return true
+        }
+
+        override fun onMousePressed(mouseButton: Int): Result {
+            if (mouseButton != 0) return Result.IGNORE
+            if (!isHovering) return Result.IGNORE
+
+            val maxSlots = sync.getMaxSlots().coerceAtLeast(0)
+            val maxScroll = (maxSlots - RECIPE_LIST_VISIBLE).coerceAtLeast(0)
+            if (maxScroll <= 0) return Result.IGNORE
+
+            val trackX = area.width - RECIPE_SCROLL_OFFSET_X - RECIPE_SCROLL_HANDLE_W
+            val trackY = RECIPE_SCROLL_OFFSET_Y
+            val trackH = (area.height - RECIPE_SCROLL_OFFSET_Y * 2).coerceAtLeast(1)
+            val usableH = (trackH - RECIPE_SCROLL_HANDLE_H).coerceAtLeast(1)
+
+            val frac = scrollIndex.toDouble() / maxScroll.toDouble()
+            val handleY = trackY + (usableH * frac).roundToInt()
+
+            val localX = context.mouseX
+            val localY = context.mouseY
+            val hoveringHandle =
+                localX in trackX until (trackX + RECIPE_SCROLL_HANDLE_W) &&
+                    localY in handleY until (handleY + RECIPE_SCROLL_HANDLE_H)
+
+            if (!hoveringHandle) return Result.IGNORE
+
+            dragging = true
+            dragOffsetY = (localY - handleY).coerceIn(0, RECIPE_SCROLL_HANDLE_H)
+            updateFromMouse(maxScroll)
+            Interactable.playButtonClickSound()
+            return Result.SUCCESS
+        }
+
+        override fun onMouseDrag(mouseButton: Int, timeSinceClick: Long) {
+            if (!dragging || mouseButton != 0) return
+
+            val maxSlots = sync.getMaxSlots().coerceAtLeast(0)
+            val maxScroll = (maxSlots - RECIPE_LIST_VISIBLE).coerceAtLeast(0)
+            if (maxScroll <= 0) return
+
+            updateFromMouse(maxScroll)
+        }
+
+        override fun onMouseRelease(mouseButton: Int): Boolean {
+            if (mouseButton != 0) return false
+            if (!dragging) return false
+
+            dragging = false
+            return true
+        }
+
+        private fun updateFromMouse(maxScroll: Int) {
+            val ctx = context
+            val localY = ctx.mouseY
+
+            val trackY = RECIPE_SCROLL_OFFSET_Y
+            val trackH = (area.height - RECIPE_SCROLL_OFFSET_Y * 2).coerceAtLeast(1)
+            val usableH = (trackH - RECIPE_SCROLL_HANDLE_H).coerceAtLeast(1)
+
+            val clamped = (localY - trackY - dragOffsetY).coerceIn(0, usableH)
+            val frac = clamped.toDouble() / usableH.toDouble()
+            val next = (frac * maxScroll.toDouble()).roundToInt().coerceIn(0, maxScroll)
+            scrollIndex = next
+        }
     }
 
     /**

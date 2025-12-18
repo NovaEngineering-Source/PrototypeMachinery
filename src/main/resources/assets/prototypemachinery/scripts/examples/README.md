@@ -15,6 +15,30 @@
 - 添加组件类型
 - 设置机器属性
 
+### recipe_processor_full_example.zs
+
+配方处理器“最小闭环”示例：
+
+- 注册一个带 `FactoryRecipeProcessorComponent` 的机器
+- 绑定 `recipeGroups`（否则扫描系统不会启动）
+- 注册一个仅包含 parallelism 的配方（不需要仓室）
+
+### recipe_processor_with_hatches_example.zs
+
+配方处理器“带仓室”示例：
+
+- 结构中包含物品输入/输出仓
+- 由于部分环境在 preinit 阶段无法解析物品，本示例已拆分为两份脚本：
+	- `recipe_processor_with_hatches_example.zs`：#loader preinit，仅注册机器
+	- `recipe_processor_with_hatches_recipes.zs`：#loader postinit，注册配方（itemInput/itemOutput）
+
+### recipe_processor_with_hatches_recipes.zs
+
+配方处理器“带仓室”的配方脚本：
+
+- #loader postinit
+- 包含 itemInput + itemOutput，必须通过仓室才能运行
+
 ## 使用方法
 
 ### 自动复制（推荐）

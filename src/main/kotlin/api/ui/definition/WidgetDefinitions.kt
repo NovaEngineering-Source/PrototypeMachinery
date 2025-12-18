@@ -331,3 +331,47 @@ public data class TabContainerDefinition(
 ) : WidgetDefinition {
     override val type: String = "tab_container"
 }
+
+// ============================================================================
+// Machine-specific Widgets
+// 机器特化组件（脚本可用的“官方组件”）
+// ============================================================================
+
+/**
+ * Factory recipe processor progress list.
+ * 工厂配方处理器的配方进度列表。
+ *
+ * Notes:
+ * - This widget is host-aware: it only renders when the machine has a FactoryRecipeProcessorComponent.
+ * - Sync is GUI-scoped and handled internally by the client widget factory.
+ */
+public data class FactoryRecipeProgressListDefinition(
+    override val x: Int = 0,
+    override val y: Int = 0,
+    override val width: Int = 89,
+    override val height: Int = 238,
+
+    /** Unique sync key in the panel sync manager. Use this to avoid collisions if you add multiple lists. */
+    public val syncKey: String = "factoryRecipeProgress",
+
+    /** Row height in pixels. Default matches gui_controller_states.png entry slice height (33). */
+    public val entryHeight: Int = 33,
+
+    /** Visible rows. If <= 0, client will derive from height / entryHeight. */
+    public val visibleRows: Int = 7,
+
+    /** Scroll handle visual placement offset inside this widget. */
+    public val scrollOffsetX: Int = 4,
+    public val scrollOffsetY: Int = 0,
+
+    public val showSlotIndex: Boolean = true,
+    public val showPercent: Boolean = true,
+
+    /** I18n keys for built-in statuses (used when entry.message is empty / idle / error without message). */
+    public val idleKey: String = "prototypemachinery.gui.recipe_progress.idle",
+    public val runningKey: String = "prototypemachinery.gui.recipe_progress.running",
+    public val errorKey: String = "prototypemachinery.gui.recipe_progress.error",
+    public val errorWithMessageKey: String = "prototypemachinery.gui.recipe_progress.error_with_message"
+) : WidgetDefinition {
+    override val type: String = "factory_recipe_progress_list"
+}

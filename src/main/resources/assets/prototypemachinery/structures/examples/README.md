@@ -41,6 +41,20 @@
 - parent_with_child.json: 父结构引用子结构
 - 展示如何组合多个结构
 
+### recipe_processor_machine.json
+
+配方处理器的最小结构示例：
+
+- 不包含任何仓室（hatch）
+- 可用于演示配方扫描、处理器组件与 UI 配方进度列表
+
+### recipe_processor_machine_with_hatches.json
+
+配方处理器（带仓室）的结构示例：
+
+- 包含 1 个物品输入仓 + 1 个物品输出仓（均为 Tier 1）
+- 可用于演示真正的“消耗输入 / 产出输出”的配方执行闭环
+
 ## 字段说明
 
 - `id`: 结构的唯一标识符

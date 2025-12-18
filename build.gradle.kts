@@ -167,10 +167,12 @@ dependencies {
     implementation(rfg.deobf("curse.maven:zenutil-401178:7304021"))
     // ZenUtils dependency
     runtimeOnly(rfg.deobf("curse.maven:configanytime-870276:5212709"))
-    // Bloom Effect Test
+    // Bloom effect test
     runtimeOnly(rfg.deobf("curse.maven:lumenized-1234162:6734060"))
     runtimeOnly(rfg.deobf("curse.maven:ctm-267602:2915363"))
     runtimeOnly(rfg.deobf("curse.maven:codechickenlib-242818:2779848"))
+    // Performance test tool
+    runtimeOnly(rfg.deobf("curse.maven:spark-361579:3542217"))
 
     // linux only
     if (System.getProperty("os.name").lowercase().contains("linux")) {

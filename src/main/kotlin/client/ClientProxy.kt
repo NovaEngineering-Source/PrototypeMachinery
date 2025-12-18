@@ -1,5 +1,6 @@
 package github.kasuminova.prototypemachinery.client
 
+import github.kasuminova.prototypemachinery.client.atlas.PmGuiAtlas
 import github.kasuminova.prototypemachinery.client.preview.ProjectionKeyBindings
 import github.kasuminova.prototypemachinery.client.preview.StructurePreviewClientCommand
 import github.kasuminova.prototypemachinery.client.preview.WorldProjectionManager
@@ -24,6 +25,9 @@ internal class ClientProxy : CommonProxy() {
 
     override fun init() {
         super.init()
+
+        // GUI atlases (TextureMap-based, uses Stitcher internally)
+        PmGuiAtlas.init()
 
         // Key bindings for projection preview controls (lock/rotate orientation).
         ProjectionKeyBindings.register()

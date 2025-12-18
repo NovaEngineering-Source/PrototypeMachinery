@@ -13,24 +13,25 @@ import com.cleanroommc.modularui.widget.Widget
  *
  * Supported modes:
  * - Momentary button: normal / hover / pressed
- * - Toggle button: normal / hover / enabled (uses [pressedOrEnabled] as enabled texture)
+ * - Toggle button: normal / hover / pressed, plus optional enabled state texture
  */
 internal class TriStateTextureButton(
     private val normal: IDrawable,
     private val hover: IDrawable,
-    private val pressedOrEnabled: IDrawable,
+    private val pressed: IDrawable,
+    private val enabled: IDrawable? = null,
     private val toggle: BoolValue? = null,
     private val onClick: (() -> Unit)? = null
 ) : Widget<TriStateTextureButton>(), Interactable {
 
-    private var pressed: Boolean = false
+    private var mouseDown: Boolean = false
 
     override fun draw(context: ModularGuiContext, widgetTheme: WidgetThemeEntry<*>) {
         val enabled = toggle?.getBoolValue() == true
         val hovering = isHovering
         val drawable = when {
-            enabled -> pressedOrEnabled
-            pressed && hovering -> pressedOrEnabled
+            mouseDown && hovering -> this.pressed
+            enabled -> (this.enabled ?: hover)
             hovering -> hover
             else -> normal
         }
@@ -41,15 +42,15 @@ internal class TriStateTextureButton(
     override fun onMousePressed(mouseButton: Int): Result {
         if (mouseButton != 0) return Result.IGNORE
         if (!isHovering) return Result.IGNORE
-        pressed = true
+        mouseDown = true
         Interactable.playButtonClickSound()
         return Result.SUCCESS
     }
 
     override fun onMouseRelease(mouseButton: Int): Boolean {
         if (mouseButton != 0) return false
-        if (!pressed) return false
-        pressed = false
+        if (!mouseDown) return false
+        mouseDown = false
         // Return true so a tap can be processed.
         return true
     }

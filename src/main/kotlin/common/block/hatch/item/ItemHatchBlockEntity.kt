@@ -150,8 +150,14 @@ public class ItemHatchBlockEntity(
 
     override fun createStructureComponents(machine: MachineInstance): Collection<StructureComponent> {
         val allowed = when (config.hatchType) {
-            HatchType.INPUT -> setOf(IOType.INPUT)
-            HatchType.OUTPUT -> setOf(IOType.OUTPUT)
+            // NOTE: IOType is from the recipe/machine perspective:
+            // - sources (recipe inputs) must be EXTRACT-able => IOType.OUTPUT
+            // - targets (recipe outputs) must be INSERT-able => IOType.INPUT
+            // HatchType is from the external/world perspective:
+            // - INPUT hatch: outside can insert -> machine should extract -> IOType.OUTPUT
+            // - OUTPUT hatch: outside can extract -> machine should insert -> IOType.INPUT
+            HatchType.INPUT -> setOf(IOType.OUTPUT)
+            HatchType.OUTPUT -> setOf(IOType.INPUT)
             HatchType.IO -> setOf(IOType.INPUT, IOType.OUTPUT)
         }
 

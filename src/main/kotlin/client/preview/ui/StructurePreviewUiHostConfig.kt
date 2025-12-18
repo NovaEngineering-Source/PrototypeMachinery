@@ -17,6 +17,8 @@ internal data class StructurePreviewUiHostConfig(
     val allowWorldScan: Boolean,
     /** Whether the UI should show scan controls. */
     val showScanControls: Boolean,
+    /** Whether the UI should show a close button (JEI host should keep it hidden). */
+    val showCloseButton: Boolean,
     /** Whether the UI should default to 3D view mode. */
     val defaultTo3DView: Boolean,
     /** Whether the host supports future "locate/highlight" interactions. */
@@ -31,6 +33,7 @@ internal data class StructurePreviewUiHostConfig(
             hostName = "standalone",
             allowWorldScan = true,
             showScanControls = true,
+            showCloseButton = true,
             defaultTo3DView = false,
             allowLocate = true,
             allowOperateChildren = false
@@ -40,6 +43,7 @@ internal data class StructurePreviewUiHostConfig(
             hostName = "jei",
             allowWorldScan = false,
             showScanControls = false,
+            showCloseButton = false,
             defaultTo3DView = true,
             allowLocate = false,
             allowOperateChildren = false,

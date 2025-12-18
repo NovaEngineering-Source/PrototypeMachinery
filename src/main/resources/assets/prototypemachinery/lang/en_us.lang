@@ -47,6 +47,12 @@ prototypemachinery.gui.resource_slot.count=Count: %s
 prototypemachinery.gui.resource_slot.types=Slots: %s / %s
 prototypemachinery.gui.resource_slot.stored=Stored: %s / %s
 
+# Default Machine UI - recipe progress list
+prototypemachinery.gui.recipe_progress.idle=Idle
+prototypemachinery.gui.recipe_progress.running=Running
+prototypemachinery.gui.recipe_progress.error=Error
+prototypemachinery.gui.recipe_progress.error_with_message=Error: %s
+
 # /////////////////////////////////////////////////////////////////////////////////[Energy Hatch]
 tile.prototypemachinery.energy_input_hatch_1.name=§d[§rEnergy-in-Lv1§d]§r-Energy Input Hatch
 tile.prototypemachinery.energy_input_hatch_2.name=§d[§rEnergy-in-Lv2§d]§r-Energy Input Hatch

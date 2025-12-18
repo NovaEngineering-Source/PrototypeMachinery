@@ -47,6 +47,12 @@ prototypemachinery.gui.resource_slot.count=数量：%s
 prototypemachinery.gui.resource_slot.types=槽位：%s / %s
 prototypemachinery.gui.resource_slot.stored=已存：%s / %s
 
+# 默认机械 UI - 配方进度列表
+prototypemachinery.gui.recipe_progress.idle=空闲
+prototypemachinery.gui.recipe_progress.running=工作中
+prototypemachinery.gui.recipe_progress.error=错误
+prototypemachinery.gui.recipe_progress.error_with_message=错误：%s
+
 # /////////////////////////////////////////////////////////////////////////////////[能源仓]
 tile.prototypemachinery.energy_input_hatch_1.name=§d[§rEnergy-in-Lv1§d]§r-能源输入仓
 tile.prototypemachinery.energy_input_hatch_2.name=§d[§rEnergy-in-Lv2§d]§r-能源输入仓

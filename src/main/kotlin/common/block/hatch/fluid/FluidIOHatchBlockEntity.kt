@@ -279,8 +279,10 @@ public class FluidIOHatchBlockEntity(
 
     override fun createStructureComponents(machine: MachineInstance): Collection<StructureComponent> {
         return listOf(
-            StructureFluidStorageContainerComponent(owner = machine, provider = this, storage = inputStorage, allowed = setOf(IOType.INPUT)),
-            StructureFluidStorageContainerComponent(owner = machine, provider = this, storage = outputStorage, allowed = setOf(IOType.OUTPUT))
+            // inputStorage: outside fills -> machine drains -> IOType.OUTPUT
+            StructureFluidStorageContainerComponent(owner = machine, provider = this, storage = inputStorage, allowed = setOf(IOType.OUTPUT)),
+            // outputStorage: outside drains -> machine fills -> IOType.INPUT
+            StructureFluidStorageContainerComponent(owner = machine, provider = this, storage = outputStorage, allowed = setOf(IOType.INPUT))
         )
     }
 

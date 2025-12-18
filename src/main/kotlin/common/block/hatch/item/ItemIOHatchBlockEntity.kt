@@ -185,8 +185,10 @@ public class ItemIOHatchBlockEntity(
 
     override fun createStructureComponents(machine: MachineInstance): Collection<StructureComponent> {
         return listOf(
-            StructureItemStorageContainerComponent(owner = machine, provider = this, storage = inputStorage, allowed = setOf(IOType.INPUT)),
-            StructureItemStorageContainerComponent(owner = machine, provider = this, storage = outputStorage, allowed = setOf(IOType.OUTPUT))
+            // inputStorage: outside inserts here -> machine should extract -> IOType.OUTPUT
+            StructureItemStorageContainerComponent(owner = machine, provider = this, storage = inputStorage, allowed = setOf(IOType.OUTPUT)),
+            // outputStorage: outside extracts from here -> machine should insert -> IOType.INPUT
+            StructureItemStorageContainerComponent(owner = machine, provider = this, storage = outputStorage, allowed = setOf(IOType.INPUT))
         )
     }
 

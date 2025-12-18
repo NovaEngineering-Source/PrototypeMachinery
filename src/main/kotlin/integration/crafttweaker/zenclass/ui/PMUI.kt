@@ -197,6 +197,21 @@ public object PMUI {
     }
 
     // ========================================================================
+    // Machine Widgets
+    // 机器特化组件
+    // ========================================================================
+
+    /**
+     * FactoryRecipeProcessor progress list.
+     * 工厂配方处理器的配方进度列表。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun recipeProgressList(): RecipeProgressListBuilder {
+        return RecipeProgressListBuilder()
+    }
+
+    // ========================================================================
     // Slot Widget Builders
     // 槽位组件构建器
     // ========================================================================

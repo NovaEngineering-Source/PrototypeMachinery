@@ -47,6 +47,9 @@ public object CraftTweakerExamples {
 
         val exampleFiles = listOf(
             "machine_registration.zs",
+            "recipe_processor_full_example.zs",
+            "recipe_processor_with_hatches_example.zs",
+            "recipe_processor_with_hatches_recipes.zs",
             "README.md"
         )
 

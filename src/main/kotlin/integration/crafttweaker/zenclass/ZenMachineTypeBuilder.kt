@@ -89,6 +89,29 @@ public class ZenMachineTypeBuilder(
     }
 
     /**
+     * Add a recipe group accepted by this machine type.
+     * 添加该机器类型可处理的配方组。
+     *
+     * Example / 示例:
+     * - builder.addRecipeGroup("mymod:my_group")
+     */
+    @ZenMethod
+    public fun addRecipeGroup(groupId: String): ZenMachineTypeBuilder {
+        builder.addRecipeGroup(groupId)
+        return this
+    }
+
+    /**
+     * Add multiple recipe groups.
+     * 添加多个配方组。
+     */
+    @ZenMethod
+    public fun addRecipeGroups(groupIds: Array<String>): ZenMachineTypeBuilder {
+        builder.addRecipeGroups(groupIds.asIterable())
+        return this
+    }
+
+    /**
      * Build the machine type (internal use; not for direct ZenScript call).
      * 构建机器类型（内部调用，不直接暴露给脚本）。
      */

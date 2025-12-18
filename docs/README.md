@@ -16,7 +16,7 @@
   - [结构系统总览](./Structures.md)
   - [MachineStructure JSON 配置指南](./StructureJsonGuide.md)
   - [StructureLoader 加载特性说明](./StructureLoadingFeatures.md)
-  - [结构投影预览（客户端）](./StructurePreview.md)
+  - [结构预览（客户端：世界投影 / GUI）](./StructurePreview.md)
 
 - **注册与生命周期**
   - [机器类型注册（MachineType）与脚本注册](./MachineRegistration.md)
@@ -26,6 +26,10 @@
 - **脚本与 UI**
   - [CraftTweaker（ZenScript）集成](./CraftTweaker.md)
   - [UI：默认 ModularUI + 脚本 UIRegistry](./UI.md)
+  - （相关）[结构预览 GUI（/pm_preview_ui）](./StructurePreview.md)
+
+- **客户端集成（Client Integrations）**
+  - [JEI / HEI 集成（配方索引 + 默认 UI + Addon 扩展）](./JEI.md)
 
 - **模块功能**
   - [10 阶 Hatch 系统（Item / Fluid / Energy）](./Hatches.md)

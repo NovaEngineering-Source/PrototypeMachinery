@@ -20,6 +20,8 @@ internal class SliceSliderWidget(
     private val handleNormal: IDrawable,
     private val handleHover: IDrawable,
     private val handlePressed: IDrawable,
+    private val handleW: Int = 7,
+    private val handleH: Int = 38,
     private val trackPaddingX: Int = 2,
     private val trackPaddingY: Int = 10,
     private val onChanged: ((Int) -> Unit)? = null
@@ -38,9 +40,6 @@ internal class SliceSliderWidget(
         val trackY = trackPaddingY
         val trackW = (area.w() - trackPaddingX * 2).coerceAtLeast(1)
         val trackH = (area.h() - trackPaddingY * 2).coerceAtLeast(1)
-
-        val handleW = 7
-        val handleH = 38
 
         val usableH = (trackH - handleH).coerceAtLeast(1)
         val frac = if (max == 0) 0.0 else v.toDouble() / max.toDouble()
@@ -92,12 +91,14 @@ internal class SliceSliderWidget(
             return
         }
 
-        val absY = ctx.absMouseY
-        val localY = absY - area.ry
+        // Interactable callbacks are invoked with this widget's matrix already applied
+        // (see ModularUI's LocatedWidget.applyMatrix). Therefore getMouseY() is already
+        // in widget-local coordinates and must NOT be mixed with area.ry (relative coord)
+        // or absMouseY (screen coord).
+        val localY = ctx.mouseY
 
         val trackY = trackPaddingY
         val trackH = (area.h() - trackPaddingY * 2).coerceAtLeast(1)
-        val handleH = 38
         val usableH = (trackH - handleH).coerceAtLeast(1)
 
         val clamped = (localY - trackY - handleH / 2).coerceIn(0, usableH)

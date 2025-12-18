@@ -8,6 +8,13 @@
 
 - **客户端结构投影预览（Structure Projection Preview）**：支持 /pm_preview 调试命令、HUD 提示、本地化，以及 **24 向朝向（front+top）** 的锁定/旋转。
    - 详见：[`docs/StructurePreview.md`](./docs/StructurePreview.md)
+- **结构预览 UI（ModularUI / Structure Preview UI）**：新增只读的 GUI 结构预览界面（`/pm_preview_ui`），可在界面内查看材料/BOM，并提供 **3D 视图（方块模型渲染）** 与 **切片（Layer）模式**。
+   - 支持 dt 平滑的折叠菜单动画、线框覆盖层开关（便于观察 block model）、以及（可选的）客户端世界扫描对比（由宿主配置 gate）。
+   - 详见：[`docs/StructurePreview.md`](./docs/StructurePreview.md)（已包含 GUI 章节）
+   - UI 贴图规范（布局/交互/资源命名）：[`src/main/resources/assets/prototypemachinery/textures/gui/gui_structure_preview/gui_structure_preview.md`](./src/main/resources/assets/prototypemachinery/textures/gui/gui_structure_preview/gui_structure_preview.md)
+- **GUI 贴图体系（切片 + 可选运行时 Atlas）**：结构预览相关贴图从“整张大图裁切表”迁移为“按组件切片的小图资源 + 稳定路径引用”。同时提供可选的运行时 GUI atlas（TextureMap + Stitcher）以减少大量小图的绑定开销。
+   - 运行时 atlas：`src/main/kotlin/client/atlas/PmGuiAtlas.kt`
+   - 构建期切片工具：`src/main/kotlin/devtools/atlas/GuiSliceGenerator.kt` + `src/main/resources/assets/prototypemachinery/pm_gui_slices/*.json`
 - **结构匹配 fast-fail**：`StructurePattern` 具备 bounds（minPos/maxPos）并提供 `isAreaLoaded(...)`，在匹配前先检查覆盖范围是否已加载，避免未加载区块导致的误判与卡顿。
 - **事务化 Requirement 系统**：配方需求执行采用 `RequirementTransaction` 事务模型（start / tick / end），失败/阻塞时整体回滚以保持原子性。
 - **Requirement Overlay（按进程覆写）**：支持为单个 `RecipeProcess` 挂载 overlay，在执行前解析“生效的需求组件”。
@@ -29,10 +36,11 @@
 - 多方块结构：[`docs/Structures.md`](./docs/Structures.md)
   - JSON 指南：[`docs/StructureJsonGuide.md`](./docs/StructureJsonGuide.md)
   - Loader 特性：[`docs/StructureLoadingFeatures.md`](./docs/StructureLoadingFeatures.md)
-- 结构投影预览（客户端）：[`docs/StructurePreview.md`](./docs/StructurePreview.md)
+- 结构预览（客户端：世界投影 / GUI）：[`docs/StructurePreview.md`](./docs/StructurePreview.md)
 - 机器类型注册：[`docs/MachineRegistration.md`](./docs/MachineRegistration.md)
 - CraftTweaker 集成：[`docs/CraftTweaker.md`](./docs/CraftTweaker.md)
 - UI（默认 + 脚本 UIRegistry）：[`docs/UI.md`](./docs/UI.md)
+- JEI / HEI 集成（配方索引 + 默认 UI + Addon 扩展）：[`docs/JEI.md`](./docs/JEI.md)
 - 调度器：[`docs/TaskScheduler.md`](./docs/TaskScheduler.md)
 - 统一 API 入口：[`docs/API.md`](./docs/API.md)
 - 资源键系统：[`docs/PMKey.md`](./docs/PMKey.md)

@@ -20,6 +20,10 @@ public class CraftTweakerMachineTypeBuilder(
     // Default component types include ZSDataComponent for script data storage
     // 默认组件类型包含 ZSDataComponent 用于脚本数据存储
     private val componentTypes: MutableSet<MachineComponentType<*>> = mutableSetOf(ZSDataComponentType)
+
+    // Recipe groups accepted by this machine type (used by FactoryRecipeScanningSystem).
+    // 该机器类型可处理的配方组（FactoryRecipeScanningSystem 会依赖此字段）。
+    private val recipeGroups: MutableSet<ResourceLocation> = linkedSetOf()
     private var controllerModel: ResourceLocation? = null
 
     /**
@@ -83,6 +87,30 @@ public class CraftTweakerMachineTypeBuilder(
     }
 
     /**
+     * Adds a recipe group accepted by this machine type.
+     *
+     * 添加一个该机器类型可处理的配方组。
+     *
+     * The group id should be a ResourceLocation string, e.g. "mymod:my_group".
+     */
+    public fun addRecipeGroup(groupId: String): CraftTweakerMachineTypeBuilder {
+        val id = ResourceLocation(groupId)
+        recipeGroups.add(id)
+        return this
+    }
+
+    /**
+     * Adds multiple recipe groups.
+     * 添加多个配方组。
+     */
+    public fun addRecipeGroups(groupIds: Iterable<String>): CraftTweakerMachineTypeBuilder {
+        for (g in groupIds) {
+            addRecipeGroup(g)
+        }
+        return this
+    }
+
+    /**
      * Build machine type wrapper for later registration.
      * 构建机器类型包装，用于后续注册。
      *
@@ -97,6 +125,7 @@ public class CraftTweakerMachineTypeBuilder(
             name = name,
             structureProvider = structureProvider,
             componentTypes = componentTypes.toSet(),
+            recipeGroups = recipeGroups.toSet(),
             controllerModelLocation = controllerModel
         )
     }
@@ -114,6 +143,7 @@ private class CraftTweakerMachineTypeImpl(
     override val name: String,
     private val structureProvider: () -> MachineStructure,
     override val componentTypes: Set<MachineComponentType<*>>,
+    override val recipeGroups: Set<ResourceLocation>,
     override val controllerModelLocation: ResourceLocation?
 ) : ICraftTweakerMachineType {
 

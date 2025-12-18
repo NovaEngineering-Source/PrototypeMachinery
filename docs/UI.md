@@ -5,6 +5,10 @@
 1. **默认原生 UI**：基于 ModularUI，为机器/外设提供默认界面。
 2. **脚本 UI**：CraftTweaker 侧通过 `UIRegistry` 注册 UI 定义，并可通过 `UIBindings` 做数据绑定。
 
+此外还有一条偏“工具/调试”向的 UI：
+
+3. **结构预览 UI（ModularUI，客户端只读）**：通过客户端命令 `/pm_preview_ui` 打开，用于结构材料/BOM + 3D/切片预览（可选 world scan 对比）。
+
 ## 代码位置
 
 - 默认 UI（示例：Hatch）：
@@ -18,6 +22,12 @@
   - `src/main/kotlin/integration/crafttweaker/zenclass/ui/UIBindings.kt`
 
 - UI 注册表实现：`src/main/kotlin/impl/ui/registry/MachineUIRegistryImpl.kt`
+
+- 结构预览 UI（ModularUI，read-only）：
+  - 命令：`src/main/kotlin/client/preview/ui/StructurePreviewUiClientCommand.kt`
+  - 界面组装：`src/main/kotlin/client/preview/ui/StructurePreviewUiScreen.kt`
+  - 3D 视图：`src/main/kotlin/client/preview/ui/widget/StructurePreview3DWidget.kt`
+  - 宿主 gate（是否允许 world scan 等）：`src/main/kotlin/client/preview/ui/StructurePreviewUiHostConfig.kt`
 
 ## 同步原则（很重要）
 
@@ -44,6 +54,8 @@ lang 文件位置：
 
 - 调试命令 `/pm_preview`：`pm.preview.*`
   - 例如：`pm.preview.started` / `pm.preview.stopped` / `pm.preview.unknown_structure`
+
+`/pm_preview_ui`（结构预览 GUI）在“找不到结构”等场景也会复用 `pm.preview.*`（例如 `pm.preview.unknown_structure`），以保持提示文案的一致性。
 - 投影 HUD / 提示：`pm.projection.*`
   - 例如：`pm.projection.hud.orientation_status`、`pm.projection.chat.locked`
 - 按键绑定名称：`key.pm.preview.*`
@@ -85,3 +97,19 @@ lang 文件位置：
 
 - [资源存储（ResourceStorage / EnergyStorage）](./Storage.md)
 - [CraftTweaker（ZenScript）集成](./CraftTweaker.md)
+
+- [结构预览（世界投影 / GUI）](./StructurePreview.md)
+
+## GUI 贴图规范与切片/atlas 管线（结构预览相关）
+
+结构预览 GUI 的贴图资源与规范文档在资源目录中：
+
+- 贴图目录：`src/main/resources/assets/prototypemachinery/textures/gui/gui_structure_preview/`
+- 规范文档（布局/交互/资源命名）：
+  - `src/main/resources/assets/prototypemachinery/textures/gui/gui_structure_preview/gui_structure_preview.md`
+
+如果需要把大量小贴图 stitch 成 TextureMap（降低纹理 bind 开销），项目还提供：
+
+- 构建期切片工具：`src/main/kotlin/devtools/atlas/GuiSliceGenerator.kt`
+- 切片 manifest：`src/main/resources/assets/prototypemachinery/pm_gui_slices/*.json`
+- 运行时 atlas：`src/main/kotlin/client/atlas/PmGuiAtlas.kt`

@@ -11,6 +11,7 @@ import github.kasuminova.prototypemachinery.client.gui.builder.UITextures
 import github.kasuminova.prototypemachinery.client.gui.builder.factory.DisplayWidgetFactory
 import github.kasuminova.prototypemachinery.client.gui.builder.factory.InteractiveWidgetFactory
 import github.kasuminova.prototypemachinery.client.gui.builder.factory.LayoutWidgetFactory
+import github.kasuminova.prototypemachinery.client.gui.builder.factory.MachineWidgetFactory
 import github.kasuminova.prototypemachinery.client.gui.builder.factory.SlotWidgetFactory
 import github.kasuminova.prototypemachinery.client.gui.builder.factory.UtilityWidgetFactory
 import github.kasuminova.prototypemachinery.client.gui.builder.factory.WidgetFactoryRegistry
@@ -28,6 +29,7 @@ public object UIBuilderHelper {
     private val registry: WidgetFactoryRegistry = WidgetFactoryRegistry(
         listOf(
             LayoutWidgetFactory(),
+            MachineWidgetFactory(),
             InteractiveWidgetFactory(),
             DisplayWidgetFactory(),
             SlotWidgetFactory(),

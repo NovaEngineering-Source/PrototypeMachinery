@@ -34,6 +34,7 @@ PrototypeMachinery 是一个面向 **Minecraft 1.12.2 (Forge)** 的模组/框架
 - CraftTweaker 集成：[`docs/CraftTweaker.md`](./docs/CraftTweaker.md)
 - UI：[`docs/UI.md`](./docs/UI.md)
 - API 入口：[`docs/API.md`](./docs/API.md)
+- JEI / HEI 集成：[`docs/JEI.md`](./docs/JEI.md)
 
 ### 30 秒定位源码入口
 
