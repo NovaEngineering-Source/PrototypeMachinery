@@ -1,0 +1,40 @@
+{
+  "id": "example_recipe_processor_machine_with_hatches",
+  "type": "template",
+  "offset": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "pattern": [
+    {
+      "pos": {
+        "x": 1,
+        "y": 0,
+        "z": 0
+      },
+      "blockId": "prototypemachinery:item_input_hatch_1",
+      "meta": 0
+    },
+    {
+      "pos": {
+        "x": -1,
+        "y": 0,
+        "z": 0
+      },
+      "blockId": "prototypemachinery:item_output_hatch_1",
+      "meta": 0
+    },
+    {
+      "pos": {
+        "x": 0,
+        "y": 1,
+        "z": 0
+      },
+      "blockId": "minecraft:iron_block",
+      "meta": 0
+    }
+  ],
+  "validators": [],
+  "children": []
+}

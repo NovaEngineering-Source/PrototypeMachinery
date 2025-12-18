@@ -1,0 +1,31 @@
+{
+  "id": "example_recipe_processor_machine",
+  "type": "template",
+  "offset": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "pattern": [
+    {
+      "pos": {
+        "x": 1,
+        "y": 0,
+        "z": 0
+      },
+      "blockId": "minecraft:iron_block",
+      "meta": 0
+    },
+    {
+      "pos": {
+        "x": 0,
+        "y": 1,
+        "z": 0
+      },
+      "blockId": "minecraft:redstone_block",
+      "meta": 0
+    }
+  ],
+  "validators": [],
+  "children": []
+}
