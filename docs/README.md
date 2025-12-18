@@ -30,6 +30,7 @@
 
 - **客户端集成（Client Integrations）**
   - [JEI / HEI 集成（配方索引 + 默认 UI + Addon 扩展）](./JEI.md)
+  - [JEI 集成维护文档（Internals：integration/jei 全包索引）](./JEI-Internals.md)
 
 - **模块功能**
   - [10 阶 Hatch 系统（Item / Fluid / Energy）](./Hatches.md)

@@ -304,6 +304,197 @@ JeiMachineLayoutRegistry.register(machineTypeId, myLayout)
 
 ---
 
+## ZenScript（CraftTweaker）自定义 JEI 布局（整合包作者用）
+
+从 `vNext` 起（本仓库实现），你可以直接用 ZenScript 给某个 machineType 覆盖 JEI 布局，而无需写 Kotlin addon。
+
+### 脚本入口
+
+- 创建布局：`mods.prototypemachinery.jei.PMJEI`
+  - `PMJEI.createLayout()`
+  - `PMJEI.createLayoutSized(width, height)`
+- 注册布局：`mods.prototypemachinery.jei.LayoutRegistry`
+  - `LayoutRegistry.register(machineId, layout)`
+  - `LayoutRegistry.registerReplace(machineId, layout, replace)`
+  - `LayoutRegistry.setDefault(layout)`（可选：覆盖默认布局）
+
+### 你需要知道的内置 ID（常用）
+
+Requirement type id（用于 `placeFirst/placeGrid/placeAllLinear` 的第一个参数）：
+
+- 物品：`prototypemachinery:item`
+- 流体：`prototypemachinery:fluid`
+- 能量：`prototypemachinery:energy`
+- 并行度（文本）：`prototypemachinery:parallelism`
+
+Role（第二个参数，大小写不敏感，传 `null` / `"ANY"` / `"*"` 表示不过滤）：
+
+- `INPUT` / `OUTPUT`
+- `INPUT_PER_TICK` / `OUTPUT_PER_TICK`
+- `OTHER`
+
+默认情况下 role 过滤是“精确匹配”的：
+
+- `"INPUT"` 只匹配 `INPUT`
+- `"INPUT_PER_TICK"` 只匹配 `INPUT_PER_TICK`
+
+如果你希望把 `INPUT`/`OUTPUT` 视作“同组”，让它们也包含 per-tick role，可以在 builder 上启用：
+
+```zenscript
+val layout = PMJEI.createLayoutSized(176, 96)
+    .mergePerTickRoles(true)
+    // 此时："INPUT" 会同时匹配 INPUT + INPUT_PER_TICK
+    .placeAllLinearWithVariant("prototypemachinery:fluid", "INPUT", 80, 6, 0, 60, "prototypemachinery:tank/16x58")
+;
+```
+
+> 提示：即使启用了 `mergePerTickRoles(true)`，你仍然可以通过显式传 `"INPUT_PER_TICK"`/`"OUTPUT_PER_TICK"` 来只匹配 per-tick 节点。
+
+Renderer variant id（可选，用于 `place*WithVariant`）：
+
+- 物品 18x18：`prototypemachinery:slot/18`
+- 流体 tank：
+  - `prototypemachinery:tank/16x58`
+  - `prototypemachinery:tank/16x34`
+  - `prototypemachinery:tank/24x58`
+
+Decorator id（用于 `addDecorator*`）：
+
+- 进度箭头/循环：`prototypemachinery:decorator/progress`
+- 耗时文本：`prototypemachinery:decorator/recipe_duration`
+
+### 示例：复刻“多列物品 + 纵向 tank + 进度箭头 + 耗时文本”
+
+> 这个例子有意写得“偏啰嗦”，方便复制后改参数。
+
+```zenscript
+#loader crafttweaker reloadable
+
+import mods.prototypemachinery.jei.PMJEI;
+import mods.prototypemachinery.jei.LayoutRegistry;
+
+// 你的 machine type id
+val MACHINE_ID = "prototypemachinery:example_recipe_processor";
+
+val layout = PMJEI.createLayoutSized(176, 96)
+    // 左侧：输入物品 2x3
+    .placeGridWithVariant(
+        "prototypemachinery:item", "INPUT",
+        6, 6,
+        2, 3,
+        18, 18,
+        "prototypemachinery:slot/18"
+    )
+    // 右侧：输出物品 2x3
+    .placeGridWithVariant(
+        "prototypemachinery:item", "OUTPUT",
+        176 - 6 - 2 * 18 - 2, 6,
+        2, 3,
+        18, 18,
+        "prototypemachinery:slot/18"
+    )
+    // 中间：输入流体（纵向 1 列多行 tank）
+    // - 如果你的配方只有 1 个流体输入，也没关系：只会摆放 1 个
+    .placeAllLinearWithVariant(
+        "prototypemachinery:fluid", "INPUT",
+        80, 6,
+        0, 60,
+        "prototypemachinery:tank/16x58"
+    )
+    // 中间：输出流体
+    .placeAllLinearWithVariant(
+        "prototypemachinery:fluid", "OUTPUT",
+        100, 6,
+        0, 60,
+        "prototypemachinery:tank/16x58"
+    )
+    // 进度箭头
+    .addDecoratorWithData(
+        "prototypemachinery:decorator/progress",
+        (176 - 20) / 2, 40,
+        {
+            "style": "arrow",
+            "direction": "RIGHT",
+            // 可选：覆盖动画周期；不填则默认按 recipe.durationTicks
+            // "cycleTicks": 200
+        }
+    )
+    // 耗时文本
+    .addDecoratorWithData(
+        "prototypemachinery:decorator/recipe_duration",
+        (176 - 80) / 2, 62,
+        {
+            "width": 80,
+            "height": 10,
+            "align": "CENTER",
+            "template": "{ticks} t ({seconds}s)",
+            "shadow": true
+        }
+    )
+    // 可选：把未被脚本显式摆放的 nodes 自动摆放到某个区域（用于 addon requirement）
+    // .autoPlaceRemaining(6, 6)
+;
+
+LayoutRegistry.register(MACHINE_ID, layout);
+```
+
+### 条件化（动态显示）的最小能力
+
+目前 ZenScript builder 支持基于“某类 node 数量”的条件：
+
+```zenscript
+layout.whenCountAtLeast("prototypemachinery:fluid", "INPUT", 2)
+    .addDecorator("prototypemachinery:decorator/progress", 10, 10)
+    .then();
+```
+
+如果你开启了 `mergePerTickRoles(true)`，那么这里的 `"INPUT"`/`"OUTPUT"` 统计同样会把 `*_PER_TICK` 合并计入。
+
+后续可以在此基础上扩展更复杂的谓词（按机器 id、按是否存在某个 role、按 renderer variant 等）。
+
+---
+
+## 固定值槽位（Fixed Slot Providers）
+
+有些 JEI UI 元素并不想绑定到某个配方 requirement node，例如：
+
+- 催化剂（Catalyst）图标
+- “必须携带某个工具/模具”的提示槽位
+- 纯展示用的图标位（比如升级芯片、模组图标等）
+
+这类槽位可以用 **固定值槽位** 实现：
+
+1) 先注册一个 provider（`providerId` → 一组固定显示值）
+2) 然后在布局里用 `placeFixedSlot(providerId, ...)` 放置一个“真 JEI 槽位”（可被 JEI focus/点击）
+
+### ZenScript：注册 provider
+
+入口：`mods.prototypemachinery.jei.FixedSlotProviders`
+
+- 物品：
+    - `FixedSlotProviders.registerItem(providerId, item, replace)`
+    - `FixedSlotProviders.registerItems(providerId, items[], replace)`
+- 流体：
+    - `FixedSlotProviders.registerFluid(providerId, fluid, replace)`
+    - `FixedSlotProviders.registerFluids(providerId, fluids[], replace)`
+- 清理：
+    - `FixedSlotProviders.clear(providerId)`
+    - `FixedSlotProviders.clearAll()`
+
+> 建议：如果你的脚本是 `#loader crafttweaker reloadable`，为了避免重载时重复注册，可以在脚本开头先 `clear(providerId)` 或 `clearAll()`。
+
+### ZenScript：放置固定槽位
+
+布局 DSL：`LayoutBuilder.placeFixedSlot(providerId, role, x, y, width, height)`
+
+- `providerId`：你注册 provider 时用的 id（字符串，会转为 `ResourceLocation`）
+- `role`：`INPUT` / `OUTPUT` / `CATALYST`（默认 `CATALYST`）
+- `width/height`：用于 JEI 的渲染与鼠标交互区域（建议和 renderer 视觉尺寸一致）
+
+---
+
+---
+
 ## 高级用法：什么时候需要手写 PMJeiIngredientKindHandler？
 
 大多数情况下 adapter 就够用；你可能在以下场景需要手写 handler：
@@ -358,3 +549,7 @@ JeiMachineLayoutRegistry.register(machineTypeId, myLayout)
   - `src/main/kotlin/integration/jei/registry/JeiNodeIngredientProviderRegistry.kt`
   - `src/main/kotlin/integration/jei/registry/JeiRequirementRendererRegistry.kt`
   - `src/main/kotlin/integration/jei/registry/JeiMachineLayoutRegistry.kt`
+    - `src/main/kotlin/integration/jei/registry/JeiFixedSlotProviderRegistry.kt`
+
+- ZenScript：
+    - `src/main/kotlin/integration/crafttweaker/zenclass/jei/FixedSlotProviders.kt`

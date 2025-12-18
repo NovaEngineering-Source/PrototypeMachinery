@@ -9,6 +9,7 @@ import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequire
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
 import github.kasuminova.prototypemachinery.integration.jei.api.JeiRecipeContext
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiDecoratorPlacement
+import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiFixedSlotPlacement
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiLayoutBuilder
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiLayoutRequirementsView
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiMachineLayoutDefinition
@@ -16,16 +17,20 @@ import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiPlac
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiRequirementRole
 import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlot
 import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotCollector
+import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotKind
+import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotRole
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRendererVariant
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementNode
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementRenderer
 import github.kasuminova.prototypemachinery.integration.jei.api.ui.PMJeiWidgetCollector
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiDecoratorRegistry
+import github.kasuminova.prototypemachinery.integration.jei.registry.JeiFixedSlotProviderRegistry
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiMachineLayoutRegistry
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiRequirementRendererRegistry
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiScreen
 import net.minecraft.client.gui.ScaledResolution
+import net.minecraft.util.ResourceLocation
 
 /**
  * Runtime bridge: builds a ModularUI panel for a JEI recipe layout and collects JEI ingredient slot declarations.
@@ -41,6 +46,7 @@ public class JeiPanelRuntime private constructor(
     public val slots: List<JeiSlot>,
     private val widgets: List<IWidget>,
     private val nodeById: Map<String, PMJeiRequirementNode<out RecipeRequirementComponent>>,
+    private val fixedValuesBySlotNodeId: Map<String, List<Any>>,
 ) {
 
     private val panel: ModularPanel = ModularPanel.defaultPanel("pm_jei_panel")
@@ -132,6 +138,11 @@ public class JeiPanelRuntime private constructor(
         return nodeById[nodeId]
     }
 
+    /** Resolve fixed (node-less) slot values by the internal slot nodeId. */
+    public fun getFixedValues(slotNodeId: String): List<Any>? {
+        return fixedValuesBySlotNodeId[slotNodeId]
+    }
+
     public companion object {
 
         /**
@@ -172,6 +183,8 @@ public class JeiPanelRuntime private constructor(
             // Build a fast node lookup.
             val nodeById = nodes.associateBy { it.nodeId }
 
+            val fixedValuesBySlotNodeId: MutableMap<String, List<Any>> = LinkedHashMap()
+
             for (placement in planBuilder.placedNodes) {
                 val node = nodeById[placement.nodeId]
                 if (node == null) {
@@ -209,6 +222,52 @@ public class JeiPanelRuntime private constructor(
                 decorator.buildWidgets(ctx, decor.x, decor.y, decor.data, widgetCollector)
             }
 
+            // Materialize fixed slots (node-less JEI ingredient slots).
+            for ((i, fixed) in planBuilder.fixedSlots.withIndex()) {
+                val provider = JeiFixedSlotProviderRegistry.get(fixed.providerId)
+                if (provider == null) {
+                    PrototypeMachinery.logger.warn(
+                        "JEI: missing fixed slot provider '${fixed.providerId}' (recipe='${ctx.recipeId}')."
+                    )
+                    continue
+                }
+
+                val kind = SimpleKind(provider.kindId)
+                val w = fixed.width
+                val h = fixed.height
+                if (w <= 0 || h <= 0) {
+                    PrototypeMachinery.logger.warn(
+                        "JEI: fixed slot '${fixed.providerId}' has invalid size (${w}x${h}) (recipe='${ctx.recipeId}')."
+                    )
+                    continue
+                }
+
+                val slotNodeId = "__fixed:${fixed.providerId.namespace}:${fixed.providerId.path}:$i"
+                val values = try {
+                    provider.getDisplayed(ctx)
+                } catch (t: Throwable) {
+                    PrototypeMachinery.logger.error(
+                        "JEI: fixed slot provider '${fixed.providerId}' failed for recipe='${ctx.recipeId}'.",
+                        t
+                    )
+                    emptyList()
+                }
+
+                val slot = JeiSlot(
+                    kind = kind,
+                    nodeId = slotNodeId,
+                    index = slotCollector.nextIndex(kind),
+                    role = fixed.role,
+                    x = fixed.x,
+                    y = fixed.y,
+                    width = w,
+                    height = h,
+                )
+
+                slotCollector.add(slot)
+                fixedValuesBySlotNodeId[slotNodeId] = values
+            }
+
             return JeiPanelRuntime(
                 ctx = ctx,
                 width = layout.width,
@@ -216,6 +275,7 @@ public class JeiPanelRuntime private constructor(
                 slots = slotCollector.slots,
                 widgets = widgetCollector.widgets,
                 nodeById = nodeById,
+                fixedValuesBySlotNodeId = fixedValuesBySlotNodeId,
             )
         }
 
@@ -243,6 +303,7 @@ public class JeiPanelRuntime private constructor(
     private class PlanBuilder : PMJeiLayoutBuilder {
         val placedNodes: MutableList<PMJeiPlacedNode> = ArrayList()
         val decorators: MutableList<PMJeiDecoratorPlacement> = ArrayList()
+        val fixedSlots: MutableList<PMJeiFixedSlotPlacement> = ArrayList()
 
         override fun placeNode(nodeId: String, x: Int, y: Int, variantId: net.minecraft.util.ResourceLocation?) {
             placedNodes += PMJeiPlacedNode(nodeId = nodeId, x = x, y = y, variantId = variantId)
@@ -256,7 +317,27 @@ public class JeiPanelRuntime private constructor(
         ) {
             decorators += PMJeiDecoratorPlacement(decoratorId = decoratorId, x = x, y = y, data = data)
         }
+
+        override fun placeFixedSlot(
+            providerId: ResourceLocation,
+            role: JeiSlotRole,
+            x: Int,
+            y: Int,
+            width: Int,
+            height: Int,
+        ) {
+            fixedSlots += PMJeiFixedSlotPlacement(
+                providerId = providerId,
+                role = role,
+                x = x,
+                y = y,
+                width = width,
+                height = height,
+            )
+        }
     }
+
+    private data class SimpleKind(override val id: ResourceLocation) : JeiSlotKind
 
     private class RequirementsView(
         override val all: List<PMJeiRequirementNode<out RecipeRequirementComponent>>,

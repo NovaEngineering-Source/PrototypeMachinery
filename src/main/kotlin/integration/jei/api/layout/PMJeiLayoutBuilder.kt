@@ -1,5 +1,6 @@
 package github.kasuminova.prototypemachinery.integration.jei.api.layout
 
+import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotRole
 import net.minecraft.util.ResourceLocation
 
 /**
@@ -25,6 +26,25 @@ public interface PMJeiLayoutBuilder {
         y: Int = 0,
         data: Map<String, Any> = emptyMap(),
     )
+
+    /**
+     * Place a fixed (non-recipe-node) ingredient slot.
+     *
+     * The slot's displayed values are provided by [providerId] via registry at runtime.
+     * This creates a real JEI ingredient slot (clickable, hoverable) but it is NOT tied to a requirement node.
+     *
+     * Default implementation is a no-op so existing layouts don't need to care.
+     */
+    public fun placeFixedSlot(
+        providerId: ResourceLocation,
+        role: JeiSlotRole = JeiSlotRole.CATALYST,
+        x: Int,
+        y: Int,
+        width: Int,
+        height: Int,
+    ) {
+        // default no-op
+    }
 }
 
 public data class PMJeiPlacedNode(
@@ -32,6 +52,15 @@ public data class PMJeiPlacedNode(
     public val x: Int,
     public val y: Int,
     public val variantId: ResourceLocation? = null,
+)
+
+public data class PMJeiFixedSlotPlacement(
+    public val providerId: ResourceLocation,
+    public val role: JeiSlotRole = JeiSlotRole.CATALYST,
+    public val x: Int,
+    public val y: Int,
+    public val width: Int,
+    public val height: Int,
 )
 
 public data class PMJeiDecoratorPlacement(

@@ -76,24 +76,32 @@ public class PMMachineRecipeCategory(
             handler.init(recipeLayout, guiHelper, slot, node)
         }
 
-        // 2) Populate groups directly from requirement nodes.
+        // 2) Populate groups: requirement nodes + fixed (node-less) slots.
         for (slot in runtime.slots) {
-            val node = runtime.getNode(slot.nodeId) ?: continue
-
-            val provider = getUnsafeProvider(node.type) as? PMJeiNodeIngredientProvider<RecipeRequirementComponent, Any>
-            if (provider == null) continue
+            val node = runtime.getNode(slot.nodeId)
 
             val handler = JeiIngredientKindRegistry.get(slot.kind.id) as? PMJeiIngredientKindHandler<Any>
             if (handler == null) continue
 
-            val values = provider.getDisplayedUnsafe(ctx, node)
-            if (values.isEmpty()) continue
+            val values: List<Any> = if (node != null) {
+                val provider = getUnsafeProvider(node.type) as? PMJeiNodeIngredientProvider<RecipeRequirementComponent, Any>
+                    ?: continue
 
-            if (provider.kind.id != slot.kind.id) {
-                PrototypeMachinery.logger.warn(
-                    "JEI: provider kind '${provider.kind.id}' does not match slot kind '${slot.kind.id}' " +
-                        "(type='${node.type.id}', nodeId='${node.nodeId}')."
-                )
+                val v = provider.getDisplayedUnsafe(ctx, node)
+                if (v.isEmpty()) continue
+
+                if (provider.kind.id != slot.kind.id) {
+                    PrototypeMachinery.logger.warn(
+                        "JEI: provider kind '${provider.kind.id}' does not match slot kind '${slot.kind.id}' " +
+                            "(type='${node.type.id}', nodeId='${node.nodeId}')."
+                    )
+                }
+
+                v
+            } else {
+                val v = runtime.getFixedValues(slot.nodeId) ?: continue
+                if (v.isEmpty()) continue
+                v
             }
 
             handler.set(recipeLayout, slot, values)
