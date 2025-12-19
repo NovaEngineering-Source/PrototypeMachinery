@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "name": "Example JEI Layout",
+  "canvas": {
+    "width": 176,
+    "height": 96
+  },
+  "elements": [
+    {
+      "id": "energy_in",
+      "type": "energy",
+      "x": 80,
+      "y": 6,
+      "w": 18,
+      "h": 58,
+      "variantId": "prototypemachinery:energy/1x3",
+      "data": {
+        "energyLedYOffset": -1
+      }
+    },
+    {
+      "id": "text_hint",
+      "type": "text",
+      "x": 6,
+      "y": 78,
+      "w": 120,
+      "h": 14,
+      "variantId": "prototypemachinery:text/energy",
+      "data": {
+        "text": "拖拽元素并导出脚本"
+      }
+    }
+  ]
+}

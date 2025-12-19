@@ -29,3 +29,8 @@ logs
 
 # VS Code
 *.code-workspace
+
+# web-editor (Node/Vite)
+web-editor/node_modules
+web-editor/dist
+web-editor/.vite
