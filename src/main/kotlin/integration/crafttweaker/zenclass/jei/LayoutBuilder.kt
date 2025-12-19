@@ -4,6 +4,9 @@ import crafttweaker.annotations.ZenRegister
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiMachineLayoutDefinition
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiRequirementRole
 import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotRole
+import github.kasuminova.prototypemachinery.integration.jei.builtin.JeiBackgroundSpec
+import github.kasuminova.prototypemachinery.integration.jei.builtin.decorator.ProgressArrowJeiDecorator
+import github.kasuminova.prototypemachinery.integration.jei.builtin.decorator.ProgressModuleJeiDecorator
 import github.kasuminova.prototypemachinery.integration.jei.layout.script.AddDecoratorRule
 import github.kasuminova.prototypemachinery.integration.jei.layout.script.AutoPlaceRemainingSpec
 import github.kasuminova.prototypemachinery.integration.jei.layout.script.CountAtLeastCondition
@@ -66,6 +69,27 @@ public class LayoutBuilder {
         return this
     }
 
+    /**
+     * Place a node with a variant and renderer-specific data.
+     *
+     * Example for energy led y offset override:
+     * data = {"energyLedYOffset": -1}
+     */
+    @ZenMethod
+    public fun placeNodeWithVariantAndData(nodeId: String, x: Int, y: Int, variantId: String, data: java.util.Map<*, *>?): LayoutBuilder {
+        val map = coerceDataMap(data)
+        addRule(
+            PlaceByNodeIdRule(
+                nodeId = nodeId,
+                x = x,
+                y = y,
+                variantId = ResourceLocation(variantId),
+                data = map,
+            )
+        )
+        return this
+    }
+
     @ZenMethod
     public fun placeFirst(typeId: String, role: String?, x: Int, y: Int): LayoutBuilder {
         addRule(
@@ -90,6 +114,29 @@ public class LayoutBuilder {
                 x = x,
                 y = y,
                 variantId = ResourceLocation(variantId),
+            )
+        )
+        return this
+    }
+
+    /**
+     * Place the first matching node with a variant and renderer-specific data.
+     *
+     * Example for energy led y offset override:
+     * data = {"energyLedYOffset": -1}
+     */
+    @ZenMethod
+    public fun placeFirstWithVariantAndData(typeId: String, role: String?, x: Int, y: Int, variantId: String, data: java.util.Map<*, *>?): LayoutBuilder {
+        val map = coerceDataMap(data)
+        addRule(
+            PlaceFirstRule(
+                typeId = ResourceLocation(typeId),
+                role = parseRole(role),
+                mergePerTick = mergePerTickRoles,
+                x = x,
+                y = y,
+                variantId = ResourceLocation(variantId),
+                data = map,
             )
         )
         return this
@@ -140,6 +187,25 @@ public class LayoutBuilder {
                 stepX = stepX,
                 stepY = stepY,
                 variantId = ResourceLocation(variantId),
+            )
+        )
+        return this
+    }
+
+    @ZenMethod
+    public fun placeAllLinearWithVariantAndData(typeId: String, role: String?, startX: Int, startY: Int, stepX: Int, stepY: Int, variantId: String, data: java.util.Map<*, *>?): LayoutBuilder {
+        val map = coerceDataMap(data)
+        addRule(
+            PlaceAllLinearRule(
+                typeId = ResourceLocation(typeId),
+                role = parseRole(role),
+                mergePerTick = mergePerTickRoles,
+                startX = startX,
+                startY = startY,
+                stepX = stepX,
+                stepY = stepY,
+                variantId = ResourceLocation(variantId),
+                data = map,
             )
         )
         return this
@@ -203,6 +269,27 @@ public class LayoutBuilder {
     }
 
     @ZenMethod
+    public fun placeGridWithVariantAndData(typeId: String, role: String?, startX: Int, startY: Int, cols: Int, rows: Int, cellW: Int, cellH: Int, variantId: String, data: java.util.Map<*, *>?): LayoutBuilder {
+        val map = coerceDataMap(data)
+        addRule(
+            PlaceGridRule(
+                typeId = ResourceLocation(typeId),
+                role = parseRole(role),
+                mergePerTick = mergePerTickRoles,
+                startX = startX,
+                startY = startY,
+                cols = cols,
+                rows = rows,
+                cellW = cellW,
+                cellH = cellH,
+                variantId = ResourceLocation(variantId),
+                data = map,
+            )
+        )
+        return this
+    }
+
+    @ZenMethod
     public fun addDecorator(decoratorId: String, x: Int, y: Int): LayoutBuilder {
         addRule(AddDecoratorRule(decoratorId = ResourceLocation(decoratorId), x = x, y = y))
         return this
@@ -212,6 +299,48 @@ public class LayoutBuilder {
     public fun addDecoratorWithData(decoratorId: String, x: Int, y: Int, data: java.util.Map<*, *>?): LayoutBuilder {
         val map = coerceDataMap(data)
         addRule(AddDecoratorRule(decoratorId = ResourceLocation(decoratorId), x = x, y = y, data = map))
+        return this
+    }
+
+    /**
+     * Override the default JEI panel background.
+     *
+     * @param texture Either:
+     * - a path relative to `prototypemachinery:textures/gui/jei_recipeicons/` (e.g. "jei_base.png")
+     * - or a full resource location string (e.g. "mymod:textures/gui/foo.png")
+     * @param borderPx Border thickness in pixels (default 2).
+     * @param fillCenter If true, fill center with sampled solid color instead of stretching.
+     */
+    @ZenMethod
+    public fun setBackgroundNineSlice(texture: String, borderPx: Int, fillCenter: Boolean): LayoutBuilder {
+        val data = HashMap<String, Any>()
+        data["texture"] = texture
+        data["borderPx"] = borderPx
+        data["fillCenter"] = fillCenter
+        addRule(AddDecoratorRule(decoratorId = JeiBackgroundSpec.id, x = 0, y = 0, data = data))
+        return this
+    }
+
+    @ZenMethod
+    public fun setBackgroundNineSlice(texture: String): LayoutBuilder {
+        return setBackgroundNineSlice(texture, 2, false)
+    }
+
+    @ZenMethod
+    public fun addProgressArrow(x: Int, y: Int, style: String?, direction: String?): LayoutBuilder {
+        val data = HashMap<String, Any>()
+        if (style != null) data["style"] = style
+        if (direction != null) data["direction"] = direction
+        addRule(AddDecoratorRule(decoratorId = ProgressArrowJeiDecorator.id, x = x, y = y, data = data))
+        return this
+    }
+
+    @ZenMethod
+    public fun addProgressModule(type: String, x: Int, y: Int, direction: String?): LayoutBuilder {
+        val data = HashMap<String, Any>()
+        data["type"] = type
+        if (direction != null) data["direction"] = direction
+        addRule(AddDecoratorRule(decoratorId = ProgressModuleJeiDecorator.id, x = x, y = y, data = data))
         return this
     }
 
@@ -348,6 +477,24 @@ public class ConditionalLayoutBuilder internal constructor(
     }
 
     @ZenMethod
+    public fun placeFirstWithVariantAndData(typeId: String, role: String?, x: Int, y: Int, variantId: String, data: java.util.Map<*, *>?): ConditionalLayoutBuilder {
+        val map = parentCoerceDataMap(data)
+        parent.addRule(
+            PlaceFirstRule(
+                condition = condition,
+                typeId = ResourceLocation(typeId),
+                role = parentWhenParseRole(role),
+                mergePerTick = parentWhenMergePerTick(),
+                x = x,
+                y = y,
+                variantId = ResourceLocation(variantId),
+                data = map,
+            )
+        )
+        return this
+    }
+
+    @ZenMethod
     public fun placeGrid(typeId: String, role: String?, startX: Int, startY: Int, cols: Int, rows: Int, cellW: Int, cellH: Int): ConditionalLayoutBuilder {
         parent.addRule(
             PlaceGridRule(
@@ -367,6 +514,28 @@ public class ConditionalLayoutBuilder internal constructor(
     }
 
     @ZenMethod
+    public fun placeGridWithVariantAndData(typeId: String, role: String?, startX: Int, startY: Int, cols: Int, rows: Int, cellW: Int, cellH: Int, variantId: String, data: java.util.Map<*, *>?): ConditionalLayoutBuilder {
+        val map = parentCoerceDataMap(data)
+        parent.addRule(
+            PlaceGridRule(
+                condition = condition,
+                typeId = ResourceLocation(typeId),
+                role = parentWhenParseRole(role),
+                mergePerTick = parentWhenMergePerTick(),
+                startX = startX,
+                startY = startY,
+                cols = cols,
+                rows = rows,
+                cellW = cellW,
+                cellH = cellH,
+                variantId = ResourceLocation(variantId),
+                data = map,
+            )
+        )
+        return this
+    }
+
+    @ZenMethod
     public fun addDecorator(decoratorId: String, x: Int, y: Int): ConditionalLayoutBuilder {
         parent.addRule(
             AddDecoratorRule(
@@ -374,6 +543,72 @@ public class ConditionalLayoutBuilder internal constructor(
                 decoratorId = ResourceLocation(decoratorId),
                 x = x,
                 y = y,
+            )
+        )
+        return this
+    }
+
+    /**
+     * Override the default JEI panel background.
+     *
+     * @param texture Either:
+     * - a path relative to `prototypemachinery:textures/gui/jei_recipeicons/` (e.g. "jei_base.png")
+     * - or a full resource location string (e.g. "mymod:textures/gui/foo.png")
+     * @param borderPx Border thickness in pixels (default 2).
+     * @param fillCenter If true, fill center with sampled solid color instead of stretching.
+     */
+    @ZenMethod
+    public fun setBackgroundNineSlice(texture: String, borderPx: Int, fillCenter: Boolean): ConditionalLayoutBuilder {
+        val data = HashMap<String, Any>()
+        data["texture"] = texture
+        data["borderPx"] = borderPx
+        data["fillCenter"] = fillCenter
+        parent.addRule(
+            AddDecoratorRule(
+                condition = condition,
+                decoratorId = JeiBackgroundSpec.id,
+                x = 0,
+                y = 0,
+                data = data
+            )
+        )
+        return this
+    }
+
+    @ZenMethod
+    public fun setBackgroundNineSlice(texture: String): ConditionalLayoutBuilder {
+        return setBackgroundNineSlice(texture, 2, false)
+    }
+
+    @ZenMethod
+    public fun addProgressArrow(x: Int, y: Int, style: String?, direction: String?): ConditionalLayoutBuilder {
+        val data = HashMap<String, Any>()
+        if (style != null) data["style"] = style
+        if (direction != null) data["direction"] = direction
+        parent.addRule(
+            AddDecoratorRule(
+                condition = condition,
+                decoratorId = ProgressArrowJeiDecorator.id,
+                x = x,
+                y = y,
+                data = data
+            )
+        )
+        return this
+    }
+
+    @ZenMethod
+    public fun addProgressModule(type: String, x: Int, y: Int, direction: String?): ConditionalLayoutBuilder {
+        val data = HashMap<String, Any>()
+        data["type"] = type
+        if (direction != null) data["direction"] = direction
+        parent.addRule(
+            AddDecoratorRule(
+                condition = condition,
+                decoratorId = ProgressModuleJeiDecorator.id,
+                x = x,
+                y = y,
+                data = data
             )
         )
         return this
@@ -428,5 +663,18 @@ public class ConditionalLayoutBuilder internal constructor(
 
     private fun parentWhenMergePerTick(): Boolean {
         return parent.isMergePerTickRolesEnabled()
+    }
+
+    private fun parentCoerceDataMap(raw: java.util.Map<*, *>?): Map<String, Any> {
+        // Keep coercion logic in sync with LayoutBuilder#coerceDataMap; duplicate is fine for ZenScript surface.
+        if (raw == null) return emptyMap()
+
+        val out = LinkedHashMap<String, Any>()
+        for (entry in raw.entrySet()) {
+            val key = entry.key as? String ?: continue
+            val v = entry.value ?: continue
+            out[key] = v
+        }
+        return out
     }
 }

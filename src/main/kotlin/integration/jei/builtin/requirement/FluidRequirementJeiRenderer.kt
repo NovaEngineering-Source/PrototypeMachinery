@@ -1,5 +1,9 @@
 package github.kasuminova.prototypemachinery.integration.jei.builtin.requirement
 
+import com.cleanroommc.modularui.drawable.GuiDraw
+import com.cleanroommc.modularui.screen.viewport.ModularGuiContext
+import com.cleanroommc.modularui.theme.WidgetThemeEntry
+import com.cleanroommc.modularui.widget.Widget
 import github.kasuminova.prototypemachinery.api.key.PMKey
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
@@ -9,11 +13,13 @@ import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiRequ
 import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlot
 import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotCollector
 import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotKinds
+import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotOverlay
 import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotRole
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRendererVariant
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementNode
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementRenderer
 import github.kasuminova.prototypemachinery.integration.jei.api.ui.PMJeiWidgetCollector
+import github.kasuminova.prototypemachinery.integration.jei.builtin.PMJeiIcons
 import net.minecraft.util.ResourceLocation
 import net.minecraftforge.fluids.FluidStack
 
@@ -41,7 +47,7 @@ public object FluidRequirementJeiRenderer : PMJeiRequirementRenderer<FluidRequir
         TankVariant(VARIANT_TANK_16x58, 16, 58),
         TankVariant(VARIANT_TANK_16x34, 16, 34),
         TankVariant(VARIANT_TANK_24x58, 24, 58),
-    )
+    ) + PMJeiIcons.ALL_VARIANTS.values.filter { it.id.path.startsWith("fluid/") }
 
     override val type: RecipeRequirementType<FluidRequirementComponent> = RecipeRequirementTypes.FLUID
 
@@ -90,6 +96,34 @@ public object FluidRequirementJeiRenderer : PMJeiRequirementRenderer<FluidRequir
             else -> JeiSlotRole.CATALYST
         }
 
+        // Fluid module spec:
+        // - base is drawn behind the fluid
+        // - fluid is rendered at (1,1,w-2,h-2)
+        // - top is drawn above the fluid, and contains the visible border/frame
+        // (see: jei_recipeicons/fluid_module/fluid_module.md)
+        //
+        // In JEI, the "overlay" drawable is clipped to the declared slot bounds.
+        // Therefore, to keep the frame visible, we declare the slot at FULL module size
+        // and use the full *_top.png as the overlay (no 1px cropping).
+        val isModuleVariant = variant.id.path.startsWith("fluid/")
+        val slotX = x
+        val slotY = y
+        val slotW = variant.width
+        val slotH = variant.height
+
+        val overlay: JeiSlotOverlay? = if (isModuleVariant) {
+            val overlayTex = resolveFluidModuleOverlayTex(variant)
+            JeiSlotOverlay(
+                texture = overlayTex,
+                u = 0,
+                v = 0,
+                width = variant.width,
+                height = variant.height,
+                textureWidth = variant.width,
+                textureHeight = variant.height,
+            )
+        } else null
+
         val index = out.nextIndex(JeiSlotKinds.FLUID)
         out.add(
             JeiSlot(
@@ -97,10 +131,11 @@ public object FluidRequirementJeiRenderer : PMJeiRequirementRenderer<FluidRequir
                 nodeId = node.nodeId,
                 index = index,
                 role = role,
-                x = x,
-                y = y,
-                width = variant.width,
-                height = variant.height,
+                x = slotX,
+                y = slotY,
+                width = slotW,
+                height = slotH,
+                overlay = overlay,
             )
         )
     }
@@ -113,7 +148,48 @@ public object FluidRequirementJeiRenderer : PMJeiRequirementRenderer<FluidRequir
         y: Int,
         out: PMJeiWidgetCollector,
     ) {
-        // Intentionally empty for now (JEI draws tanks itself).
+        if (variant.id.path.startsWith("fluid/")) {
+            out.add(FluidModuleWidget(variant).pos(x, y))
+        }
+    }
+
+    private class FluidModuleWidget(
+        private val variant: PMJeiRendererVariant
+    ) : Widget<FluidModuleWidget>() {
+
+        private val baseTex: ResourceLocation
+
+        init {
+            val key = when (variant.id) {
+                PMJeiIcons.FLUID_PLAID_1X1 -> "1_1_plaid"
+                else -> variant.id.path
+                    .removePrefix("fluid/")
+                    .replace("x", "_")
+            }
+            // Most fluid module textures live under `fluid_module/`.
+            // However, the 0.5x1 preset (0o5_1_*) is currently shipped under `gas_module/`.
+            // We keep a small fallback here so `fluid/0o5x1` does not hard-fail at runtime.
+            val moduleDir = if (key == "0o5_1") "gas_module" else "fluid_module"
+            baseTex = PMJeiIcons.tex("$moduleDir/${key}_base.png")
+
+            size(variant.width, variant.height)
+        }
+
+        override fun draw(context: ModularGuiContext, widgetTheme: WidgetThemeEntry<*>) {
+            // Base/frame goes behind the JEI-rendered fluid.
+            GuiDraw.drawTexture(baseTex, 0f, 0f, area.width.toFloat(), area.height.toFloat(), 0f, 0f, 1f, 1f)
+        }
+    }
+
+    private fun resolveFluidModuleOverlayTex(variant: PMJeiRendererVariant): ResourceLocation {
+        val key = when (variant.id) {
+            PMJeiIcons.FLUID_PLAID_1X1 -> "1_1_plaid"
+            else -> variant.id.path
+                .removePrefix("fluid/")
+                .replace("x", "_")
+        }
+        val moduleDir = if (key == "0o5_1") "gas_module" else "fluid_module"
+        return PMJeiIcons.tex("$moduleDir/${key}_top.png")
     }
 
     /**

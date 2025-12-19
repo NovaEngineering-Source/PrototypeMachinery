@@ -10,27 +10,20 @@ import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiLayo
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiMachineLayoutDefinition
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiRequirementRole
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementRenderer
-import github.kasuminova.prototypemachinery.integration.jei.builtin.decorator.ProgressArrowJeiDecorator
+import github.kasuminova.prototypemachinery.integration.jei.builtin.PMJeiIcons
+import github.kasuminova.prototypemachinery.integration.jei.builtin.decorator.ProgressModuleJeiDecorator
 import github.kasuminova.prototypemachinery.integration.jei.builtin.decorator.RecipeDurationTextJeiDecorator
-import github.kasuminova.prototypemachinery.integration.jei.builtin.requirement.FluidRequirementJeiRenderer
-import github.kasuminova.prototypemachinery.integration.jei.builtin.requirement.ItemRequirementJeiRenderer
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiRequirementRendererRegistry
 import net.minecraft.util.ResourceLocation
 
 /**
- * Default auto layout.
- *
- * Goals:
- * - Always show something useful without machine-specific layout.
- * - Put inputs on the left and outputs on the right.
- * - Prefer item slots and one/two fluid tanks per side.
- * - Render energy requirements as text in the middle.
+ * Default auto layout using the new plaid and module assets.
  */
 public object DefaultJeiMachineLayout : PMJeiMachineLayoutDefinition {
 
-    override val width: Int = 160
+    override val width: Int = 170
 
-    override val height: Int = 80
+    override val height: Int = 82
 
     override fun build(
         ctx: JeiRecipeContext,
@@ -40,7 +33,6 @@ public object DefaultJeiMachineLayout : PMJeiMachineLayoutDefinition {
         val pad = 4
 
         // Track which nodes are explicitly placed by this default layout.
-        // Any remaining nodes (addon requirement types) will be auto-placed later.
         val placed: MutableSet<String> = HashSet()
         val trackingOut = object : PMJeiLayoutBuilder {
             override fun placeNode(nodeId: String, x: Int, y: Int, variantId: ResourceLocation?) {
@@ -71,9 +63,9 @@ public object DefaultJeiMachineLayout : PMJeiMachineLayoutDefinition {
             var y = startY
             for (row in 0 until maxRows) {
                 if (idx >= nodes.size) break
-                trackingOut.placeNode(nodes[idx++], x0, y, ItemRequirementJeiRenderer.VARIANT_SLOT_18)
+                trackingOut.placeNode(nodes[idx++], x0, y, PMJeiIcons.ITEM_PLAID)
                 if (idx >= nodes.size) break
-                trackingOut.placeNode(nodes[idx++], x1, y, ItemRequirementJeiRenderer.VARIANT_SLOT_18)
+                trackingOut.placeNode(nodes[idx++], x1, y, PMJeiIcons.ITEM_PLAID)
                 y += itemH + itemGap
             }
             return idx
@@ -86,22 +78,19 @@ public object DefaultJeiMachineLayout : PMJeiMachineLayoutDefinition {
             .filter { it.component is ItemRequirementComponent }
             .map { it.nodeId }
 
-        // Limit grid to available height.
         val maxItemRows = ((height - pad * 2 + itemGap) / (itemH + itemGap)).coerceAtLeast(1)
 
         placeItemGrid(itemInputs, leftItemX0, leftItemX1, pad, maxItemRows)
         placeItemGrid(itemOutputs, rightItemX0, rightItemX1, pad, maxItemRows)
 
         // ------------------------------------------
-        // Fluids: one column per side, use tank variant
+        // Fluids: one column per side
         // ------------------------------------------
-        val tankMain: ResourceLocation = FluidRequirementJeiRenderer.VARIANT_TANK_16x58
-        val tankSmall: ResourceLocation = FluidRequirementJeiRenderer.VARIANT_TANK_16x34
-
-        val tankW = 16
+        val tankMain = PMJeiIcons.FLUID_1X3 // 18x54
+        val tankSmall = PMJeiIcons.FLUID_1X1 // 18x18
+        val tankW = 18
         val tankGap = 4
 
-        // Put fluid tanks next to item grids.
         val leftTankX = leftItemX1 + itemW + tankGap
         val rightTankX = rightItemX0 - tankGap - tankW
 
@@ -112,105 +101,74 @@ public object DefaultJeiMachineLayout : PMJeiMachineLayoutDefinition {
             .filter { it.component is FluidRequirementComponent }
             .map { it.nodeId }
 
-        // Prefer one big tank per side.
         fluidInputs.firstOrNull()?.let { trackingOut.placeNode(it, leftTankX, pad, tankMain) }
         fluidOutputs.firstOrNull()?.let { trackingOut.placeNode(it, rightTankX, pad, tankMain) }
 
-        // Per-tick fluids (if any): show as smaller tanks near bottom.
-        val fluidInputsPerTick = requirements.byRole(PMJeiRequirementRole.INPUT_PER_TICK)
-            .filter { it.component is FluidRequirementComponent }
-            .map { it.nodeId }
-        val fluidOutputsPerTick = requirements.byRole(PMJeiRequirementRole.OUTPUT_PER_TICK)
-            .filter { it.component is FluidRequirementComponent }
-            .map { it.nodeId }
-
-        val smallTankY = (height - pad - 34).coerceAtLeast(pad)
-        fluidInputsPerTick.firstOrNull()?.let { trackingOut.placeNode(it, leftTankX, smallTankY, tankSmall) }
-        fluidOutputsPerTick.firstOrNull()?.let { trackingOut.placeNode(it, rightTankX, smallTankY, tankSmall) }
+        val smallTankY = (height - pad - 18).coerceAtLeast(pad)
+        fluidInputs.getOrNull(1)?.let { trackingOut.placeNode(it, leftTankX, smallTankY, tankSmall) }
+        fluidOutputs.getOrNull(1)?.let { trackingOut.placeNode(it, rightTankX, smallTankY, tankSmall) }
 
         // ------------------------------------------
-        // Energy: show up to 4 lines in the middle.
+        // Energy & Progress: Center Area
         // ------------------------------------------
-        val midX = (width / 2) - 40
-        var energyY = pad
+        val midAreaX = leftTankX + tankW + tankGap
+        val midAreaW = rightTankX - tankGap - midAreaX
+        val midX = midAreaX + midAreaW / 2
 
-        fun placeEnergy(role: PMJeiRequirementRole) {
-            val nodes = requirements.byRole(role)
-                .filter { it.component is EnergyRequirementComponent }
-                .map { it.nodeId }
-            for (id in nodes) {
-                trackingOut.placeNode(id, midX, energyY, null)
-                energyY += 10
-            }
+        // Energy Bar (18x54)
+        val energyNodes = requirements.all.filter { it.component is EnergyRequirementComponent }
+        if (energyNodes.isNotEmpty()) {
+            trackingOut.placeNode(energyNodes[0].nodeId, midAreaX, pad, PMJeiIcons.ENERGY_1X3)
         }
 
-        placeEnergy(PMJeiRequirementRole.INPUT)
-        placeEnergy(PMJeiRequirementRole.OUTPUT)
-        placeEnergy(PMJeiRequirementRole.INPUT_PER_TICK)
-        placeEnergy(PMJeiRequirementRole.OUTPUT_PER_TICK)
+        // Progress Module (24x17)
+        val progressX = midX - 12
+        val progressY = (height - 17) / 2
+        trackingOut.addDecorator(
+            decoratorId = ProgressModuleJeiDecorator.id,
+            x = progressX,
+            y = progressY,
+            data = mapOf(
+                "type" to "right",
+                "direction" to "RIGHT",
+                "cycleTicks" to ctx.recipe.durationTicks.coerceAtLeast(1)
+            )
+        )
 
-        // Parallelism (non-ingredient text)
+        // Duration Text
+        trackingOut.addDecorator(
+            decoratorId = RecipeDurationTextJeiDecorator.id,
+            x = midX - 30,
+            y = progressY + 20,
+            data = mapOf(
+                "width" to 60,
+                "height" to 10,
+                "align" to "CENTER",
+                "template" to "{ticks} t",
+                "shadow" to true
+            )
+        )
+
+        // Parallelism (if any)
         val parallelismNodes = requirements.byRole(PMJeiRequirementRole.OTHER)
             .filter { it.component is ParallelismRequirementComponent }
             .map { it.nodeId }
-        for (id in parallelismNodes) {
-            trackingOut.placeNode(id, midX, energyY, null)
-            energyY += 10
-        }
-
-        // Optional: if the center area ended up unused (no energy/parallelism text), show a progress arrow + duration.
-        val hasEnergyText = requirements.byRole(PMJeiRequirementRole.INPUT).any { it.component is EnergyRequirementComponent } ||
-            requirements.byRole(PMJeiRequirementRole.OUTPUT).any { it.component is EnergyRequirementComponent } ||
-            requirements.byRole(PMJeiRequirementRole.INPUT_PER_TICK).any { it.component is EnergyRequirementComponent } ||
-            requirements.byRole(PMJeiRequirementRole.OUTPUT_PER_TICK).any { it.component is EnergyRequirementComponent }
-
-        val hasParallelismText = parallelismNodes.isNotEmpty()
-
-        if (!hasEnergyText && !hasParallelismText) {
-            val centerArrowX = (width - 20) / 2
-            val centerArrowY = (height - 20) / 2
-            trackingOut.addDecorator(
-                decoratorId = ProgressArrowJeiDecorator.id,
-                x = centerArrowX,
-                y = centerArrowY,
-                data = mapOf(
-                    "style" to "arrow",
-                    "direction" to "RIGHT",
-                    "cycleTicks" to ctx.recipe.durationTicks.coerceAtLeast(1),
-                ),
-            )
-            trackingOut.addDecorator(
-                decoratorId = RecipeDurationTextJeiDecorator.id,
-                x = (width - 80) / 2,
-                y = centerArrowY + 22,
-                data = mapOf(
-                    "width" to 80,
-                    "height" to 10,
-                    "align" to "CENTER",
-                    "template" to "{ticks} t",
-                    "shadow" to true,
-                ),
-            )
+        if (parallelismNodes.isNotEmpty()) {
+            trackingOut.placeNode(parallelismNodes[0], midX - 30, progressY - 15, null)
         }
 
         // ------------------------------------------
-        // Fallback: auto-place any remaining nodes (addon requirement types)
+        // Fallback: auto-place any remaining nodes
         // ------------------------------------------
         val remaining = requirements.all.filter { it.nodeId !in placed }
         if (remaining.isNotEmpty()) {
-            var x = midX
-            var y = (energyY + 2).coerceAtMost(height - pad)
-            if (y > height - pad - 10) {
-                // If the text stack already consumed most space, start from top of the middle area.
-                y = pad
-            }
-
-            val maxX = width - pad
+            var x = midAreaX
+            var y = pad + 60 // Below energy/progress if possible
+            val maxX = rightTankX - tankGap
             var rowH = 0
 
             for (n in remaining) {
                 val renderer = getUnsafeRenderer(n.type) ?: continue
-
                 @Suppress("UNCHECKED_CAST")
                 val castNode = n as github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementNode<github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent>
                 val variant = renderer.defaultVariant(ctx, castNode)
@@ -219,15 +177,11 @@ public object DefaultJeiMachineLayout : PMJeiMachineLayoutDefinition {
                 val h = variant.height.coerceAtLeast(1)
 
                 if (x + w > maxX) {
-                    x = midX
+                    x = midAreaX
                     y += rowH + 2
                     rowH = 0
                 }
-
-                if (y + h > height - pad) {
-                    // No more space; stop placing.
-                    break
-                }
+                if (y + h > height - pad) break
 
                 trackingOut.placeNode(n.nodeId, x, y, variant.id)
                 x += w + 2

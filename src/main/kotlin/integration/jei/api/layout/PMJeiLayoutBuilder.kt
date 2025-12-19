@@ -19,6 +19,21 @@ public interface PMJeiLayoutBuilder {
         variantId: ResourceLocation? = null,
     )
 
+    /**
+     * Place a requirement node on the JEI background with optional, renderer-specific data.
+     *
+     * Default implementation ignores data for backward compatibility.
+     */
+    public fun placeNodeWithData(
+        nodeId: String,
+        x: Int,
+        y: Int,
+        variantId: ResourceLocation? = null,
+        data: Map<String, Any> = emptyMap(),
+    ) {
+        placeNode(nodeId, x, y, variantId)
+    }
+
     /** Add a decorator instance. Decorator may interpret x/y as its anchor. */
     public fun addDecorator(
         decoratorId: ResourceLocation,
@@ -52,6 +67,7 @@ public data class PMJeiPlacedNode(
     public val x: Int,
     public val y: Int,
     public val variantId: ResourceLocation? = null,
+    public val data: Map<String, Any> = emptyMap(),
 )
 
 public data class PMJeiFixedSlotPlacement(

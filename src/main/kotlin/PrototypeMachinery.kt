@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery
 
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.common.CommonProxy
+import github.kasuminova.prototypemachinery.common.command.SchedulerServerCommand
 import github.kasuminova.prototypemachinery.common.handler.CraftTweakerReloadHandler
 import github.kasuminova.prototypemachinery.common.network.NetworkHandler
 import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
@@ -16,6 +17,7 @@ import net.minecraftforge.fml.common.SidedProxy
 import net.minecraftforge.fml.common.event.FMLInitializationEvent
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent
+import net.minecraftforge.fml.common.event.FMLServerStartingEvent
 import net.minecraftforge.fml.common.event.FMLServerStoppingEvent
 import org.apache.logging.log4j.Logger
 
@@ -106,6 +108,12 @@ public object PrototypeMachinery {
         )
 
         proxy.postInit()
+    }
+
+    @Mod.EventHandler
+    internal fun serverStarting(event: FMLServerStartingEvent) {
+        // Server-side debug/admin command for scheduler control.
+        event.registerServerCommand(SchedulerServerCommand)
     }
 
     @Mod.EventHandler

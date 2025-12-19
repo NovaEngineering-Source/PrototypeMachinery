@@ -438,6 +438,34 @@ val layout = PMJEI.createLayoutSized(176, 96)
 LayoutRegistry.register(MACHINE_ID, layout);
 ```
 
+### 节点 placement data：按元素覆盖渲染细节（例如能量条 LED yOffset）
+
+部分内置 widget 支持从 layout 里读取“placement data”（一个 `Map<String, Any>`），用于做每个元素的细粒度调整。
+
+目前支持：能量条顶部 IO LED 的 Y 偏移（像素）。key：`"energyLedYOffset"`。
+
+```zenscript
+#loader crafttweaker reloadable
+
+import mods.prototypemachinery.jei.PMJEI;
+import mods.prototypemachinery.jei.LayoutRegistry;
+
+val MACHINE_ID = "prototypemachinery:example_recipe_processor";
+
+val layout = PMJEI.createLayoutSized(176, 96)
+    // 将能量条放在某处，并把 LED 往上挪 1 像素（-1）
+    .placeFirstWithVariantAndData(
+        "prototypemachinery:energy", "INPUT",
+        80, 6,
+        "prototypemachinery:energy/1x3",
+        {"energyLedYOffset": -1}
+    );
+
+LayoutRegistry.register(MACHINE_ID, layout);
+```
+
+如果未提供该 key，则会使用配置文件 `config/prototypemachinery_jei.cfg` 中的 `ui.energyLedYOffset` 作为默认值。
+
 ### 条件化（动态显示）的最小能力
 
 目前 ZenScript builder 支持基于“某类 node 数量”的条件：

@@ -54,4 +54,21 @@ public interface PMJeiRequirementRenderer<C : RecipeRequirementComponent> {
         y: Int,
         out: PMJeiWidgetCollector,
     )
+
+    /**
+     * Build widgets with optional, renderer-specific placement data.
+     *
+     * Default implementation ignores data and delegates to [buildWidgets] for backward compatibility.
+     */
+    public fun buildWidgetsWithData(
+        ctx: JeiRecipeContext,
+        node: PMJeiRequirementNode<C>,
+        variant: PMJeiRendererVariant,
+        x: Int,
+        y: Int,
+        data: Map<String, Any>,
+        out: PMJeiWidgetCollector,
+    ) {
+        buildWidgets(ctx, node, variant, x, y, out)
+    }
 }

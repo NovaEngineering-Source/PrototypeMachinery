@@ -6,6 +6,30 @@
 
 ## 文件说明
 
+### jei_demo_machine_registration.zs
+
+JEI 演示机器注册（多 IO）示例脚本：
+
+- #loader preinit
+- 注册 3 台 demo 机器（A/B/C），均使用 `example_recipe_processor_machine_io_demo` 结构
+- 三台机器分别绑定不同 recipe group，便于在 JEI 中展示不同布局风格
+
+### jei_demo_recipes.zs
+
+JEI 演示配方脚本：
+
+- #loader crafttweaker reloadable
+- 为 A/B/C 三个 group 分别提供多条配方
+- 覆盖 item / fluid / energy 的输入输出，并包含 per-tick（*_PER_TICK）示例
+
+### jei_demo_layouts.zs
+
+JEI 演示布局脚本：
+
+- #loader crafttweaker reloadable
+- 为 demo 机器 A/B/C 注册 3 套不同风格的 JEI layout（不同尺寸、分区、decorator、fixed slot）
+- 使用新版 nine-slice 背景与 module 美术变体
+
 ### machine_registration.zs
 
 机器注册示例脚本，展示了如何：
@@ -56,10 +80,13 @@
 
 ## 注意事项
 
-- 脚本必须使用 `#loader preinit` 加载器
-- 机器ID必须唯一
-- 引用的结构JSON文件必须存在
-- CraftTweaker的错误会在日志中显示
+- **机器注册**通常必须使用 `#loader preinit`（否则机器定义阶段可能错过注册时机）。
+- **配方 / JEI layout** 建议使用 `#loader postinit` 或 `#loader crafttweaker reloadable`，便于解析物品/流体并支持 `/mt reload`。
+- 机器 ID 必须唯一。
+- 引用的结构 JSON 文件必须存在。
+- CraftTweaker 的错误会在日志中显示。
+
+> 备注：旧的 `jei_layout_example.zs` 已弃用，不再自动注册任何布局；请以 demo 三件套为准。
 
 ## 相关文档
 

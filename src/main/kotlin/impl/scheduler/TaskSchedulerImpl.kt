@@ -3,17 +3,13 @@ package github.kasuminova.prototypemachinery.impl.scheduler
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.scheduler.ExecutionMode
 import github.kasuminova.prototypemachinery.api.scheduler.ISchedulable
-import github.kasuminova.prototypemachinery.api.scheduler.SchedulingAffinity
 import github.kasuminova.prototypemachinery.api.scheduler.TaskScheduler
+import github.kasuminova.prototypemachinery.common.config.PmSchedulerConfig
+import github.kasuminova.prototypemachinery.impl.scheduler.backend.CoroutineTaskSchedulerBackend
+import github.kasuminova.prototypemachinery.impl.scheduler.backend.JavaTaskSchedulerBackend
+import github.kasuminova.prototypemachinery.impl.scheduler.backend.TaskSchedulerBackend
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent
 import net.minecraftforge.fml.common.gameevent.TickEvent
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.Future
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Implementation of TaskScheduler.
@@ -27,347 +23,174 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 internal object TaskSchedulerImpl : TaskScheduler {
 
-    private val mainThreadTasks = ConcurrentHashMap.newKeySet<ISchedulable>()
-    private val concurrentTasks = ConcurrentHashMap.newKeySet<ISchedulable>()
-
-    private val customMainThreadTasks = ConcurrentLinkedQueue<Runnable>()
-    private val customConcurrentTasks = ConcurrentLinkedQueue<Runnable>()
-
-    private val threadCounter = AtomicInteger(0)
+    private val state: SchedulerState = SchedulerState()
 
     @Volatile
-    private var isShutdown = false
+    private var isShutdown: Boolean = false
 
-    // Thread pool for concurrent execution
-    // 并发执行的线程池
-    private var executorService: ExecutorService = createExecutorService()
+    @Volatile
+    private var settings: SchedulerRuntimeSettings = readSettingsFromConfig()
 
-    // Single-thread lanes for affinity grouped tasks.
-    // 用于 affinity 分组任务的单线程 lanes。
-    private var laneExecutors: Array<ExecutorService> = createLaneExecutors()
+    private val metrics: SchedulerMetrics = SchedulerMetrics(settings.metricsWindowTicks)
 
-    private fun createExecutorService(): ExecutorService = Executors.newFixedThreadPool(
-        Runtime.getRuntime().availableProcessors().coerceAtLeast(2)
-    ) { runnable ->
-        Thread(runnable, "PrototypeMachinery-Scheduler-${threadCounter.incrementAndGet()}").apply {
-            isDaemon = true
-            priority = Thread.NORM_PRIORITY + 1
-        }
-    }
-
-    private fun createLaneExecutors(): Array<ExecutorService> {
-        val lanes = Runtime.getRuntime().availableProcessors().coerceIn(2, 8)
-        return Array(lanes) { lane ->
-            Executors.newSingleThreadExecutor { runnable ->
-                Thread(runnable, "PrototypeMachinery-Scheduler-Lane-${lane + 1}").apply {
-                    isDaemon = true
-                    priority = Thread.NORM_PRIORITY + 1
-                }
-            }
-        }
-    }
+    @Volatile
+    private var backend: TaskSchedulerBackend = createBackend(settings)
 
     /**
-     * Restart the scheduler if it has been shut down.
-     * 如果调度器已关闭，则重新启动。
-     *
-     * This is needed for single-player where the server can be stopped and restarted.
-     * 这对于单机游戏很必要，因为服务器可以停止并重新启动。
+     * Pending settings applied on next tick boundary.
+     * 仅在 tick 边界切换，避免丢任务/破坏语义。
      */
+    @Volatile
+    private var pendingSettings: SchedulerRuntimeSettings? = null
+
+    /**
+     * Runtime check: coroutine classes are provided by a prerequisite mod in your pack.
+     * 运行时探测：协程库由前置模组提供；若缺失则禁止启用协程后端。
+     */
+    private fun isCoroutinesAvailable(): Boolean {
+        // Use reflection to avoid hard-crashing when the prerequisite mod is missing.
+        return runCatching { Class.forName("kotlinx.coroutines.Job") }.isSuccess
+    }
+
+    private fun coerceSettingsForAvailability(s: SchedulerRuntimeSettings): SchedulerRuntimeSettings {
+        if (s.backendType != SchedulerBackendType.COROUTINES) return s
+        if (isCoroutinesAvailable()) return s
+
+        PrototypeMachinery.logger.warn(
+            "Task scheduler: COROUTINES backend requested but kotlinx-coroutines is not available at runtime; falling back to JAVA. " +
+                "(Ensure the prerequisite coroutine mod is installed on both server and client.)"
+        )
+        return s.copy(backendType = SchedulerBackendType.JAVA)
+    }
+
+    private fun readSettingsFromConfig(): SchedulerRuntimeSettings {
+        val s = PmSchedulerConfig.scheduler
+        return SchedulerRuntimeSettings.sane(
+            backendType = SchedulerBackendType.parse(s.backend),
+            workerThreads = s.workerThreads,
+            laneCount = s.laneCount,
+            metricsEnabled = s.metricsEnabled,
+            metricsLogIntervalTicks = s.metricsLogIntervalTicks,
+            metricsWindowTicks = s.metricsWindowTicks,
+        )
+    }
+
+    private fun createBackend(settings: SchedulerRuntimeSettings): TaskSchedulerBackend {
+        return when (settings.backendType) {
+            SchedulerBackendType.JAVA -> JavaTaskSchedulerBackend(settings)
+            SchedulerBackendType.COROUTINES -> CoroutineTaskSchedulerBackend(settings)
+        }
+    }
+
     @Synchronized
     private fun restartIfNeeded() {
-        if (isShutdown) {
-            executorService = createExecutorService()
-            laneExecutors = createLaneExecutors()
-            isShutdown = false
-            PrototypeMachinery.logger.info("Task scheduler restarted")
-        }
+        if (!isShutdown) return
+
+        val newSettings = coerceSettingsForAvailability(readSettingsFromConfig())
+        settings = newSettings
+        metrics.resizeIfNeeded(newSettings.metricsWindowTicks)
+        backend = createBackend(newSettings)
+        isShutdown = false
+        PrototypeMachinery.logger.info("Task scheduler restarted (backend=${backend.backendName})")
     }
 
     override fun register(schedulable: ISchedulable) {
         restartIfNeeded()
         when (schedulable.getExecutionMode()) {
-            ExecutionMode.MAIN_THREAD -> mainThreadTasks.add(schedulable)
-            ExecutionMode.CONCURRENT -> concurrentTasks.add(schedulable)
+            ExecutionMode.MAIN_THREAD -> state.mainThreadTasks.add(schedulable)
+            ExecutionMode.CONCURRENT -> state.concurrentTasks.add(schedulable)
         }
-        PrototypeMachinery.logger.debug("Registered schedulable: {} ({})", schedulable.javaClass.simpleName, schedulable.getExecutionMode())
     }
 
     override fun unregister(schedulable: ISchedulable) {
-        val removed = mainThreadTasks.remove(schedulable) || concurrentTasks.remove(schedulable)
-        if (removed) {
-            PrototypeMachinery.logger.debug("Unregistered schedulable: ${schedulable.javaClass.simpleName}")
-        }
+        state.mainThreadTasks.remove(schedulable)
+        state.concurrentTasks.remove(schedulable)
     }
 
     override fun submitTask(task: Runnable, executionMode: ExecutionMode) {
         restartIfNeeded()
         when (executionMode) {
-            ExecutionMode.MAIN_THREAD -> customMainThreadTasks.offer(task)
-            ExecutionMode.CONCURRENT -> customConcurrentTasks.offer(task)
+            ExecutionMode.MAIN_THREAD -> state.customMainThreadTasks.offer(task)
+            ExecutionMode.CONCURRENT -> state.customConcurrentTasks.offer(task)
         }
     }
 
-    override fun getRegisteredCount(): Int = mainThreadTasks.size + concurrentTasks.size
+    override fun getRegisteredCount(): Int = state.mainThreadTasks.size + state.concurrentTasks.size
 
     /**
-     * Shutdown the scheduler and cleanup resources.
-     * 关闭调度器并清理资源。
-     *
-     * This should be called when the server is stopping.
-     * 应在服务器停止时调用。
+     * Request applying current config on next tick.
      */
+    internal fun requestReloadFromConfig() {
+        pendingSettings = readSettingsFromConfig()
+    }
+
+    internal fun requestSwitchBackend(type: SchedulerBackendType): Boolean {
+        if (type == SchedulerBackendType.COROUTINES && !isCoroutinesAvailable()) {
+            return false
+        }
+        val s = PmSchedulerConfig.scheduler
+        pendingSettings = SchedulerRuntimeSettings.sane(
+            backendType = type,
+            workerThreads = s.workerThreads,
+            laneCount = s.laneCount,
+            metricsEnabled = s.metricsEnabled,
+            metricsLogIntervalTicks = s.metricsLogIntervalTicks,
+            metricsWindowTicks = s.metricsWindowTicks,
+        )
+        return true
+    }
+
+    internal fun currentBackendName(): String = backend.backendName
+
+    internal fun isCoroutinesBackendAvailable(): Boolean = isCoroutinesAvailable()
+
+    internal fun snapshotReport() = metrics.snapshotReport()
+
     @Synchronized
     internal fun shutdown() {
-        if (isShutdown) {
-            return
-        }
+        if (isShutdown) return
 
-        PrototypeMachinery.logger.info("Shutting down task scheduler...")
-
+        PrototypeMachinery.logger.info("Shutting down task scheduler (backend=${backend.backendName})...")
         isShutdown = true
 
-        // Stop accepting new tasks first.
-        executorService.shutdown()
-        for (lane in laneExecutors) {
-            lane.shutdown()
-        }
-        try {
-            if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
-                PrototypeMachinery.logger.warn("Executor service did not terminate in time, forcing shutdown")
-                executorService.shutdownNow()
-            }
-        } catch (e: InterruptedException) {
-            PrototypeMachinery.logger.error("Interrupted while waiting for executor service shutdown", e)
-            executorService.shutdownNow()
-            Thread.currentThread().interrupt()
-        }
-
-        for (lane in laneExecutors) {
-            try {
-                if (!lane.awaitTermination(10, TimeUnit.SECONDS)) {
-                    PrototypeMachinery.logger.warn("Lane executor did not terminate in time, forcing shutdown")
-                    lane.shutdownNow()
-                }
-            } catch (e: InterruptedException) {
-                PrototypeMachinery.logger.error("Interrupted while waiting for lane executor shutdown", e)
-                lane.shutdownNow()
-                Thread.currentThread().interrupt()
-            }
-        }
-
-        mainThreadTasks.clear()
-        concurrentTasks.clear()
-        customMainThreadTasks.clear()
-        customConcurrentTasks.clear()
+        backend.shutdown()
+        state.clearAll()
 
         PrototypeMachinery.logger.info("Task scheduler shutdown complete")
     }
 
-    /**
-     * Handle server tick event.
-     * 处理服务器 Tick 事件。
-     */
     @SubscribeEvent
     internal fun onServerTick(event: TickEvent.ServerTickEvent) {
         if (event.phase != TickEvent.Phase.END || isShutdown) {
             return
         }
 
-        // Execute custom main thread tasks
-        // 执行自定义主线程任务
-        processCustomMainThreadTasks()
+        val ps = pendingSettings
+        if (ps != null) {
+            applyPendingSettings(ps)
+        }
 
-        // Execute main thread tasks
-        // 执行主线程可调度任务
-        processMainThreadTasks()
-
-        // Submit concurrent tasks to thread pool
-        // 提交并发任务到线程池
-        submitConcurrentTasksAndJoin()
+        backend.onServerTickEnd(state, metrics)
+        metrics.maybeLog(settings.metricsLogIntervalTicks, settings.metricsEnabled)
     }
 
-    /**
-     * Process custom main thread tasks.
-     * 处理自定义主线程任务。
-     */
-    private fun processCustomMainThreadTasks() {
-        var task = customMainThreadTasks.poll()
-        while (task != null) {
-            try {
-                task.run()
-            } catch (e: Throwable) {
-                PrototypeMachinery.logger.error("Error executing custom main thread task", e)
-            }
-            task = customMainThreadTasks.poll()
-        }
+    @Synchronized
+    private fun applyPendingSettings(ps: SchedulerRuntimeSettings) {
+        // Double-check inside lock.
+        val pending = pendingSettings ?: return
+        if (pending != ps) return
+
+        pendingSettings = null
+        val effective = coerceSettingsForAvailability(ps)
+        settings = effective
+        metrics.resizeIfNeeded(effective.metricsWindowTicks)
+
+        // Swap backend at tick boundary. Keep SchedulerState untouched to avoid losing registrations.
+        runCatching { backend.shutdown() }
+        backend = createBackend(effective)
+
+        PrototypeMachinery.logger.warn(
+            "Task scheduler backend switched to ${backend.backendName} (threads=${effective.workerThreads}, lanes=${effective.laneCount})"
+        )
     }
-
-    /**
-     * Process main thread tasks.
-     * 处理主线程可调度任务。
-     */
-    private fun processMainThreadTasks() {
-        for (schedulable in mainThreadTasks) {
-            if (!schedulable.isActive()) {
-                continue
-            }
-
-            try {
-                schedulable.onSchedule()
-            } catch (e: Throwable) {
-                PrototypeMachinery.logger.error("Error executing main thread schedulable: ${schedulable.javaClass.simpleName}", e)
-            }
-        }
-    }
-
-    /**
-     * Submit concurrent tasks to thread pool.
-     * 提交并发任务到线程池。
-     */
-    private fun submitConcurrentTasksAndJoin() {
-        val futures = ArrayList<Future<*>>()
-
-        // Submit custom concurrent tasks (no affinity)
-        // 提交自定义并发任务（无 affinity）
-        var customTask = customConcurrentTasks.poll()
-        while (customTask != null) {
-            futures.add(executorService.submit(SafeRunnable(customTask)))
-            customTask = customConcurrentTasks.poll()
-        }
-
-        // Snapshot active schedulables
-        // 快照活跃的可调度任务
-        val active = concurrentTasks.asSequence().filter { it.isActive() }.toList()
-        if (active.isEmpty()) {
-            // Still need to join custom concurrent tasks.
-            for (f in futures) {
-                try {
-                    f.get()
-                } catch (e: Throwable) {
-                    PrototypeMachinery.logger.error("Error while joining concurrent tasks", e)
-                }
-            }
-            return
-        }
-
-        // Union-find grouping by shared affinity keys (A 方案：共享 IO 设备)
-        val uf = UnionFind(active.size)
-        val keyToIndex = HashMap<Any, Int>(active.size * 2)
-        val affinityKeysByIndex: Array<Set<Any>> = Array(active.size) { emptySet() }
-
-        for (i in active.indices) {
-            val keys = (active[i] as? SchedulingAffinity)?.getSchedulingAffinityKeys().orEmpty()
-            affinityKeysByIndex[i] = keys
-
-            for (k in keys) {
-                val prev = keyToIndex.putIfAbsent(k, i)
-                if (prev != null) {
-                    uf.union(i, prev)
-                }
-            }
-        }
-
-        val groups = HashMap<Int, MutableList<Int>>()
-        for (i in active.indices) {
-            val root = uf.find(i)
-            groups.computeIfAbsent(root) { ArrayList() }.add(i)
-        }
-
-        for ((_, indexes) in groups) {
-            // No affinity keys -> keep parallel behavior
-            val hasAffinity = indexes.any { affinityKeysByIndex[it].isNotEmpty() }
-            if (!hasAffinity) {
-                for (i in indexes) {
-                    futures.add(executorService.submit(SafeRunnable { active[i].onSchedule() }))
-                }
-                continue
-            }
-
-            // Merge keys for lane selection
-            val mergedKeys = LinkedHashSet<Any>()
-            for (i in indexes) {
-                mergedKeys.addAll(affinityKeysByIndex[i])
-            }
-
-            // Deterministic order within group reduces jitter
-            indexes.sortBy { System.identityHashCode(active[it]) }
-
-            val laneIndex = laneIndexFor(mergedKeys)
-            val lane = laneExecutors[laneIndex]
-            futures.add(
-                lane.submit(
-                    SafeRunnable {
-                        for (i in indexes) {
-                            active[i].onSchedule()
-                        }
-                    }
-                )
-            )
-        }
-
-        // Join barrier: block main thread until all concurrent work for this tick is finished.
-        // Join 屏障：阻塞主线程直到本 tick 所有并发任务完成。
-        for (f in futures) {
-            try {
-                f.get()
-            } catch (e: Throwable) {
-                PrototypeMachinery.logger.error("Error while joining concurrent tasks", e)
-            }
-        }
-    }
-
-    private fun laneIndexFor(keys: Set<Any>): Int {
-        if (laneExecutors.isEmpty()) return 0
-
-        // Stable-ish hash: sort component hashes to avoid iteration-order noise.
-        val parts = keys.asSequence().map { it.hashCode() }.sorted().toList()
-        var h = 1
-        for (p in parts) {
-            h = 31 * h + p
-        }
-        return (h and Int.MAX_VALUE) % laneExecutors.size
-    }
-
-    private class UnionFind(size: Int) {
-        private val parent = IntArray(size) { it }
-        private val rank = IntArray(size)
-
-        fun find(x: Int): Int {
-            var v = x
-            while (parent[v] != v) {
-                parent[v] = parent[parent[v]]
-                v = parent[v]
-            }
-            return v
-        }
-
-        fun union(a: Int, b: Int) {
-            val ra = find(a)
-            val rb = find(b)
-            if (ra == rb) return
-
-            val rka = rank[ra]
-            val rkb = rank[rb]
-            when {
-                rka < rkb -> parent[ra] = rb
-                rka > rkb -> parent[rb] = ra
-                else -> {
-                    parent[rb] = ra
-                    rank[ra] = rka + 1
-                }
-            }
-        }
-    }
-
-    /**
-     * Wrapper for safe task execution with error handling.
-     * 用于安全任务执行的包装器，带错误处理。
-     */
-    private class SafeRunnable(private val task: Runnable) : Runnable {
-        override fun run() {
-            runCatching { task.run() }.onFailure { e -> PrototypeMachinery.logger.error("Error executing concurrent task", e) }
-        }
-    }
-
 }

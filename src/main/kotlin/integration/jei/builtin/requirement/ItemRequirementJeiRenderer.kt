@@ -1,5 +1,9 @@
 package github.kasuminova.prototypemachinery.integration.jei.builtin.requirement
 
+import com.cleanroommc.modularui.drawable.GuiDraw
+import com.cleanroommc.modularui.screen.viewport.ModularGuiContext
+import com.cleanroommc.modularui.theme.WidgetThemeEntry
+import com.cleanroommc.modularui.widget.Widget
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.ItemRequirementComponent
@@ -13,6 +17,7 @@ import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRend
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementNode
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementRenderer
 import github.kasuminova.prototypemachinery.integration.jei.api.ui.PMJeiWidgetCollector
+import github.kasuminova.prototypemachinery.integration.jei.builtin.PMJeiIcons
 import net.minecraft.item.ItemStack
 import net.minecraft.util.ResourceLocation
 
@@ -31,6 +36,11 @@ public object ItemRequirementJeiRenderer : PMJeiRequirementRenderer<ItemRequirem
         override val width: Int = 18
         override val height: Int = 18
     }
+
+    private val variants: List<PMJeiRendererVariant> = listOf(
+        Slot18Variant,
+        PMJeiIcons.ALL_VARIANTS[PMJeiIcons.ITEM_PLAID]!!
+    ) + PMJeiIcons.ALL_VARIANTS.values.filter { it.id.path.startsWith("plaid/base_") }
 
     override val type: RecipeRequirementType<ItemRequirementComponent>
         get() = RecipeRequirementTypes.ITEM
@@ -64,11 +74,11 @@ public object ItemRequirementJeiRenderer : PMJeiRequirementRenderer<ItemRequirem
     }
 
     override fun variants(ctx: JeiRecipeContext, node: PMJeiRequirementNode<ItemRequirementComponent>): List<PMJeiRendererVariant> {
-        return listOf(Slot18Variant)
+        return variants
     }
 
     override fun defaultVariant(ctx: JeiRecipeContext, node: PMJeiRequirementNode<ItemRequirementComponent>): PMJeiRendererVariant {
-        return Slot18Variant
+        return variants[0]
     }
 
     override fun declareJeiSlots(
@@ -109,8 +119,64 @@ public object ItemRequirementJeiRenderer : PMJeiRequirementRenderer<ItemRequirem
         y: Int,
         out: PMJeiWidgetCollector,
     ) {
-        // Intentionally empty for now.
-        // JEI will render the item stack itself; we can add slot frame/labels later.
+        if (variant.id == PMJeiIcons.ITEM_PLAID) {
+            out.add(PlaidItemWidget(PMJeiIcons.ITEM_PLAID).pos(x, y))
+        } else if (variant.id.path.startsWith("plaid/base_")) {
+            out.add(PlaidItemWidget(variant.id).pos(x, y))
+        }
+    }
+
+    private class PlaidItemWidget(private val baseId: ResourceLocation) : Widget<PlaidItemWidget>() {
+        private val baseTex: ResourceLocation = when (baseId) {
+            // item/plaid is a dedicated item slot background texture
+            // See: jei_recipeicons/item_module/item_module.md
+            PMJeiIcons.ITEM_PLAID -> PMJeiIcons.tex("item_module/plaid_base.png")
+
+            // plaid/base_* are 18x18 background tiles used for multi-slot groups
+            // See: jei_recipeicons/plaid_module/plaid_module.md
+            PMJeiIcons.PLAID_BASE_0101 -> PMJeiIcons.tex("plaid_module/base_top_0101.png")
+            PMJeiIcons.PLAID_BASE_0111 -> PMJeiIcons.tex("plaid_module/base_top_0111.png")
+            PMJeiIcons.PLAID_BASE_0110 -> PMJeiIcons.tex("plaid_module/base_top_0110.png")
+
+            PMJeiIcons.PLAID_BASE_1101 -> PMJeiIcons.tex("plaid_module/base_mid_1101.png")
+            PMJeiIcons.PLAID_BASE_1111 -> PMJeiIcons.tex("plaid_module/base_mid_1111.png")
+            PMJeiIcons.PLAID_BASE_1110 -> PMJeiIcons.tex("plaid_module/base_mid_1110.png")
+
+            PMJeiIcons.PLAID_BASE_1001 -> PMJeiIcons.tex("plaid_module/base_down_1001.png")
+            PMJeiIcons.PLAID_BASE_1011 -> PMJeiIcons.tex("plaid_module/base_down_1011.png")
+            PMJeiIcons.PLAID_BASE_1010 -> PMJeiIcons.tex("plaid_module/base_down_1010.png")
+
+            else -> PMJeiIcons.tex("item_module/plaid_base.png")
+        }
+        
+        // Map base to border overlay texture if applicable
+        private val overlayTex: ResourceLocation? = when (baseId) {
+            PMJeiIcons.ITEM_PLAID -> PMJeiIcons.tex("plaid_module/0000.png")
+            PMJeiIcons.PLAID_BASE_0101 -> PMJeiIcons.tex("plaid_module/1010.png") // Top-Left
+            PMJeiIcons.PLAID_BASE_0111 -> PMJeiIcons.tex("plaid_module/1000.png") // Top-Mid
+            PMJeiIcons.PLAID_BASE_0110 -> PMJeiIcons.tex("plaid_module/1001.png") // Top-Right
+            PMJeiIcons.PLAID_BASE_1101 -> PMJeiIcons.tex("plaid_module/0001.png") // Mid-Left
+            PMJeiIcons.PLAID_BASE_1110 -> PMJeiIcons.tex("plaid_module/0010.png") // Mid-Right
+            PMJeiIcons.PLAID_BASE_1001 -> PMJeiIcons.tex("plaid_module/0110.png") // Bottom-Left
+            PMJeiIcons.PLAID_BASE_1011 -> PMJeiIcons.tex("plaid_module/0100.png") // Bottom-Mid
+            PMJeiIcons.PLAID_BASE_1010 -> PMJeiIcons.tex("plaid_module/0101.png") // Bottom-Right
+            else -> null
+        }
+
+        init { size(18, 18) }
+
+        override fun draw(context: ModularGuiContext, widgetTheme: WidgetThemeEntry<*>) {
+            // 1. Draw base (18x18)
+            GuiDraw.drawTexture(baseTex, 0f, 0f, 18f, 18f, 0f, 0f, 1f, 1f)
+        }
+
+        override fun drawOverlay(context: ModularGuiContext, widgetTheme: WidgetThemeEntry<*>) {
+            // 2. Draw border overlay (54x54, centered at -18, -18) around the slot.
+            overlayTex?.let {
+                // GuiDraw.drawTexture expects x0,y0,x1,y1; so end = start + size.
+                GuiDraw.drawTexture(it, -18f, -18f, 36f, 36f, 0f, 0f, 1f, 1f)
+            }
+        }
     }
 
     /** Resolve displayed stacks for a node (alternatives list). */

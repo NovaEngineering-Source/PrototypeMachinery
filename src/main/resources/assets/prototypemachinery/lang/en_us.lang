@@ -47,6 +47,18 @@ prototypemachinery.gui.resource_slot.count=Count: %s
 prototypemachinery.gui.resource_slot.types=Slots: %s / %s
 prototypemachinery.gui.resource_slot.stored=Stored: %s / %s
 
+# JEI - Energy ingredient
+prototypemachinery.jei.energy.display=Energy: %s (%s)
+prototypemachinery.jei.energy.direction.consume=Consume
+prototypemachinery.jei.energy.direction.produce=Produce
+prototypemachinery.jei.energy.timing.once=Once
+prototypemachinery.jei.energy.timing.per_tick=Per Tick
+prototypemachinery.jei.energy.amount.once=%s FE
+prototypemachinery.jei.energy.amount.per_tick=%s FE/t
+
+# JEI - Fluid tooltip hints
+prototypemachinery.jei.fluid.tooltip.io=%s (%s)
+
 # Default Machine UI - recipe progress list
 prototypemachinery.gui.recipe_progress.idle=Idle
 prototypemachinery.gui.recipe_progress.running=Running

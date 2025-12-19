@@ -1,0 +1,51 @@
+{
+  "id": "example_recipe_processor_machine_io_demo",
+  "type": "template",
+  "offset": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "pattern": [
+    {
+      "pos": { "x": 1, "y": 0, "z": 0 },
+      "blockId": "prototypemachinery:item_input_hatch_1",
+      "meta": 0
+    },
+    {
+      "pos": { "x": -1, "y": 0, "z": 0 },
+      "blockId": "prototypemachinery:item_output_hatch_1",
+      "meta": 0
+    },
+
+    {
+      "pos": { "x": 0, "y": 0, "z": 1 },
+      "blockId": "prototypemachinery:fluid_input_hatch_1",
+      "meta": 0
+    },
+    {
+      "pos": { "x": 0, "y": 0, "z": -1 },
+      "blockId": "prototypemachinery:fluid_output_hatch_1",
+      "meta": 0
+    },
+
+    {
+      "pos": { "x": 1, "y": 1, "z": 0 },
+      "blockId": "prototypemachinery:energy_input_hatch_1",
+      "meta": 0
+    },
+    {
+      "pos": { "x": -1, "y": 1, "z": 0 },
+      "blockId": "prototypemachinery:energy_output_hatch_1",
+      "meta": 0
+    },
+
+    {
+      "pos": { "x": 0, "y": 1, "z": 0 },
+      "blockId": "minecraft:iron_block",
+      "meta": 0
+    }
+  ],
+  "validators": [],
+  "children": []
+}

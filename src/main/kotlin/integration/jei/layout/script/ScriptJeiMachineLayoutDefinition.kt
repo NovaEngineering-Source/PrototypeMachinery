@@ -42,7 +42,7 @@ public class ScriptJeiMachineLayoutDefinition(
 
         val output = ScriptJeiLayoutOutput(
             placedNodeIds = placed,
-            placeNode = { nodeId, x, y, variantId -> out.placeNode(nodeId, x, y, variantId) },
+            placeNode = { nodeId, x, y, variantId, data -> out.placeNodeWithData(nodeId, x, y, variantId, data) },
             placeFixedSlot = { providerId, role, x, y, width, height -> out.placeFixedSlot(providerId, role, x, y, width, height) },
             addDecorator = { decoratorId, x, y, data -> out.addDecorator(decoratorId, x, y, data) },
         )
@@ -105,7 +105,7 @@ private fun autoPlaceRemaining(
             break
         }
 
-        out.placeNode(n.nodeId, x, y, variant.id)
+        out.placeNodeWithData(n.nodeId, x, y, variant.id, emptyMap())
         x += w + spec.gapX
         rowH = maxOf(rowH, h)
     }

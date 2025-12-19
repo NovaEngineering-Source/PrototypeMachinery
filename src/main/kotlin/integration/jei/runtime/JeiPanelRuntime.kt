@@ -23,6 +23,9 @@ import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRend
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementNode
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementRenderer
 import github.kasuminova.prototypemachinery.integration.jei.api.ui.PMJeiWidgetCollector
+import github.kasuminova.prototypemachinery.integration.jei.builtin.JeiBackgroundSpec
+import github.kasuminova.prototypemachinery.integration.jei.builtin.PMJeiIcons
+import github.kasuminova.prototypemachinery.integration.jei.builtin.widget.JeiNineSliceBackgroundWidget
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiDecoratorRegistry
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiFixedSlotProviderRegistry
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiMachineLayoutRegistry
@@ -180,6 +183,30 @@ public class JeiPanelRuntime private constructor(
             val slotCollector = SlotCollector()
             val widgetCollector = WidgetCollector()
 
+            // 3.0) Background (9-slice). Drawn behind all other widgets.
+            // Default uses a fixed 2px border; callers may override via a reserved decorator id.
+            val bgPlacement = planBuilder.decorators.firstOrNull { it.decoratorId == JeiBackgroundSpec.id }
+            val bgSpec = if (bgPlacement != null) {
+                // Consume so it won't go through the normal decorator registry.
+                planBuilder.decorators.remove(bgPlacement)
+                JeiBackgroundSpec.parse(bgPlacement.data)
+            } else {
+                JeiBackgroundSpec.Spec(
+                    texture = PMJeiIcons.tex("jei_base.png"),
+                    borderPx = 2,
+                    fillCenter = false,
+                )
+            }
+
+            widgetCollector.add(
+                JeiNineSliceBackgroundWidget(
+                    texture = bgSpec.texture,
+                    cornerPx = bgSpec.borderPx,
+                    fillCenter = bgSpec.fillCenter,
+                    splitMode = JeiNineSliceBackgroundWidget.SplitMode.AUTO_PIXELS,
+                ).size(layout.width, layout.height)
+            )
+
             // Build a fast node lookup.
             val nodeById = nodes.associateBy { it.nodeId }
 
@@ -208,7 +235,7 @@ public class JeiPanelRuntime private constructor(
                 val variant = selectVariant(ctx, renderer, castNode, placement)
 
                 renderer.declareJeiSlotsUnsafe(ctx, castNode, variant, placement.x, placement.y, slotCollector)
-                renderer.buildWidgetsUnsafe(ctx, castNode, variant, placement.x, placement.y, widgetCollector)
+                renderer.buildWidgetsUnsafe(ctx, castNode, variant, placement.x, placement.y, placement.data, widgetCollector)
             }
 
             for (decor in planBuilder.decorators) {
@@ -306,7 +333,17 @@ public class JeiPanelRuntime private constructor(
         val fixedSlots: MutableList<PMJeiFixedSlotPlacement> = ArrayList()
 
         override fun placeNode(nodeId: String, x: Int, y: Int, variantId: net.minecraft.util.ResourceLocation?) {
-            placedNodes += PMJeiPlacedNode(nodeId = nodeId, x = x, y = y, variantId = variantId)
+            placeNodeWithData(nodeId = nodeId, x = x, y = y, variantId = variantId, data = emptyMap())
+        }
+
+        override fun placeNodeWithData(
+            nodeId: String,
+            x: Int,
+            y: Int,
+            variantId: net.minecraft.util.ResourceLocation?,
+            data: Map<String, Any>,
+        ) {
+            placedNodes += PMJeiPlacedNode(nodeId = nodeId, x = x, y = y, variantId = variantId, data = data)
         }
 
         override fun addDecorator(
@@ -437,11 +474,20 @@ private fun PMJeiRequirementRenderer<RecipeRequirementComponent>.buildWidgetsUns
     variant: PMJeiRendererVariant,
     x: Int,
     y: Int,
+    data: Map<String, Any>,
     out: PMJeiWidgetCollector,
 ) {
     try {
         @Suppress("UNCHECKED_CAST")
-        buildWidgets(ctx, node as PMJeiRequirementNode<RecipeRequirementComponent>, variant, x, y, out)
+        buildWidgetsWithData(
+            ctx,
+            node as PMJeiRequirementNode<RecipeRequirementComponent>,
+            variant,
+            x,
+            y,
+            data,
+            out
+        )
     } catch (t: Throwable) {
         PrototypeMachinery.logger.error(
             "JEI: renderer buildWidgets failed for type='${type.id}', nodeId='${node.nodeId}', recipe='${ctx.recipeId}'",

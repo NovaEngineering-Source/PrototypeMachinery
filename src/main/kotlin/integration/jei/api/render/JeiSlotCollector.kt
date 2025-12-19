@@ -36,6 +36,9 @@ public object JeiSlotKinds {
     /** Vanilla fluid stack ingredient slots. */
     public val FLUID: JeiSlotKind = Simple(ResourceLocation(PrototypeMachinery.MOD_ID, "ingredient/fluid"))
 
+    /** Energy IO ingredient slots (custom JEI ingredient). */
+    public val ENERGY: JeiSlotKind = Simple(ResourceLocation(PrototypeMachinery.MOD_ID, "ingredient/energy"))
+
     private data class Simple(override val id: ResourceLocation) : JeiSlotKind
 }
 
@@ -60,4 +63,23 @@ public data class JeiSlot(
     public val y: Int,
     public val width: Int,
     public val height: Int,
+
+    /** Optional JEI-drawn overlay (drawn by JEI after the ingredient renderer). */
+    public val overlay: JeiSlotOverlay? = null,
+)
+
+/**
+ * Overlay spec for JEI ingredient groups.
+ *
+ * For small standalone textures (like our module PNGs), JEI needs the real texture size
+ * to compute correct UVs. Use [textureWidth]/[textureHeight] accordingly.
+ */
+public data class JeiSlotOverlay(
+    public val texture: ResourceLocation,
+    public val u: Int,
+    public val v: Int,
+    public val width: Int,
+    public val height: Int,
+    public val textureWidth: Int,
+    public val textureHeight: Int,
 )

@@ -40,7 +40,7 @@ public data class ScriptJeiLayoutNodeView(
 
 public data class ScriptJeiLayoutOutput(
     public val placedNodeIds: MutableSet<String>,
-    public val placeNode: (nodeId: String, x: Int, y: Int, variantId: ResourceLocation?) -> Unit,
+    public val placeNode: (nodeId: String, x: Int, y: Int, variantId: ResourceLocation?, data: Map<String, Any>) -> Unit,
     public val placeFixedSlot: (providerId: ResourceLocation, role: JeiSlotRole, x: Int, y: Int, width: Int, height: Int) -> Unit,
     public val addDecorator: (decoratorId: ResourceLocation, x: Int, y: Int, data: Map<String, Any>) -> Unit,
 )
@@ -83,10 +83,11 @@ public data class PlaceByNodeIdRule(
     public val x: Int,
     public val y: Int,
     public val variantId: ResourceLocation? = null,
+    public val data: Map<String, Any> = emptyMap(),
 ) : ScriptJeiLayoutRule {
     override fun apply(input: ScriptJeiLayoutInput, out: ScriptJeiLayoutOutput) {
         out.placedNodeIds += nodeId
-        out.placeNode(nodeId, x, y, variantId)
+        out.placeNode(nodeId, x, y, variantId, data)
     }
 }
 
@@ -99,6 +100,7 @@ public data class PlaceFirstRule(
     public val x: Int,
     public val y: Int,
     public val variantId: ResourceLocation? = null,
+    public val data: Map<String, Any> = emptyMap(),
     public val skipPlaced: Boolean = true,
 ) : ScriptJeiLayoutRule {
     override fun apply(input: ScriptJeiLayoutInput, out: ScriptJeiLayoutOutput) {
@@ -110,7 +112,7 @@ public data class PlaceFirstRule(
             ?: return
 
         out.placedNodeIds += node.nodeId
-        out.placeNode(node.nodeId, x, y, variantId)
+        out.placeNode(node.nodeId, x, y, variantId, data)
     }
 }
 
@@ -126,6 +128,7 @@ public data class PlaceAllLinearRule(
     public val stepY: Int,
     public val maxCount: Int = Int.MAX_VALUE,
     public val variantId: ResourceLocation? = null,
+    public val data: Map<String, Any> = emptyMap(),
     public val skipPlaced: Boolean = true,
 ) : ScriptJeiLayoutRule {
     override fun apply(input: ScriptJeiLayoutInput, out: ScriptJeiLayoutOutput) {
@@ -141,7 +144,7 @@ public data class PlaceAllLinearRule(
 
         for (n in nodes) {
             out.placedNodeIds += n.nodeId
-            out.placeNode(n.nodeId, x, y, variantId)
+            out.placeNode(n.nodeId, x, y, variantId, data)
             x += stepX
             y += stepY
         }
@@ -163,6 +166,7 @@ public data class PlaceGridRule(
     public val gapX: Int = 2,
     public val gapY: Int = 2,
     public val variantId: ResourceLocation? = null,
+    public val data: Map<String, Any> = emptyMap(),
     public val skipPlaced: Boolean = true,
 ) : ScriptJeiLayoutRule {
     override fun apply(input: ScriptJeiLayoutInput, out: ScriptJeiLayoutOutput) {
@@ -184,7 +188,7 @@ public data class PlaceGridRule(
 
                 val n = nodes[idx++]
                 out.placedNodeIds += n.nodeId
-                out.placeNode(n.nodeId, x, y, variantId)
+                out.placeNode(n.nodeId, x, y, variantId, data)
             }
         }
     }

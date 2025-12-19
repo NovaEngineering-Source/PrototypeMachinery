@@ -5,6 +5,10 @@ import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.integration.jei.builtin.PMJeiBuiltins
+import github.kasuminova.prototypemachinery.integration.jei.builtin.ingredient.EnergyJeiIngredient
+import github.kasuminova.prototypemachinery.integration.jei.builtin.ingredient.EnergyJeiIngredientHelper
+import github.kasuminova.prototypemachinery.integration.jei.builtin.ingredient.EnergyJeiIngredientListRenderer
+import github.kasuminova.prototypemachinery.integration.jei.builtin.ingredient.EnergyJeiType
 import github.kasuminova.prototypemachinery.integration.jei.category.PMMachineRecipeCategory
 import github.kasuminova.prototypemachinery.integration.jei.layout.DefaultJeiMachineLayout
 import github.kasuminova.prototypemachinery.integration.jei.layout.ExampleRecipeProcessorHatchesJeiLayout
@@ -16,6 +20,7 @@ import github.kasuminova.prototypemachinery.integration.jei.wrapper.PMStructureP
 import mezz.jei.api.IModPlugin
 import mezz.jei.api.IModRegistry
 import mezz.jei.api.JEIPlugin
+import mezz.jei.api.ingredients.IModIngredientRegistration
 import mezz.jei.api.recipe.IRecipeCategoryRegistration
 import net.minecraft.util.ResourceLocation
 import net.minecraftforge.fml.relauncher.Side
@@ -27,6 +32,29 @@ import net.minecraftforge.fml.relauncher.SideOnly
 @JEIPlugin
 @SideOnly(Side.CLIENT)
 public class PMJeiPlugin : IModPlugin {
+
+    override fun registerIngredients(registry: IModIngredientRegistration) {
+        // Register built-ins early so addon authors can rely on types/kinds being present.
+        PMJeiBuiltins.ensureRegistered()
+
+        // Custom energy ingredient: makes recipes searchable by energy IO.
+        // We also provide 4 virtual browse entries so players can click them in the ingredient list:
+        // - 消耗(一次性) / 消耗(每tick) / 产出(一次性) / 产出(每tick)
+        // IMPORTANT: use the IIngredientType overload so JEI keys the ingredient registry by *our* EnergyJeiType instance.
+        // Otherwise, registering by class will create a different internal ingredient type instance, and recipe wrappers
+        // that write ingredients using EnergyJeiType will crash with "Unknown ingredient type".
+        registry.register(
+            EnergyJeiType,
+            listOf(
+                EnergyJeiIngredient.consumeOnce(1),
+                EnergyJeiIngredient.consumePerTick(1),
+                EnergyJeiIngredient.produceOnce(1),
+                EnergyJeiIngredient.producePerTick(1),
+            ),
+            EnergyJeiIngredientHelper,
+            EnergyJeiIngredientListRenderer,
+        )
+    }
 
     override fun registerCategories(registration: IRecipeCategoryRegistration) {
         // Register built-in requirement renderers/decorators.
