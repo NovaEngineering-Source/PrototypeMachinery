@@ -47,6 +47,18 @@ prototypemachinery.gui.resource_slot.count=数量：%s
 prototypemachinery.gui.resource_slot.types=槽位：%s / %s
 prototypemachinery.gui.resource_slot.stored=已存：%s / %s
 
+# JEI - 能量材料
+prototypemachinery.jei.energy.display=能量：%s（%s）
+prototypemachinery.jei.energy.direction.consume=消耗
+prototypemachinery.jei.energy.direction.produce=产出
+prototypemachinery.jei.energy.timing.once=一次性
+prototypemachinery.jei.energy.timing.per_tick=每 Tick
+prototypemachinery.jei.energy.amount.once=%s FE
+prototypemachinery.jei.energy.amount.per_tick=%s FE/t
+
+# JEI - 流体 tooltip 提示
+prototypemachinery.jei.fluid.tooltip.io=%s（%s）
+
 # 默认机械 UI - 配方进度列表
 prototypemachinery.gui.recipe_progress.idle=空闲
 prototypemachinery.gui.recipe_progress.running=工作中
