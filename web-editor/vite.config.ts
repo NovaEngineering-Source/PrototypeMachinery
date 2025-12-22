@@ -1,7 +1,14 @@
-import {defineConfig} from 'vite';
+import {defineConfig, type Plugin} from 'vite';
 import react from '@vitejs/plugin-react';
+// NOTE: These are Node.js built-ins used by Vite config.
+// If your editor reports "Cannot find module 'node:fs'" etc, the root cause is usually missing @types/node.
+// Recommended fix (project-wide): add devDependency "@types/node".
+// This file keeps local ts-ignore to avoid hard-failing typecheck in environments without node types.
+// @ts-ignore
 import fs from 'node:fs';
+// @ts-ignore
 import path from 'node:path';
+// @ts-ignore
 import {fileURLToPath} from 'node:url';
 
 type PmAssetIndex = {
@@ -45,6 +52,8 @@ function pmTexturesPlugin() {
   const pmLogoFile = path.resolve(__dirname, '..', 'src', 'main', 'resources', 'assets', 'prototypemachinery', 'logo.png');
   const includeDirs = [
     path.join(pmTexturesRoot, 'gui', 'jei_recipeicons'),
+    // Machine UI gui_states skins (buttons/toggles/sliders/input boxes, etc)
+    path.join(pmTexturesRoot, 'gui', 'gui_states'),
   ];
   const includeFiles = [
     path.join(pmTexturesRoot, 'gui', 'slot.png'),
@@ -84,9 +93,9 @@ function pmTexturesPlugin() {
     return abs;
   };
 
-  return {
+  const plugin = {
     name: 'pm-textures',
-    apply: 'serve',
+    apply: 'serve' as const,
     configureServer(server: any) {
       server.middlewares.use((req: any, res: any, next: any) => {
         const url = req.url || '';
@@ -124,7 +133,9 @@ function pmTexturesPlugin() {
         next();
       });
     },
-  };
+  } satisfies Plugin;
+
+  return plugin;
 }
 
 function pmTexturesBuildPlugin() {
@@ -134,6 +145,8 @@ function pmTexturesBuildPlugin() {
   const pmLogoFile = path.resolve(__dirname, '..', 'src', 'main', 'resources', 'assets', 'prototypemachinery', 'logo.png');
   const includeDirs = [
     path.join(pmTexturesRoot, 'gui', 'jei_recipeicons'),
+    // Machine UI gui_states skins (buttons/toggles/sliders/input boxes, etc)
+    path.join(pmTexturesRoot, 'gui', 'gui_states'),
   ];
   const includeFiles = [
     path.join(pmTexturesRoot, 'gui', 'slot.png'),
@@ -160,9 +173,9 @@ function pmTexturesBuildPlugin() {
     return { paths };
   };
 
-  return {
+  const plugin = {
     name: 'pm-textures-build',
-    apply: 'build',
+    apply: 'build' as const,
     generateBundle(this: any) {
       const index = computeIndex();
 
@@ -202,7 +215,9 @@ function pmTexturesBuildPlugin() {
         }
       }
     },
-  };
+  } satisfies Plugin;
+
+  return plugin;
 }
 
 // GitHub Pages 友好：使用相对 base，避免仓库名/子路径问题。
