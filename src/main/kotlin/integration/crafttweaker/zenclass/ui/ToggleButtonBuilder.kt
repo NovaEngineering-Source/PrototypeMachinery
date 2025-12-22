@@ -17,6 +17,7 @@ public class ToggleButtonBuilder : IWidgetBuilder {
     private var y: Int = 0
     private var width: Int = 27
     private var height: Int = 15
+    private var skin: String? = null
     private var stateKey: String? = null
     private var textOn: String? = null
     private var textOff: String? = null
@@ -82,7 +83,17 @@ public class ToggleButtonBuilder : IWidgetBuilder {
         return this
     }
 
+    /**
+     * Set visual skin id (e.g. gui_states templates).
+     * 设置视觉皮肤 ID（例如 gui_states 模板）。
+     */
+    @ZenMethod
+    public fun setSkin(skin: String?): ToggleButtonBuilder {
+        this.skin = skin
+        return this
+    }
+
     override fun build(): WidgetDefinition {
-        return ToggleButtonDefinition(x, y, width, height, stateKey, textOn, textOff, textureOn, textureOff)
+        return ToggleButtonDefinition(x, y, width, height, skin, stateKey, textOn, textOff, textureOn, textureOff)
     }
 }

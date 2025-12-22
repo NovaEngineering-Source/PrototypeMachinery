@@ -4,6 +4,7 @@ import crafttweaker.annotations.ZenRegister
 import github.kasuminova.prototypemachinery.api.ui.definition.DynamicTextDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.SpacerDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.TooltipAreaDefinition
+import github.kasuminova.prototypemachinery.api.ui.definition.TooltipWrapperDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.WidgetDefinition
 import stanhebben.zenscript.annotations.ZenClass
 import stanhebben.zenscript.annotations.ZenMethod
@@ -170,5 +171,69 @@ public class TooltipAreaBuilder : IWidgetBuilder {
 
     override fun build(): WidgetDefinition {
         return TooltipAreaDefinition(x, y, width, height, tooltipLines.toList())
+    }
+}
+
+/**
+ * Builder for Tooltip wrapper.
+ * Tooltip 包装器构建器：为任意子控件添加 tooltip（静态行 + 动态 string 绑定）。
+ */
+@ZenClass("mods.prototypemachinery.ui.TooltipBuilder")
+@ZenRegister
+public class TooltipBuilder(private val child: IWidgetBuilder) : IWidgetBuilder {
+
+    private val tooltipLines: MutableList<String> = mutableListOf()
+    private var tooltipKey: String? = null
+
+    @ZenMethod
+    override fun setPos(x: Int, y: Int): TooltipBuilder {
+        child.setPos(x, y)
+        return this
+    }
+
+    @ZenMethod
+    override fun setSize(width: Int, height: Int): TooltipBuilder {
+        child.setSize(width, height)
+        return this
+    }
+
+    /** Add a static tooltip line. */
+    @ZenMethod
+    public fun addLine(line: String): TooltipBuilder {
+        tooltipLines.add(line)
+        return this
+    }
+
+    /** Clear all static lines. */
+    @ZenMethod
+    public fun clearLines(): TooltipBuilder {
+        tooltipLines.clear()
+        return this
+    }
+
+    /** Replace static tooltip lines. */
+    @ZenMethod
+    public fun setLines(lines: Array<String>): TooltipBuilder {
+        tooltipLines.clear()
+        tooltipLines.addAll(lines)
+        return this
+    }
+
+    /**
+     * Optional dynamic tooltip binding key.
+     * The bound string may contain '\n' to create multiple lines.
+     */
+    @ZenMethod
+    public fun bindText(key: String?): TooltipBuilder {
+        this.tooltipKey = key
+        return this
+    }
+
+    override fun build(): WidgetDefinition {
+        return TooltipWrapperDefinition(
+            content = child.build(),
+            tooltipLines = tooltipLines.toList(),
+            tooltipKey = tooltipKey
+        )
     }
 }

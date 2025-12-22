@@ -2,7 +2,10 @@ package github.kasuminova.prototypemachinery.client.gui.builder
 
 import com.cleanroommc.modularui.api.drawable.IDrawable
 import com.cleanroommc.modularui.drawable.UITexture
+import github.kasuminova.prototypemachinery.client.gui.drawable.SeparatedNineSliceTexture
 import net.minecraft.util.ResourceLocation
+
+import java.util.concurrent.ConcurrentHashMap
 
 public class UITextures {
 
@@ -25,24 +28,27 @@ public class UITextures {
     // Button textures (27x15) - Normal / Hover / Pressed / Hover+Pressed
     private val btnW: Int = 27
     private val btnH: Int = 15
-    private val btnNormalX: Int = 185
-    private val btnNormalY: Int = 87
-    private val btnHoverX: Int = 214
-    private val btnHoverY: Int = 87
+    // NOTE: These coordinates must match *our* states.png.
+    // The old values were copied from another atlas layout and pointed to fully-transparent pixels,
+    // causing buttons/progress to not render (only debug borders were visible).
+    private val btnNormalX: Int = 0
+    private val btnNormalY: Int = 76
+    private val btnHoverX: Int = 0
+    private val btnHoverY: Int = 92
 
     // Hover + Pressed
-    private val btnHoverPressedX: Int = 214
-    private val btnHoverPressedY: Int = 103
-    private val btnPressedX: Int = 185
-    private val btnPressedY: Int = 103
+    private val btnHoverPressedX: Int = 0
+    private val btnHoverPressedY: Int = 124
+    private val btnPressedX: Int = 0
+    private val btnPressedY: Int = 108
 
     // Progress textures (55x12) - Empty / Full
     private val progW: Int = 55
     private val progH: Int = 12
-    private val progEmptyX: Int = 185
-    private val progEmptyY: Int = 119
-    private val progFullX: Int = 185
-    private val progFullY: Int = 133
+    private val progEmptyX: Int = 0
+    private val progEmptyY: Int = 18
+    private val progFullX: Int = 0
+    private val progFullY: Int = 32
 
     // Slot textures (18x18)
     private val slotW: Int = 18
@@ -106,5 +112,94 @@ public class UITextures {
 
     public fun parseTexture(texturePath: String): IDrawable {
         return UITexture.fullImage(ResourceLocation(texturePath))
+    }
+
+    // ==========================================
+    // gui_states helpers
+    // ==========================================
+
+    private val guiStatesCache: MutableMap<String, IDrawable> = ConcurrentHashMap()
+
+    /**
+     * Build a full-image drawable for a gui_states PNG.
+     *
+     * @param relPath path relative to `textures/`, without `.png`, e.g. `gui/gui_states/empty_button/normal/default_n`
+     */
+    public fun guiStatesFull(relPath: String): IDrawable {
+        val key = "full:$relPath"
+        return guiStatesCache.getOrPut(key) {
+            UITexture.fullImage(ResourceLocation("prototypemachinery", relPath))
+        }
+    }
+
+    /**
+     * Build a 9-slice (adaptable) drawable for a gui_states PNG.
+     */
+    public fun guiStatesAdaptable(
+        relPath: String,
+        imageW: Int,
+        imageH: Int,
+        borderLeft: Int,
+        borderTop: Int,
+        borderRight: Int,
+        borderBottom: Int,
+        subX: Int = 0,
+        subY: Int = 0,
+        subW: Int = imageW,
+        subH: Int = imageH
+    ): IDrawable {
+        val key = "adapt:$relPath:$imageW,$imageH:sub=$subX,$subY,$subW,$subH:b=$borderLeft,$borderTop,$borderRight,$borderBottom"
+        return guiStatesCache.getOrPut(key) {
+            UITexture.builder()
+                .location(ResourceLocation("prototypemachinery", relPath))
+                .imageSize(imageW, imageH)
+                .subAreaXYWH(subX, subY, subW, subH)
+                .adaptable(borderLeft, borderTop, borderRight, borderBottom)
+                .build()
+        }
+    }
+
+    /**
+     * Build a 9-slice drawable for gui_states *_expand textures, but do NOT render the 1px separator lines.
+     *
+     * This is needed because the documented gui_states templates include separator pixels between slices.
+     * With standard 9-slice those separators are still drawn (just not stretched), resulting in visible lines.
+     */
+    public fun guiStatesSeparatedAdaptable(
+        relPath: String,
+        imageW: Int,
+        imageH: Int,
+        borderLeft: Int,
+        borderTop: Int,
+        borderRight: Int,
+        borderBottom: Int,
+        subX: Int = 0,
+        subY: Int = 0,
+        subW: Int = imageW,
+        subH: Int = imageH,
+        separatorPx: Int = 1
+    ): IDrawable {
+        val key = "adapt_sep:$relPath:$imageW,$imageH:sub=$subX,$subY,$subW,$subH:b=$borderLeft,$borderTop,$borderRight,$borderBottom:sep=$separatorPx"
+        return guiStatesCache.getOrPut(key) {
+            val u0 = subX.toFloat() / imageW.toFloat()
+            val v0 = subY.toFloat() / imageH.toFloat()
+            val u1 = (subX + subW).toFloat() / imageW.toFloat()
+            val v1 = (subY + subH).toFloat() / imageH.toFloat()
+
+            SeparatedNineSliceTexture(
+                location = ResourceLocation("prototypemachinery", relPath),
+                u0 = u0,
+                v0 = v0,
+                u1 = u1,
+                v1 = v1,
+                imageWidth = imageW,
+                imageHeight = imageH,
+                bl = borderLeft,
+                bt = borderTop,
+                br = borderRight,
+                bb = borderBottom,
+                separatorPx = separatorPx
+            )
+        }
     }
 }

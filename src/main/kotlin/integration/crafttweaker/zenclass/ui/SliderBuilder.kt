@@ -17,6 +17,7 @@ public class SliderBuilder : IWidgetBuilder {
     private var y: Int = 0
     private var width: Int = 100
     private var height: Int = 14
+    private var skin: String? = null
     private var min: Double = 0.0
     private var max: Double = 100.0
     private var step: Double = 1.0
@@ -71,7 +72,17 @@ public class SliderBuilder : IWidgetBuilder {
         return this
     }
 
+    /**
+     * Set visual skin id (e.g. gui_states templates).
+     * 设置视觉皮肤 ID（例如 gui_states 模板）。
+     */
+    @ZenMethod
+    public fun setSkin(skin: String?): SliderBuilder {
+        this.skin = skin
+        return this
+    }
+
     override fun build(): WidgetDefinition {
-        return SliderDefinition(x, y, width, height, min, max, step, valueKey, horizontal)
+        return SliderDefinition(x, y, width, height, skin, min, max, step, valueKey, horizontal)
     }
 }

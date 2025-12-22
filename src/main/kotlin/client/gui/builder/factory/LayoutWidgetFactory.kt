@@ -1,15 +1,20 @@
 package github.kasuminova.prototypemachinery.client.gui.builder.factory
 
+import com.cleanroommc.modularui.api.drawable.IDrawable
 import com.cleanroommc.modularui.api.widget.IWidget
 import com.cleanroommc.modularui.widget.ParentWidget
+import com.cleanroommc.modularui.widget.scroll.HorizontalScrollData
+import com.cleanroommc.modularui.widget.scroll.VerticalScrollData
 import com.cleanroommc.modularui.widgets.layout.Column
 import com.cleanroommc.modularui.widgets.layout.Row
 import github.kasuminova.prototypemachinery.api.ui.definition.ColumnDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.GridDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.PanelDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.RowDefinition
+import github.kasuminova.prototypemachinery.api.ui.definition.ScrollContainerDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.WidgetDefinition
 import github.kasuminova.prototypemachinery.client.gui.builder.UIBuildContext
+import github.kasuminova.prototypemachinery.client.gui.widget.PMScrollContainerWidget
 import github.kasuminova.prototypemachinery.client.gui.widget.PMSmoothGrid
 
 public class LayoutWidgetFactory : WidgetFactory {
@@ -20,6 +25,7 @@ public class LayoutWidgetFactory : WidgetFactory {
             is RowDefinition -> buildRow(def, buildChild)
             is ColumnDefinition -> buildColumn(def, buildChild)
             is GridDefinition -> buildGrid(def, buildChild)
+            is ScrollContainerDefinition -> buildScrollContainer(def, buildChild)
             else -> null
         }
     }
@@ -52,23 +58,33 @@ public class LayoutWidgetFactory : WidgetFactory {
     }
 
     private fun buildNestedPanel(def: PanelDefinition, ctx: UIBuildContext, buildChild: (WidgetDefinition) -> IWidget?): IWidget {
-        val column = Column()
+        // Panel is meant to be an absolute-position container, not a Flow layout.
+        // Using a Column here causes some children (notably nested layout widgets) to be reflowed
+        // unexpectedly, leading to overlaps and content drifting when scripts rely on explicit x/y.
+        val panel = ParentWidget()
             .pos(def.x, def.y)
             .size(def.width, def.height)
 
         val bgPath = ctx.textures.normalizeTexturePath(def.backgroundTexture)
         if (bgPath != null) {
-            column.background(ctx.textures.parseTexture(bgPath))
+            panel.background(ctx.textures.parseTexture(bgPath))
+        } else {
+            // Disable default theme background when no custom background is set.
+            // This prevents parent panel's theme background (e.g., MC_BACKGROUND) from
+            // bleeding through transparent areas of child panels.
+            // 当没有设置自定义背景时，禁用主题默认背景。
+            // 这可以防止父面板的主题背景（如 MC_BACKGROUND）透过子面板的透明区域显示。
+            panel.background(IDrawable.EMPTY)
         }
 
         def.children.forEach { childDef ->
             val widget = buildChild(childDef)
             if (widget != null) {
-                column.child(widget)
+                panel.child(widget)
             }
         }
 
-        return column
+        return panel
     }
 
     private fun buildRow(def: RowDefinition, buildChild: (WidgetDefinition) -> IWidget?): IWidget {
@@ -149,5 +165,43 @@ public class LayoutWidgetFactory : WidgetFactory {
         grid.matrix(rows as List<List<IWidget>>)
 
         return grid
+    }
+
+    private fun buildScrollContainer(def: ScrollContainerDefinition, buildChild: (WidgetDefinition) -> IWidget?): IWidget? {
+        // A scroll container must have a positive viewport size.
+        if (def.width <= 0 || def.height <= 0) return null
+
+        val scrollX = if (def.scrollX) {
+            HorizontalScrollData(def.scrollBarOnStartX, def.scrollBarThicknessX)
+                .apply {
+                    setScrollSpeed(def.scrollSpeed)
+                    setCancelScrollEdge(def.cancelScrollEdge)
+                }
+        } else {
+            null
+        }
+
+        val scrollY = if (def.scrollY) {
+            VerticalScrollData(def.scrollBarOnStartY, def.scrollBarThicknessY)
+                .apply {
+                    setScrollSpeed(def.scrollSpeed)
+                    setCancelScrollEdge(def.cancelScrollEdge)
+                }
+        } else {
+            null
+        }
+
+        val container = PMScrollContainerWidget(scrollX = scrollX, scrollY = scrollY)
+            .pos(def.x, def.y)
+            .size(def.width, def.height)
+
+        def.children.forEach { childDef ->
+            val widget = buildChild(childDef)
+            if (widget != null) {
+                container.child(widget)
+            }
+        }
+
+        return container
     }
 }

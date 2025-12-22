@@ -79,6 +79,46 @@ public object PMUI {
         return GridBuilder()
     }
 
+    /**
+     * Create a scrollable container.
+     * 创建可滚动容器。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun scrollContainer(): ScrollContainerBuilder {
+        return ScrollContainerBuilder()
+    }
+
+    /**
+     * Wrap a widget with conditional visibility/enabled expressions.
+     * 用条件表达式包装组件的可见性/可用性。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun conditional(child: IWidgetBuilder): ConditionalBuilder {
+        return ConditionalBuilder(child)
+    }
+
+    /**
+     * Create a tab container.
+     * 创建标签容器。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun tabContainer(): TabContainerBuilder {
+        return TabContainerBuilder()
+    }
+
+    /**
+     * Create a tab definition (content should be set via setContent()).
+     * 创建标签页（内容通过 setContent() 设置）。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun tab(tabKey: String, title: String): TabBuilder {
+        return TabBuilder(tabKey, title)
+    }
+
     // ========================================================================
     // Interactive Widget Builders
     // 交互组件构建器
@@ -122,6 +162,280 @@ public object PMUI {
     @JvmStatic
     public fun slider(): SliderBuilder {
         return SliderBuilder()
+    }
+
+    /**
+     * Create a text field.
+     * 创建文本输入框。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun textField(): TextFieldBuilder {
+        return TextFieldBuilder()
+    }
+
+    // ========================================================================
+    // gui_states Templates (开箱即用模板)
+    // ========================================================================
+
+    /**
+     * gui_states 空按钮（无阴影，固定尺寸 16x19）。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun emptyButton(): ButtonBuilder {
+        return ButtonBuilder(null)
+            .setSize(16, 19)
+            .setSkin("gui_states/empty_button/normal")
+    }
+
+    /**
+     * gui_states 空按钮（有阴影，固定尺寸 16x19）。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun emptyButtonShadow(): ButtonBuilder {
+        return ButtonBuilder(null)
+            .setSize(16, 19)
+            .setSkin("gui_states/empty_button/shadow")
+    }
+
+    /**
+     * gui_states 扩展按钮（无阴影，9-slice，可缩放）。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun expandButton(): ButtonBuilder {
+        return ButtonBuilder(null)
+            .setSize(16, 19)
+            .setSkin("gui_states/expand_button/normal")
+    }
+
+    /**
+     * gui_states 扩展按钮（有阴影，9-slice，可缩放）。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun expandButtonShadow(): ButtonBuilder {
+        return ButtonBuilder(null)
+            .setSize(16, 19)
+            .setSkin("gui_states/expand_button/shadow")
+    }
+
+    /**
+     * gui_states 开关按钮（switch，默认尺寸 28x14）。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun switchButton(): ToggleButtonBuilder {
+        return ToggleButtonBuilder()
+            .setSize(28, 14)
+            .setSkin("gui_states/switch/normal")
+    }
+
+    /** gui_states 开关按钮（switch，有阴影，默认尺寸 28x14）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun switchButtonShadow(): ToggleButtonBuilder {
+        return ToggleButtonBuilder()
+            .setSize(28, 14)
+            .setSkin("gui_states/switch/shadow")
+    }
+
+    /** gui_states 窄横滑块 slider_s_x（无阴影，默认 56x10）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderSX(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(56, 10)
+            .setHorizontal(true)
+            .setSkin("gui_states/slider/s/x/normal")
+    }
+
+    /** gui_states 窄横滑块 slider_s_x（有阴影，默认 56x10）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderSXShadow(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(56, 10)
+            .setHorizontal(true)
+            .setSkin("gui_states/slider/s/x/shadow")
+    }
+
+    /** gui_states 扩展窄横滑块 slider_s_x（无阴影，最小贴图 14x10，组件可横向缩放）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderSXExpand(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(14, 10)
+            .setHorizontal(true)
+            .setSkin("gui_states/slider/s/x_expand/normal")
+    }
+
+    /** gui_states 扩展窄横滑块 slider_s_x（有阴影）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderSXExpandShadow(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(14, 10)
+            .setHorizontal(true)
+            .setSkin("gui_states/slider/s/x_expand/shadow")
+    }
+
+    /** gui_states 宽横滑块 slider_m_x（无阴影，默认 56x13）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderMX(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(56, 13)
+            .setHorizontal(true)
+            .setSkin("gui_states/slider/m/x/normal")
+    }
+
+    /** gui_states 宽横滑块 slider_m_x（有阴影，默认 56x13）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderMXShadow(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(56, 13)
+            .setHorizontal(true)
+            .setSkin("gui_states/slider/m/x/shadow")
+    }
+
+    /** gui_states 扩展宽横滑块 slider_m_x（无阴影，最小贴图 17x13，组件可横向缩放）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderMXExpand(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(17, 13)
+            .setHorizontal(true)
+            .setSkin("gui_states/slider/m/x_expand/normal")
+    }
+
+    /** gui_states 扩展宽横滑块 slider_m_x（有阴影）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderMXExpandShadow(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(17, 13)
+            .setHorizontal(true)
+            .setSkin("gui_states/slider/m/x_expand/shadow")
+    }
+
+    /** gui_states 窄竖滑块 slider_s_y（无阴影，默认 10x77）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderSY(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(10, 77)
+            .setHorizontal(false)
+            .setSkin("gui_states/slider/s/y/normal")
+    }
+
+    /** gui_states 窄竖滑块 slider_s_y（有阴影，默认 10x77）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderSYShadow(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(10, 77)
+            .setHorizontal(false)
+            .setSkin("gui_states/slider/s/y/shadow")
+    }
+
+    /** gui_states 扩展窄竖滑块 slider_s_y（无阴影，最小贴图 10x16，组件可纵向缩放）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderSYExpand(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(10, 16)
+            .setHorizontal(false)
+            .setSkin("gui_states/slider/s/y_expand/normal")
+    }
+
+    /** gui_states 扩展窄竖滑块 slider_s_y（有阴影）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderSYExpandShadow(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(10, 16)
+            .setHorizontal(false)
+            .setSkin("gui_states/slider/s/y_expand/shadow")
+    }
+
+    /** gui_states 宽竖滑块 slider_m_y（无阴影，默认 13x56）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderMY(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(13, 56)
+            .setHorizontal(false)
+            .setSkin("gui_states/slider/m/y/normal")
+    }
+
+    /** gui_states 宽竖滑块 slider_m_y（有阴影，默认 13x56）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderMYShadow(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(13, 56)
+            .setHorizontal(false)
+            .setSkin("gui_states/slider/m/y/shadow")
+    }
+
+    /** gui_states 扩展宽竖滑块 slider_m_y（无阴影，最小贴图 13x18，组件可纵向缩放）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderMYExpand(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(13, 18)
+            .setHorizontal(false)
+            .setSkin("gui_states/slider/m/y_expand/normal")
+    }
+
+    /** gui_states 扩展宽竖滑块 slider_m_y（有阴影）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun sliderMYExpandShadow(): SliderBuilder {
+        return SliderBuilder()
+            .setSize(13, 18)
+            .setHorizontal(false)
+            .setSkin("gui_states/slider/m/y_expand/shadow")
+    }
+
+    /** gui_states 默认输入框（无阴影，默认 56x13）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun inputBox(): TextFieldBuilder {
+        return TextFieldBuilder()
+            .setSize(56, 13)
+            .setSkin("gui_states/input_box/normal")
+    }
+
+    /** gui_states 默认输入框（有阴影，默认 56x13）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun inputBoxShadow(): TextFieldBuilder {
+        return TextFieldBuilder()
+            .setSize(56, 13)
+            .setSkin("gui_states/input_box/shadow")
+    }
+
+    /** gui_states 扩展输入框（无阴影，最小 5x10，9-slice，可缩放）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun inputBoxExpand(): TextFieldBuilder {
+        return TextFieldBuilder()
+            .setSize(5, 10)
+            .setSkin("gui_states/input_box/expand/normal")
+    }
+
+    /** gui_states 扩展输入框（有阴影，最小 5x10，9-slice，可缩放）。 */
+    @ZenMethod
+    @JvmStatic
+    public fun inputBoxExpandShadow(): TextFieldBuilder {
+        return TextFieldBuilder()
+            .setSize(5, 10)
+            .setSkin("gui_states/input_box/expand/shadow")
     }
 
     // ========================================================================
@@ -194,6 +508,16 @@ public object PMUI {
     @JvmStatic
     public fun tooltipArea(): TooltipAreaBuilder {
         return TooltipAreaBuilder()
+    }
+
+    /**
+     * Wrap any widget builder and attach tooltip metadata.
+     * 为任意组件添加 tooltip（静态行 + 可选动态绑定）。
+     */
+    @ZenMethod
+    @JvmStatic
+    public fun tooltip(child: IWidgetBuilder): TooltipBuilder {
+        return TooltipBuilder(child)
     }
 
     // ========================================================================

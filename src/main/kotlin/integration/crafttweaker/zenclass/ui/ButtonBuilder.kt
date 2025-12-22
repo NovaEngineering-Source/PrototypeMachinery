@@ -14,6 +14,7 @@ public class ButtonBuilder(private val text: String?) : IWidgetBuilder {
     private var width: Int = 27
     private var height: Int = 15
     private var actionKey: String? = null
+    private var skin: String? = null
 
     @ZenMethod
     override fun setPos(x: Int, y: Int): ButtonBuilder {
@@ -35,7 +36,17 @@ public class ButtonBuilder(private val text: String?) : IWidgetBuilder {
         return this
     }
 
+    /**
+     * Set visual skin id (e.g. gui_states templates).
+     * 设置视觉皮肤 ID（例如 gui_states 模板）。
+     */
+    @ZenMethod
+    public fun setSkin(skin: String?): ButtonBuilder {
+        this.skin = skin
+        return this
+    }
+
     override fun build(): WidgetDefinition {
-        return ButtonDefinition(x, y, width, height, text, actionKey)
+        return ButtonDefinition(x, y, width, height, skin, text, actionKey)
     }
 }

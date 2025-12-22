@@ -14,6 +14,7 @@ import github.kasuminova.prototypemachinery.api.ui.definition.TextDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.WidgetDefinition
 import github.kasuminova.prototypemachinery.client.gui.builder.UIBuildContext
 import net.minecraft.util.ResourceLocation
+import kotlin.math.roundToInt
 
 public class DisplayWidgetFactory : WidgetFactory {
 
@@ -32,6 +33,10 @@ public class DisplayWidgetFactory : WidgetFactory {
             .pos(def.x, def.y)
             .color(def.color)
             .shadow(def.shadow)
+
+        if (def.width > 0 || def.height > 0) {
+            text.size(def.width.coerceAtLeast(1), def.height.coerceAtLeast(1))
+        }
 
         text.alignment(parseAlignment(def.alignment))
         return text
@@ -58,6 +63,10 @@ public class DisplayWidgetFactory : WidgetFactory {
             .pos(def.x, def.y)
             .color(def.color)
             .shadow(def.shadow)
+
+        if (def.width > 0 || def.height > 0) {
+            text.size(def.width.coerceAtLeast(1), def.height.coerceAtLeast(1))
+        }
 
         text.alignment(parseAlignment(def.alignment))
         return text
@@ -91,9 +100,32 @@ public class DisplayWidgetFactory : WidgetFactory {
             progress.texture(ctx.textures.defaultProgressEmpty, ctx.textures.defaultProgressFull, imageSize)
         }
 
-        ctx.bindings.bindingKey(def.progressKey)?.let { rawKey ->
-            ctx.bindings.ensureDoubleBinding(ctx.syncManager, ctx.machineTile, rawKey)
+        val progressSync = ctx.bindings.bindingKey(def.progressKey)?.let { rawKey ->
+            val res = ctx.bindings.ensureDoubleBindingExpr(ctx.syncManager, ctx.machineTile, rawKey)
             progress.syncHandler(ctx.bindings.doubleSyncKey(rawKey), 0)
+            res.syncValue
+        }
+
+        def.tooltipTemplate?.takeIf { it.isNotBlank() }?.let { template ->
+            if (progressSync != null) {
+                progress.tooltipDynamic { tooltip ->
+                    val v = progressSync.doubleValue.coerceIn(0.0, 1.0)
+                    val percent = v * 100.0
+                    val percentInt = percent.roundToInt()
+                    val percentStr = "$percentInt%"
+
+                    val text = runCatching {
+                        // Provide a few common args; unused args are ignored by String.format.
+                        String.format(template, v, percent, percentInt, percentStr)
+                    }.getOrElse { template }
+
+                    if (text.isNotBlank()) {
+                        tooltip.addStringLines(text.split('\n'))
+                    }
+                }
+            } else {
+                progress.addTooltipStringLines(template.split('\n'))
+            }
         }
 
         return progress

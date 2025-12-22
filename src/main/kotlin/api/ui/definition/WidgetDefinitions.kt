@@ -81,6 +81,45 @@ public data class GridDefinition(
     override val type: String = "grid"
 }
 
+/**
+ * Scrollable container.
+ * 可滚动容器：提供裁剪（viewport）+ 滚动条，并支持嵌套 children。
+ *
+ * Notes:
+ * - children 的坐标系相对于该容器左上角。
+ * - width/height 必须为正数（用于确定可视区域大小）。
+ * - scrollSize 将由客户端根据 children 的布局结果自动推导。
+ */
+public data class ScrollContainerDefinition(
+    override val x: Int = 0,
+    override val y: Int = 0,
+    override val width: Int = 0,
+    override val height: Int = 0,
+
+    /** Enable horizontal scrolling. */
+    public val scrollX: Boolean = false,
+    /** Enable vertical scrolling. */
+    public val scrollY: Boolean = true,
+
+    /** If true, scrollbar is placed on the start side (left/top) for that axis. */
+    public val scrollBarOnStartX: Boolean = false,
+    public val scrollBarOnStartY: Boolean = false,
+
+    /** Scrollbar thickness in pixels; <= 0 uses the theme default. */
+    public val scrollBarThicknessX: Int = -1,
+    public val scrollBarThicknessY: Int = -1,
+
+    /** Mouse wheel scroll speed in pixels per tick. */
+    public val scrollSpeed: Int = 30,
+
+    /** Whether to cancel scroll events at edges (prevents propagating to parents). */
+    public val cancelScrollEdge: Boolean = true,
+
+    public val children: List<WidgetDefinition> = emptyList()
+) : WidgetDefinition {
+    override val type: String = "scroll_container"
+}
+
 // ============================================================================
 // Interactive Widgets
 // 交互组件
@@ -91,6 +130,8 @@ public data class ButtonDefinition(
     override val y: Int = 0,
     override val width: Int = 27,
     override val height: Int = 15,
+    /** Optional visual skin id, interpreted by the client widget factory. */
+    public val skin: String? = null,
     public val text: String? = null,
     public val actionKey: String? = null
 ) : WidgetDefinition {
@@ -106,6 +147,8 @@ public data class ToggleButtonDefinition(
     override val y: Int = 0,
     override val width: Int = 27,
     override val height: Int = 15,
+    /** Optional visual skin id, interpreted by the client widget factory. */
+    public val skin: String? = null,
     public val stateKey: String? = null, // Data binding key for boolean state
     public val textOn: String? = null,
     public val textOff: String? = null,
@@ -124,6 +167,8 @@ public data class SliderDefinition(
     override val y: Int = 0,
     override val width: Int = 100,
     override val height: Int = 14,
+    /** Optional visual skin id, interpreted by the client widget factory. */
+    public val skin: String? = null,
     public val min: Double = 0.0,
     public val max: Double = 100.0,
     public val step: Double = 1.0,
@@ -131,6 +176,36 @@ public data class SliderDefinition(
     public val horizontal: Boolean = true
 ) : WidgetDefinition {
     override val type: String = "slider"
+}
+
+/**
+ * Text input field.
+ * 文本输入框。
+ */
+public data class TextFieldDefinition(
+    override val x: Int = 0,
+    override val y: Int = 0,
+    override val width: Int = 56,
+    override val height: Int = 13,
+
+    /** Data binding key for string value. */
+    public val valueKey: String? = null,
+
+    /**
+     * Input type:
+     * - "string" (default)
+     * - "long" (numbers only, long)
+     */
+    public val inputType: String = "string",
+
+    /** Optional clamp range for numeric input (only used when inputType == "long"). */
+    public val minLong: Long? = null,
+    public val maxLong: Long? = null,
+
+    /** Optional visual skin id, interpreted by the client widget factory. */
+    public val skin: String? = null
+) : WidgetDefinition {
+    override val type: String = "text_field"
 }
 
 // ============================================================================
@@ -298,6 +373,49 @@ public data class TooltipAreaDefinition(
     public val tooltipLines: List<String> = emptyList()
 ) : WidgetDefinition {
     override val type: String = "tooltip_area"
+}
+
+/**
+ * Tooltip wrapper for any widget.
+ * 为任意组件附加 tooltip 的包装器。
+ *
+ * Notes:
+ * - This does not change layout semantics; it simply attaches tooltip metadata to the wrapped widget.
+ * - `tooltipKey` uses the normal string binding system (same as DynamicText).
+ *
+ * `tooltipTemplate`-style formatting is intentionally not handled here; keep it simple and let
+ * scripts provide already formatted strings if needed.
+ */
+public data class TooltipWrapperDefinition(
+    public val content: WidgetDefinition,
+    public val tooltipLines: List<String> = emptyList(),
+    public val tooltipKey: String? = null
+) : WidgetDefinition {
+    override val x: Int get() = content.x
+    override val y: Int get() = content.y
+    override val width: Int get() = content.width
+    override val height: Int get() = content.height
+    override val type: String = "tooltip_wrapper"
+}
+
+/**
+ * Conditional wrapper for any widget definition.
+ *
+ * Notes:
+ * - This is mainly used by runtime JSON interpreters.
+ * - Conditions are evaluated via bool bindings/expressions.
+ * - Implementation uses widget enable/disable as a lightweight "visibility" mechanism.
+ */
+public data class ConditionalDefinition(
+    public val content: WidgetDefinition,
+    public val visibleIf: String? = null,
+    public val enabledIf: String? = null
+) : WidgetDefinition {
+    override val x: Int get() = content.x
+    override val y: Int get() = content.y
+    override val width: Int get() = content.width
+    override val height: Int get() = content.height
+    override val type: String = "conditional"
 }
 
 /**
