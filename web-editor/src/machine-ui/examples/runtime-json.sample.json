@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "name": "Sample Runtime JSON (tabs + conditions + extra widgets)",
+  "canvas": {
+    "width": 384,
+    "height": 256
+  },
+  "options": {
+    "activeBackground": "A",
+    "activeTabId": "A",
+    "tabs": [
+      {
+        "id": "A",
+        "label": "Main",
+        "texturePath": "gui/gui_controller_a.png"
+      },
+      {
+        "id": "B",
+        "label": "Extension",
+        "texturePath": "gui/gui_controller_b.png"
+      }
+    ],
+    "backgroundA": {"texturePath": "gui/gui_controller_a.png"},
+    "backgroundB": {"texturePath": "gui/gui_controller_b.png"}
+  },
+  "widgets": [
+    {
+      "type": "image",
+      "id": "logo",
+      "x": 28,
+      "y": 10,
+      "w": 16,
+      "h": 16,
+      "texturePath": "gui/slot.png",
+      "visibleIf": "not(hideLogo)"
+    },
+    {
+      "type": "text",
+      "id": "title",
+      "x": 50,
+      "y": 10,
+      "w": 200,
+      "h": 12,
+      "text": "Prototype Machinery",
+      "color": "#ffffff",
+      "shadow": true,
+      "align": "left"
+    },
+    {
+      "type": "progress",
+      "id": "work",
+      "tabId": "A",
+      "x": 132,
+      "y": 28,
+      "w": 24,
+      "h": 16,
+      "direction": "right",
+      "baseTexturePath": "gui/progress_base.png",
+      "runTexturePath": "gui/progress_run.png",
+      "progressKey": "norm(workTicks;0;200)",
+      "tooltipTemplate": "Work: %s%%"
+    },
+    {
+      "type": "slotGrid",
+      "id": "inputs",
+      "tabId": "A",
+      "x": 28,
+      "y": 36,
+      "w": 54,
+      "h": 54,
+      "cols": 3,
+      "rows": 3,
+      "slotKey": "input",
+      "startIndex": 0,
+      "canInsert": true,
+      "canExtract": false,
+      "enabledIf": "and(hasPower;not(isJammed))"
+    },
+    {
+      "type": "button",
+      "id": "start",
+      "tabId": "A",
+      "x": 200,
+      "y": 36,
+      "w": 60,
+      "h": 16,
+      "text": "Start",
+      "actionKey": "start",
+      "enabledIf": "and(hasPower;not(isRunning))"
+    },
+    {
+      "type": "toggle",
+      "id": "redstone",
+      "tabId": "A",
+      "x": 200,
+      "y": 56,
+      "w": 60,
+      "h": 16,
+      "textOn": "RS: ON",
+      "textOff": "RS: OFF",
+      "stateKey": "redstoneEnabled"
+    },
+    {
+      "type": "slider",
+      "id": "speed",
+      "tabId": "B",
+      "x": 28,
+      "y": 30,
+      "w": 120,
+      "h": 14,
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "valueKey": "speed",
+      "horizontal": true
+    },
+    {
+      "type": "playerInventory",
+      "id": "inv",
+      "tabId": "B",
+      "x": 28,
+      "y": 140,
+      "w": 162,
+      "h": 76,
+      "visibleIf": "showPlayerInv"
+    }
+  ]
+}
