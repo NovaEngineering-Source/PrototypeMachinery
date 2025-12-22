@@ -48,6 +48,24 @@ builder 支持通过 structureId 延迟解析结构：
 - `UIRegistry.register(machineId, panel, priority)`：以优先级覆盖/叠加 UI 定义
 - `UIBindings.*`：把 UI 组件与 `ZSDataComponent` 的键值绑定，实现脚本侧数据读写
 
+### Runtime JSON（Machine UI Editor 导出）
+
+除了 builder 方式（`PMUI`）之外，`UIRegistry` 也支持直接注册 **runtime JSON**（通常由 Machine UI Editor 导出）：
+
+- `UIRegistry.registerRuntimeJson(machineId, runtimeJson)`
+- `UIRegistry.registerRuntimeJsonWithPriority(machineId, runtimeJson, priority)`
+
+其中 `runtimeJson` 是一个 JSON 字符串；Mod 侧会在加载 UI 时解析 JSON，并按当前实现构建 ModularUI。
+
+建议：
+
+- 把 runtime JSON 当作“工具链产物”，脚本里只负责注册（以及注册必要的 `UIBindings`）。
+- 如果需要条件/tabs/表达式绑定等能力，优先参考对接契约文档，避免依赖未落地语义。
+
+对接细节（字段契约、兼容策略、支持的 widget type、visibleIf/enabledIf 与 tabs 的当前语义等）见：
+
+- [Machine UI Editor：Runtime JSON 对接（现状 + 契约 + 限制）](./MachineUiEditorRuntime.md)
+
 ## See also
 
 - [机器类型注册（MachineType）与脚本注册](./MachineRegistration.md)

@@ -26,6 +26,7 @@
 - **脚本与 UI**
   - [CraftTweaker（ZenScript）集成](./CraftTweaker.md)
   - [UI：默认 ModularUI + 脚本 UIRegistry](./UI.md)
+  - [Machine UI Editor：Runtime JSON 对接（现状 + 契约 + 限制）](./MachineUiEditorRuntime.md)
   - （相关）[结构预览 GUI（/pm_preview_ui）](./StructurePreview.md)
 
 - **客户端集成（Client Integrations）**

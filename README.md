@@ -33,6 +33,9 @@ PrototypeMachinery 是一个面向 **Minecraft 1.12.2 (Forge)** 的模组/框架
 - 机器注册：[`docs/MachineRegistration.md`](./docs/MachineRegistration.md)
 - CraftTweaker 集成：[`docs/CraftTweaker.md`](./docs/CraftTweaker.md)
 - UI：[`docs/UI.md`](./docs/UI.md)
+- Machine UI Editor（Web Editor 侧）：
+	- 功能现状/代码导航：[`web-editor/src/machine-ui/README.md`](./web-editor/src/machine-ui/README.md)
+	- 运行时对接草案：[`docs/MachineUiEditorRuntime.md`](./docs/MachineUiEditorRuntime.md)
 - API 入口：[`docs/API.md`](./docs/API.md)
 - JEI / HEI 集成：[`docs/JEI.md`](./docs/JEI.md)
 
@@ -112,6 +115,9 @@ Quick links:
 - Machine registration: [`docs/MachineRegistration.md`](./docs/MachineRegistration.md)
 - CraftTweaker integration: [`docs/CraftTweaker.md`](./docs/CraftTweaker.md)
 - UI (ModularUI + script overrides): [`docs/UI.md`](./docs/UI.md)
+- Machine UI Editor (Web Editor):
+	- Feature/status & code map: [`web-editor/src/machine-ui/README.md`](./web-editor/src/machine-ui/README.md)
+	- Runtime integration draft: [`docs/MachineUiEditorRuntime.md`](./docs/MachineUiEditorRuntime.md)
 - Public API entry point: [`docs/API.md`](./docs/API.md)
 
 ### Source entry points

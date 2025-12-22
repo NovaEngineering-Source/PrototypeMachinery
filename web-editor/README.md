@@ -1,6 +1,6 @@
-# PrototypeMachinery Web Editor (Draft)
+# PrototypeMachinery Web Editor（WIP）
 
-一个独立的 Web 子项目（`web-editor/`），用于可视化编辑 JEI/UI/配方相关数据，并导出 ZenScript 脚本。
+一个独立的 Web 子项目（`web-editor/`），用于可视化编辑 UI/配方相关数据，并导出 **Runtime JSON** / **ZenScript**。
 
 本项目的优先目标：**可维护、可演进、先把闭环跑通**。我们会刻意避免“为了架构而架构”，用最少的抽象换取长期可控的复杂度。
 
@@ -15,10 +15,6 @@
 ## 运行
 
 在 `web-editor/` 目录：
-
-如果你的系统只有 `node` 但没有 `npm`（当前工作区就是这种情况），可以用 pacman 安装：
-
-- `sudo pacman -S --needed npm`
 
 - `npm install`
 - `npm run dev`
@@ -35,27 +31,24 @@
 
 > 注意：我们使用 HashRouter + Vite `base: './'`，适配子路径静态托管。
 
-## 要做的活（Roadmap）与预期效果
+## 当前状态与 Roadmap
 
-### 基层框架（Foundation，当前优先）
+### 基层框架（Foundation）
 
 这些是“以后所有功能都依赖它”的底座能力：
 
-1) **可撤销/重做（Undo/Redo）**
-	- 预期效果：拖拽、属性修改、增删元素、导入等操作都能 `Ctrl+Z / Ctrl+Y` 回退/重做。
-	- 设计约束：避免在拖拽过程中产生海量历史（仅在 `dragEnd` 记录一次）。
+1) **可撤销/重做（Undo/Redo）**（已实现）
+	- 拖拽/批量操作会合并为单步历史（避免拖拽过程中产生海量历史）。
 
-2) **基础快捷键**
-	- 预期效果：
-	  - `Ctrl+Z` 撤销、`Ctrl+Shift+Z`/`Ctrl+Y` 重做
-	  - `Delete` 删除选中元素
+2) **基础快捷键**（已实现一批）
+	- `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y`
+	- `Delete/Backspace` 删除
+	- 方向键 nudge（debounce 合并成一次 undo）
 
-3) **画布尺寸可编辑**
-	- 预期效果：右侧面板可改 canvas 的 `width/height`，即时反映到画布。
+3) **画布尺寸可编辑**（已实现）
 
-4) **稳定的最小 IR（中间格式）**
-	- 预期效果：导出 JSON 能被校验（Zod），后续加字段不会破坏旧数据。
-	- 原则：IR 只表达“布局意图”和“渲染所需参数”，不要在 IR 内塞运行时逻辑。
+4) **稳定的最小 IR（中间格式）**（已实现）
+	- IR 由 Zod 校验；导出时会剥离 editor-only 字段。
 
 ### 迭代增强（按需推进，避免过度设计）
 
@@ -84,3 +77,14 @@
   - `components/`：画布/编辑器组件
   - `io/`：本地存储、示例、下载
   - `exporters/`：导出器（ZenScript/JSON）
+
+## 子编辑器：Machine UI Editor
+
+Web Editor 内目前有一条独立的“机器 GUI 编辑器”链路：
+
+- 页面入口：`/#/machine-ui`
+- 开发者文档（功能现状 + 代码导航 + Roadmap）：`src/machine-ui/README.md`
+
+运行时对接/变量绑定/多 Tab 构建对接文档（Mod 侧现状 + 契约）：
+
+- `../docs/MachineUiEditorRuntime.md`
