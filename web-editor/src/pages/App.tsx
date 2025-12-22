@@ -1,5 +1,6 @@
 import {AppShell, Button, Group, Text} from '@mantine/core';
 import {Link, Route, Routes, useLocation} from 'react-router-dom';
+import {pmLogoUrl} from '../editor/assets/pmAssets';
 import {EditorPage} from './EditorPage';
 import {MachineUiPage} from './MachineUiPage';
 
@@ -14,6 +15,18 @@ export function App() {
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
           <Group gap="xs">
+            <img
+              src={pmLogoUrl()}
+              alt="PrototypeMachinery"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+              style={{
+                width: 20,
+                height: 20,
+                objectFit: 'contain',
+              }}
+            />
             <Text fw={700}>PrototypeMachinery</Text>
             <Text c="dimmed">Web Editor (Draft)</Text>
           </Group>

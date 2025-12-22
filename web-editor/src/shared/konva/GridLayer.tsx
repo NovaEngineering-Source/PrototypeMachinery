@@ -17,8 +17,20 @@ export function GridLayer(props: {
     thickness = 0.5,
   } = props;
 
-  const cols = Math.floor(Math.max(0, width) / Math.max(1, grid));
-  const rows = Math.floor(Math.max(0, height) / Math.max(1, grid));
+  // grid=1 is useful for snapping, but drawing a 1px grid would create hundreds/thousands of Konva nodes.
+  // To keep the editor responsive, auto-coarsen the *rendered* grid while preserving snapping semantics elsewhere.
+  const maxLinesPerAxis = 200;
+  const baseGrid = Math.max(1, Math.floor(Number(grid) || 1));
+  let renderGrid = baseGrid;
+  while (
+    renderGrid > 0 &&
+    (Math.floor(Math.max(0, width) / renderGrid) > maxLinesPerAxis || Math.floor(Math.max(0, height) / renderGrid) > maxLinesPerAxis)
+  ) {
+    renderGrid *= 2;
+  }
+
+  const cols = Math.floor(Math.max(0, width) / Math.max(1, renderGrid));
+  const rows = Math.floor(Math.max(0, height) / Math.max(1, renderGrid));
 
   // Avoid drawing on the edges so we don't cover outer borders / frames.
   const vCount = Math.max(0, cols - 1);
@@ -31,7 +43,7 @@ export function GridLayer(props: {
         return (
           <Rect
             key={`v-${i}`}
-            x={i * grid}
+            x={i * renderGrid}
             y={0}
             width={thickness}
             height={height}
@@ -47,7 +59,7 @@ export function GridLayer(props: {
           <Rect
             key={`h-${i}`}
             x={0}
-            y={i * grid}
+            y={i * renderGrid}
             width={width}
             height={thickness}
             fill={color}

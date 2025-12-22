@@ -17,3 +17,8 @@ export function pmTextureUrl(texturePath: string): string {
   const p = texturePath.replace(/^\/+/, '');
   return `${base}pm-textures/${p}`;
 }
+
+export function pmLogoUrl(): string {
+  const base = import.meta.env.BASE_URL || '/';
+  return `${base}pm-logo.png`;
+}

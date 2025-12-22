@@ -42,6 +42,7 @@ function pmTexturesPlugin() {
 
   // web-editor/.. = PrototypeMachinery/
   const pmTexturesRoot = path.resolve(__dirname, '..', 'src', 'main', 'resources', 'assets', 'prototypemachinery', 'textures');
+  const pmLogoFile = path.resolve(__dirname, '..', 'src', 'main', 'resources', 'assets', 'prototypemachinery', 'logo.png');
   const includeDirs = [
     path.join(pmTexturesRoot, 'gui', 'jei_recipeicons'),
   ];
@@ -96,6 +97,17 @@ function pmTexturesPlugin() {
           res.end(JSON.stringify(index));
           return;
         }
+        if (url === '/pm-logo.png') {
+          if (!fs.existsSync(pmLogoFile) || !fs.statSync(pmLogoFile).isFile()) {
+            res.statusCode = 404;
+            res.end('Not found');
+            return;
+          }
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'image/png');
+          fs.createReadStream(pmLogoFile).pipe(res);
+          return;
+        }
         if (url.startsWith('/pm-textures/')) {
           const rel = decodeURIComponent(url.slice('/pm-textures/'.length));
           const abs = resolveTextureFile(rel);
@@ -119,6 +131,7 @@ function pmTexturesBuildPlugin() {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   const pmTexturesRoot = path.resolve(__dirname, '..', 'src', 'main', 'resources', 'assets', 'prototypemachinery', 'textures');
+  const pmLogoFile = path.resolve(__dirname, '..', 'src', 'main', 'resources', 'assets', 'prototypemachinery', 'logo.png');
   const includeDirs = [
     path.join(pmTexturesRoot, 'gui', 'jei_recipeicons'),
   ];
@@ -152,6 +165,20 @@ function pmTexturesBuildPlugin() {
     apply: 'build',
     generateBundle(this: any) {
       const index = computeIndex();
+
+      // 0) emit logo (non-texture asset)
+      try {
+        if (fs.existsSync(pmLogoFile) && fs.statSync(pmLogoFile).isFile()) {
+          const buf = fs.readFileSync(pmLogoFile);
+          this.emitFile({
+            type: 'asset',
+            fileName: 'pm-logo.png',
+            source: buf,
+          });
+        }
+      } catch {
+        // ignore
+      }
 
       // 1) emit index
       this.emitFile({
