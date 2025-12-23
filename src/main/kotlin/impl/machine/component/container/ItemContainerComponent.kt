@@ -11,15 +11,15 @@ public interface ItemContainerComponent : MachineComponent {
 
     public val maxStackSize: Long
 
-    public fun isAllowedPortMode(ioType: PortMode): Boolean
+    public fun isAllowedPortMode(mode: PortMode): Boolean
 
     public fun getItem(slot: Int): ItemStack
 
     public fun setItem(slot: Int, item: ItemStack)
 
-    public fun insertItem(stack: ItemStack, action: TransactionMode): InsertResult
+    public fun insertItem(stack: ItemStack, mode: TransactionMode): InsertResult
 
-    public fun extractItem(amount: Long, action: TransactionMode, predicate: (ItemStack) -> Boolean): ExtractResult
+    public fun extractItem(amount: Long, mode: TransactionMode, predicate: (ItemStack) -> Boolean): ExtractResult
 
     public sealed interface InsertResult {
         public data class Success(val remaining: ItemStack) : InsertResult

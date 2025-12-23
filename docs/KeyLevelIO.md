@@ -49,7 +49,7 @@ This document describes the **key-level** IO model used internally by PrototypeM
 接口同时提供 unchecked 版本（命名可能为 `insertUnchecked` / `extractUnchecked`）：
 
 - 设计目的：**事务 rollback** 时恢复容器状态。
-- 语义：忽略 IOType（输入/输出）限制等“外部规则”，只做“把状态恢复回去”这件事。
+- 语义：忽略 PortMode（输入/输出）限制等“外部规则”，只做“把状态恢复回去”这件事。
 
 重要：unchecked 不是给普通逻辑“绕过规则”用的。
 

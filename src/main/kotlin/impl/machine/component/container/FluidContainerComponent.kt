@@ -12,15 +12,15 @@ public interface FluidContainerComponent : MachineComponent {
 
     public val maxFluidAmount: Long
 
-    public fun isAllowedPortMode(ioType: PortMode): Boolean
+    public fun isAllowedPortMode(mode: PortMode): Boolean
 
     public fun getFluidAmount(tank: Int): Long
 
     public fun setFluidAmount(tank: Int, amount: Long)
 
-    public fun insertFluid(fluid: FluidStack, amount: Long, action: TransactionMode): InsertResult
+    public fun insertFluid(fluid: FluidStack, amount: Long, mode: TransactionMode): InsertResult
 
-    public fun extractFluid(fluid: Fluid, amount: Long, action: TransactionMode): ExtractResult
+    public fun extractFluid(fluid: Fluid, amount: Long, mode: TransactionMode): ExtractResult
 
     public sealed interface InsertResult {
         public data class Success(val remaining: Long) : InsertResult

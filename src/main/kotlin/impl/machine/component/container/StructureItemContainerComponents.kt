@@ -41,18 +41,18 @@ public class StructureItemContainerComponent(
             return max.toLong()
         }
 
-    override fun isAllowedPortMode(ioType: PortMode): Boolean = allowed.contains(ioType)
+    override fun isAllowedPortMode(mode: PortMode): Boolean = allowed.contains(mode)
 
-    override fun insert(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
+    override fun insert(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long {
         if (amount <= 0L) return 0L
         if (!isAllowedPortMode(PortMode.INPUT)) return 0L
-        return insertUnchecked(key, amount, action)
+        return insertUnchecked(key, amount, mode)
     }
 
-    override fun insertUnchecked(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
+    override fun insertUnchecked(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long {
         if (amount <= 0L) return 0L
 
-        val simulate = action == TransactionMode.SIMULATE
+        val simulate = mode == TransactionMode.SIMULATE
         val proto = (key as? PMItemKey)?.uniqueKey?.getItemStackUnsafe() ?: key.get()
 
         var remaining = amount
@@ -77,16 +77,16 @@ public class StructureItemContainerComponent(
         return insertedTotal
     }
 
-    override fun extract(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
+    override fun extract(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long {
         if (amount <= 0L) return 0L
         if (!isAllowedPortMode(PortMode.OUTPUT)) return 0L
-        return extractUnchecked(key, amount, action)
+        return extractUnchecked(key, amount, mode)
     }
 
-    override fun extractUnchecked(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
+    override fun extractUnchecked(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long {
         if (amount <= 0L) return 0L
 
-        val simulate = action == TransactionMode.SIMULATE
+        val simulate = mode == TransactionMode.SIMULATE
         val wanted = (key as? PMItemKey)?.uniqueKey ?: PMItemKeyType.getUniqueKey(key.get())
 
         var remaining = amount
@@ -142,29 +142,29 @@ public class StructureItemStorageContainerComponent(
     public val maxStackSize: Long
         get() = storage.maxCountPerType
 
-    override fun isAllowedPortMode(ioType: PortMode): Boolean = allowed.contains(ioType)
+    override fun isAllowedPortMode(mode: PortMode): Boolean = allowed.contains(mode)
 
-    override fun insert(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
+    override fun insert(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long {
         if (amount <= 0L) return 0L
         if (!isAllowedPortMode(PortMode.INPUT)) return 0L
-        return insertUnchecked(key, amount, action)
+        return insertUnchecked(key, amount, mode)
     }
 
-    override fun insertUnchecked(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
+    override fun insertUnchecked(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        val simulate = action == TransactionMode.SIMULATE
+        val simulate = mode == TransactionMode.SIMULATE
         return storage.insert(key, amount, simulate)
     }
 
-    override fun extract(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
+    override fun extract(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long {
         if (amount <= 0L) return 0L
         if (!isAllowedPortMode(PortMode.OUTPUT)) return 0L
-        return extractUnchecked(key, amount, action)
+        return extractUnchecked(key, amount, mode)
     }
 
-    override fun extractUnchecked(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
+    override fun extractUnchecked(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        val simulate = action == TransactionMode.SIMULATE
+        val simulate = mode == TransactionMode.SIMULATE
         return storage.extract(key, amount, simulate)
     }
 }

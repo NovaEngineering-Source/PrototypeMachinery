@@ -18,19 +18,19 @@ import net.minecraftforge.fluids.FluidStack
  */
 public interface StructureItemKeyContainer : StructureComponent {
 
-    public fun isAllowedPortMode(ioType: PortMode): Boolean
+    public fun isAllowedPortMode(mode: PortMode): Boolean
 
     /** Inserts up to [amount] of [key]. Returns the amount actually inserted. */
-    public fun insert(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long
+    public fun insert(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long
 
     /** Extracts up to [amount] of [key]. Returns the amount actually extracted. */
-    public fun extract(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long
+    public fun extract(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long
 
     /** Unchecked variant that ignores PortMode restrictions (for rollback). */
-    public fun insertUnchecked(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long
+    public fun insertUnchecked(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long
 
     /** Unchecked variant that ignores PortMode restrictions (for rollback). */
-    public fun extractUnchecked(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long
+    public fun extractUnchecked(key: PMKey<ItemStack>, amount: Long, mode: TransactionMode): Long
 }
 
 /**
@@ -40,17 +40,17 @@ public interface StructureItemKeyContainer : StructureComponent {
  */
 public interface StructureFluidKeyContainer : StructureComponent {
 
-    public fun isAllowedPortMode(ioType: PortMode): Boolean
+    public fun isAllowedPortMode(mode: PortMode): Boolean
 
     /** Inserts up to [amount] of [key]. Returns the amount actually inserted. */
-    public fun insert(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long
+    public fun insert(key: PMKey<FluidStack>, amount: Long, mode: TransactionMode): Long
 
     /** Extracts up to [amount] of [key]. Returns the amount actually extracted. */
-    public fun extract(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long
+    public fun extract(key: PMKey<FluidStack>, amount: Long, mode: TransactionMode): Long
 
     /** Unchecked variant that ignores PortMode restrictions (for rollback). */
-    public fun insertUnchecked(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long
+    public fun insertUnchecked(key: PMKey<FluidStack>, amount: Long, mode: TransactionMode): Long
 
     /** Unchecked variant that ignores PortMode restrictions (for rollback). */
-    public fun extractUnchecked(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long
+    public fun extractUnchecked(key: PMKey<FluidStack>, amount: Long, mode: TransactionMode): Long
 }

@@ -214,7 +214,7 @@ class FluidRequirementSystemPerTickTest {
         private val fluid: Fluid = initialFluid
         private var amount: Long = initialAmount.coerceIn(0L, capacity)
 
-        override fun isAllowedPortMode(ioType: PortMode): Boolean = allowed.contains(ioType)
+        override fun isAllowedPortMode(mode: PortMode): Boolean = allowed.contains(mode)
 
         fun getFluidAmount(tank: Int): Long = if (tank == 0) amount else 0L
 
@@ -223,13 +223,13 @@ class FluidRequirementSystemPerTickTest {
             this.amount = amount.coerceIn(0L, capacity)
         }
 
-        override fun insert(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
+        override fun insert(key: PMKey<FluidStack>, amount: Long, mode: TransactionMode): Long {
             if (amount <= 0L) return 0L
             if (!isAllowedPortMode(PortMode.INPUT)) return 0L
-            return insertUnchecked(key, amount, action)
+            return insertUnchecked(key, amount, mode)
         }
 
-        override fun insertUnchecked(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
+        override fun insertUnchecked(key: PMKey<FluidStack>, amount: Long, mode: TransactionMode): Long {
             if (amount <= 0L) return 0L
             val stack = key.get()
             if (stack.fluid != this.fluid) return 0L
@@ -238,28 +238,28 @@ class FluidRequirementSystemPerTickTest {
             val accepted = minOf(amount, space)
             if (accepted <= 0L) return 0L
 
-            if (action == TransactionMode.EXECUTE) {
+            if (mode == TransactionMode.EXECUTE) {
                 this.amount += accepted
             }
             return accepted
         }
 
-        override fun extract(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
+        override fun extract(key: PMKey<FluidStack>, amount: Long, mode: TransactionMode): Long {
             if (amount <= 0L) return 0L
             if (!isAllowedPortMode(PortMode.OUTPUT)) return 0L
-            return extractUnchecked(key, amount, action)
+            return extractUnchecked(key, amount, mode)
         }
 
-        override fun extractUnchecked(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
+        override fun extractUnchecked(key: PMKey<FluidStack>, amount: Long, mode: TransactionMode): Long {
             if (amount <= 0L) return 0L
             val stack = key.get()
             if (stack.fluid != this.fluid) return 0L
 
-            if (action == TransactionMode.SIMULATE && simulateExtractAlways != null) {
+            if (mode == TransactionMode.SIMULATE && simulateExtractAlways != null) {
                 return minOf(amount, simulateExtractAlways).coerceAtLeast(0L)
             }
 
-            if (action == TransactionMode.EXECUTE && executeExtractAlways != null) {
+            if (mode == TransactionMode.EXECUTE && executeExtractAlways != null) {
                 val out = minOf(amount, executeExtractAlways).coerceAtLeast(0L)
                 if (out <= 0L) return 0L
                 this.amount = (this.amount - out).coerceAtLeast(0L)
@@ -269,7 +269,7 @@ class FluidRequirementSystemPerTickTest {
             val extracted = minOf(amount, this.amount)
             if (extracted <= 0L) return 0L
 
-            if (action == TransactionMode.EXECUTE) {
+            if (mode == TransactionMode.EXECUTE) {
                 this.amount -= extracted
             }
 

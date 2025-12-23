@@ -10,10 +10,10 @@ public interface EnergyContainerComponent : MachineComponent {
 
     public val stored: Long
 
-    public fun isAllowedPortMode(ioType: PortMode): Boolean
+    public fun isAllowedPortMode(mode: PortMode): Boolean
 
-    public fun insertEnergy(amount: Long, action: TransactionMode): Long
+    public fun insertEnergy(amount: Long, mode: TransactionMode): Long
 
-    public fun extractEnergy(amount: Long, action: TransactionMode): Long
+    public fun extractEnergy(amount: Long, mode: TransactionMode): Long
 
 }

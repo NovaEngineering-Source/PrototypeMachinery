@@ -185,43 +185,43 @@ class EnergyRequirementSystemPerTickTest {
         override val stored: Long
             get() = _stored
 
-        override fun isAllowedPortMode(ioType: PortMode): Boolean = allowed.contains(ioType)
+        override fun isAllowedPortMode(mode: PortMode): Boolean = allowed.contains(mode)
 
-        override fun insertEnergy(amount: Long, action: TransactionMode): Long {
+        override fun insertEnergy(amount: Long, mode: TransactionMode): Long {
             if (amount <= 0L) return 0L
             if (!isAllowedPortMode(PortMode.INPUT)) return 0L
-            return insertEnergyUnchecked(amount, action)
+            return insertEnergyUnchecked(amount, mode)
         }
 
-        override fun extractEnergy(amount: Long, action: TransactionMode): Long {
+        override fun extractEnergy(amount: Long, mode: TransactionMode): Long {
             if (amount <= 0L) return 0L
             if (!isAllowedPortMode(PortMode.OUTPUT)) return 0L
-            return extractEnergyUnchecked(amount, action)
+            return extractEnergyUnchecked(amount, mode)
         }
 
-        override fun insertEnergyUnchecked(amount: Long, action: TransactionMode): Long {
+        override fun insertEnergyUnchecked(amount: Long, mode: TransactionMode): Long {
             if (amount <= 0L) return 0L
             val accepted = minOf(amount, capacity - _stored).coerceAtLeast(0L)
-            if (action == TransactionMode.EXECUTE) {
+            if (mode == TransactionMode.EXECUTE) {
                 _stored += accepted
             }
             return accepted
         }
 
-        override fun extractEnergyUnchecked(amount: Long, action: TransactionMode): Long {
+        override fun extractEnergyUnchecked(amount: Long, mode: TransactionMode): Long {
             if (amount <= 0L) return 0L
 
-            if (action == TransactionMode.SIMULATE && simulateExtractAlways != null) {
+            if (mode == TransactionMode.SIMULATE && simulateExtractAlways != null) {
                 return minOf(amount, simulateExtractAlways)
             }
-            if (action == TransactionMode.EXECUTE && executeExtractAlways != null) {
+            if (mode == TransactionMode.EXECUTE && executeExtractAlways != null) {
                 val out = minOf(amount, executeExtractAlways)
                 _stored = (_stored - out).coerceAtLeast(0L)
                 return out
             }
 
             val extracted = minOf(amount, _stored).coerceAtLeast(0L)
-            if (action == TransactionMode.EXECUTE) {
+            if (mode == TransactionMode.EXECUTE) {
                 _stored -= extracted
             }
             return extracted
