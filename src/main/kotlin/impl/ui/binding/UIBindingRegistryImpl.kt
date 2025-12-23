@@ -1,7 +1,7 @@
 package github.kasuminova.prototypemachinery.impl.ui.binding
 
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
-import github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachineAttributes
+import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeRegistry
 import github.kasuminova.prototypemachinery.api.machine.component.type.ZSDataComponent
 import github.kasuminova.prototypemachinery.api.machine.component.type.ZSDataComponentType
 import github.kasuminova.prototypemachinery.api.ui.binding.UIBindingRegistry
@@ -209,7 +209,7 @@ public object UIBindingRegistryImpl : UIBindingRegistry {
         if (k.startsWith("attr:")) {
             val idStr = k.removePrefix("attr:")
             val rl = runCatching { ResourceLocation(idStr) }.getOrNull() ?: return null
-            val attrType = StandardMachineAttributes.getById(rl) ?: return null
+            val attrType = MachineAttributeRegistry.get(rl) ?: return null
             return UIBindingRegistry.ResolvedDouble(
                 UIBindingRegistry.BindingKey(UIBindingRegistry.ValueType.DOUBLE, k),
                 getter = { m ->

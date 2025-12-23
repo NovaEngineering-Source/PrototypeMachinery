@@ -47,6 +47,37 @@ public data class ExactBlockStateRequirement(
 }
 
 /**
+ * Exact block-state requirement plus shallow TileEntity NBT constraints.
+ *
+ * This is used by predicates that need to match TE state in addition to block state.
+ */
+public data class ExactBlockStateWithNbtRequirement(
+    public val blockId: net.minecraft.util.ResourceLocation,
+    public val meta: Int,
+    public val properties: Map<String, String> = emptyMap(),
+    /** Shallow constraints: key -> expected string value (best-effort SNBT / string) */
+    public val nbtConstraints: Map<String, String> = emptyMap()
+) : BlockRequirement {
+    override fun stableKey(): String {
+        val propsPart = if (properties.isEmpty()) "" else {
+            properties.entries
+                .sortedBy { it.key }
+                .joinToString(",") { (k, v) -> "$k=$v" }
+                .let { "{$it}" }
+        }
+
+        val nbtPart = if (nbtConstraints.isEmpty()) "" else {
+            nbtConstraints.entries
+                .sortedBy { it.key }
+                .joinToString(",") { (k, v) -> "$k=$v" }
+                .let { "[nbt:$it]" }
+        }
+
+        return "state_nbt:${blockId}:$meta$propsPart$nbtPart"
+    }
+}
+
+/**
  * A lightweight requirement for predicates that can be expressed but are not tied to a block state.
  * Intended mostly for tests / future tags.
  */

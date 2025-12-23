@@ -9,10 +9,13 @@ import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.structureR
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.taskScheduler
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.machine.MachineTypeRegistry
+import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeRegistry
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureRegistry
+import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidatorRegistry
 import github.kasuminova.prototypemachinery.api.recipe.RecipeManager
 import github.kasuminova.prototypemachinery.api.recipe.index.IRecipeIndexRegistry
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementRegistry
+import github.kasuminova.prototypemachinery.api.recipe.scanning.RecipeParallelismConstraintRegistry
 import github.kasuminova.prototypemachinery.api.recipe.selective.SelectiveModifierRegistry
 import github.kasuminova.prototypemachinery.api.scheduler.TaskScheduler
 import github.kasuminova.prototypemachinery.api.ui.action.UIActionRegistry
@@ -136,6 +139,22 @@ public object PrototypeMachineryAPI {
     public val structureRegistry: StructureRegistry = StructureRegistryImpl
 
     /**
+     * Structure validator registry.
+     *
+     * Used by JSON-loaded structures (`StructureData.validators`).
+     */
+    @get:JvmStatic
+    public val structureValidatorRegistry: StructureValidatorRegistry = StructureValidatorRegistry
+
+    /**
+     * Global machine attribute registry.
+     *
+     * This is the authoritative registry for attribute type resolution (including NBT).
+     */
+    @get:JvmStatic
+    public val machineAttributeRegistry: MachineAttributeRegistry = MachineAttributeRegistry
+
+    /**
      * The recipe manager.
      *
      * Manager for machine recipes.
@@ -170,6 +189,14 @@ public object PrototypeMachineryAPI {
      */
     @get:JvmStatic
     public val recipeRequirementRegistry: RecipeRequirementRegistry = RecipeRequirementRegistry
+
+    /**
+     * Recipe scan-time parallelism constraint registry.
+     *
+     * This is used by the scanning system to determine the maximum safe effective parallelism.
+     */
+    @get:JvmStatic
+    public val recipeParallelismConstraintRegistry: RecipeParallelismConstraintRegistry = RecipeParallelismConstraintRegistry
 
     /**
      * The selective modifier registry.

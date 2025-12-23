@@ -2,8 +2,8 @@ package github.kasuminova.prototypemachinery.impl.machine.attribute
 
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeInstance
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeModifier
+import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeRegistry
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeType
-import github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachineAttributes
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.nbt.NBTTagList
 import net.minecraft.util.ResourceLocation
@@ -18,14 +18,9 @@ import net.minecraft.util.ResourceLocation
  * - MachineAttributeMapImpl：全量序列化（base + modifiers）。
  * - OverlayMachineAttributeMapImpl：只序列化本地变化（本地 modifiers + base override）。
  *
- * ## TODO (Temporary attribute registry) / TODO（临时属性注册表）
+ * Attribute types are resolved through [MachineAttributeRegistry].
  *
- * Currently deserialization resolves types using [StandardMachineAttributes] only.
- * This should be replaced by a real attribute registry so third-party attributes can
- * roundtrip without becoming [UnknownMachineAttributeType].
- *
- * 当前反序列化只会用 [StandardMachineAttributes] 来解析类型。
- * 后续应替换为真正的属性注册表，以支持第三方属性完整 roundtrip，避免变成 [UnknownMachineAttributeType]。
+ * 不考虑向后兼容：反序列化遇到未知 attribute id 会直接报错。
  */
 public object MachineAttributeNbt {
 
@@ -189,10 +184,7 @@ public object MachineAttributeNbt {
     }
 
     private fun resolveType(id: ResourceLocation): MachineAttributeType {
-        return StandardMachineAttributes.getById(id) ?: UnknownMachineAttributeType(id)
-    }
-
-    private class UnknownMachineAttributeType(override val id: ResourceLocation) : MachineAttributeType {
-        override val name: String = id.toString()
+        return MachineAttributeRegistry.get(id)
+            ?: error("Unknown MachineAttributeType id in NBT: $id")
     }
 }

@@ -1,6 +1,4 @@
 package github.kasuminova.prototypemachinery.api.machine.attribute
-
-import github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachineAttributes.getById
 import net.minecraft.client.resources.I18n
 import net.minecraft.util.ResourceLocation
 import net.minecraftforge.fml.relauncher.Side
@@ -16,14 +14,6 @@ import net.minecraftforge.fml.relauncher.SideOnly
  * 定义框架提供的一组 [MachineAttributeType]。
  * 这些属性通常被内置系统使用（并行度、速度等）。
  *
- * ## TODO (Temporary registry) / TODO（临时注册表）
- *
- * This object currently doubles as a minimal “attribute registry” (via [getById]).
- * It is mainly for NBT deserialization, and should eventually be replaced by a real registry
- * that supports third-party attribute registration.
- *
- * 当前对象也充当了一个最小的“属性注册表”（通过 [getById]）。
- * 这主要用于 NBT 反序列化，后续应替换为真正的注册表，以支持第三方注册属性。
  */
 public object StandardMachineAttributes {
 
@@ -43,16 +33,13 @@ public object StandardMachineAttributes {
         ResourceLocation("prototypemachinery", "energy_efficiency")
     )
 
-    private val byId: Map<ResourceLocation, MachineAttributeType> by lazy {
-        listOf(
-            MAX_CONCURRENT_PROCESSES,
-            PROCESS_PARALLELISM,
-            PROCESS_SPEED,
-            ENERGY_EFFICIENCY,
-        ).associateBy { it.id }
+    init {
+        // Register built-in attribute types into the global registry.
+        MachineAttributeRegistry.register(MAX_CONCURRENT_PROCESSES)
+        MachineAttributeRegistry.register(PROCESS_PARALLELISM)
+        MachineAttributeRegistry.register(PROCESS_SPEED)
+        MachineAttributeRegistry.register(ENERGY_EFFICIENCY)
     }
-
-    public fun getById(id: ResourceLocation): MachineAttributeType? = byId[id]
 
     private class MachineAttributeTypeImpl(
         override val id: ResourceLocation,

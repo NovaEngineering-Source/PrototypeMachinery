@@ -3,6 +3,7 @@ package github.kasuminova.prototypemachinery
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.common.CommonProxy
 import github.kasuminova.prototypemachinery.common.command.SchedulerServerCommand
+import github.kasuminova.prototypemachinery.common.config.PrototypeMachineryCommonConfig
 import github.kasuminova.prototypemachinery.common.handler.CraftTweakerReloadHandler
 import github.kasuminova.prototypemachinery.common.network.NetworkHandler
 import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
@@ -53,6 +54,9 @@ public object PrototypeMachinery {
     internal fun preInit(event: FMLPreInitializationEvent) {
         logger = event.modLog
         event.modMetadata.version = Tags.VERSION
+
+        // Load config early so performance-related tunings apply to all systems.
+        PrototypeMachineryCommonConfig.load(event)
 
         NetworkHandler.init()
 

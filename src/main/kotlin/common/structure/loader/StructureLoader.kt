@@ -3,6 +3,8 @@ package github.kasuminova.prototypemachinery.common.structure.loader
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
+import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidator
+import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidatorRegistry
 import github.kasuminova.prototypemachinery.api.machine.structure.pattern.StructurePattern
 import github.kasuminova.prototypemachinery.api.machine.structure.pattern.predicate.BlockPredicate
 import github.kasuminova.prototypemachinery.common.registry.StructureRegisterer
@@ -12,6 +14,7 @@ import github.kasuminova.prototypemachinery.impl.machine.structure.SliceStructur
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
 import github.kasuminova.prototypemachinery.impl.machine.structure.TemplateStructure
 import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.SimpleStructurePattern
+import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.StatedBlockNbtPredicate
 import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.StatedBlockPredicate
 import kotlinx.serialization.json.Json
 import net.minecraft.block.Block
@@ -217,6 +220,7 @@ public object StructureLoader {
 
         val offset = BlockPos(data.offset.x, data.offset.y, data.offset.z)
         val pattern = convertPattern(data.id, offset, data.pattern)
+        val validators = resolveValidators(data.id, data.validators)
 
         // Resolve child structures by ID
         // 通过 ID 解析子结构
@@ -255,7 +259,7 @@ public object StructureLoader {
                 orientation = DEFAULT_ORIENTATION,
                 offset = offset,
                 pattern = pattern,
-                validators = emptyList(), // TODO: Support validator deserialization
+                validators = validators,
                 children = children
             )
 
@@ -277,7 +281,7 @@ public object StructureLoader {
                     minCount = minCount,
                     maxCount = maxCount,
                     sliceOffset = sliceOffset,
-                    validators = emptyList(),
+                    validators = validators,
                     children = children
                 )
             }
@@ -317,12 +321,40 @@ public object StructureLoader {
 
             @Suppress("DEPRECATION")
             val blockState = block.getStateFromMeta(element.meta)
-            val predicate = StatedBlockPredicate(blockState)
+
+            val predicate = if (!element.nbt.isNullOrEmpty()) {
+                StatedBlockNbtPredicate(blockState, element.nbt)
+            } else {
+                StatedBlockPredicate(blockState)
+            }
 
             blocks[pos] = predicate
         }
 
         return SimpleStructurePattern(blocks)
+    }
+
+    private fun resolveValidators(structureId: String, ids: List<String>): List<StructureValidator> {
+        if (ids.isEmpty()) return emptyList()
+
+        val out = ArrayList<StructureValidator>(ids.size)
+        for (raw in ids) {
+            val id = runCatching { ResourceLocation(raw) }.getOrNull()
+            if (id == null) {
+                PrototypeMachinery.logger.warn("Invalid validator id '$raw' in structure '$structureId' (skipped)")
+                continue
+            }
+
+            val validator = StructureValidatorRegistry.create(id)
+            if (validator == null) {
+                PrototypeMachinery.logger.warn("Unknown validator '$id' in structure '$structureId' (skipped)")
+                continue
+            }
+
+            out.add(validator)
+        }
+
+        return out
     }
 
     /**

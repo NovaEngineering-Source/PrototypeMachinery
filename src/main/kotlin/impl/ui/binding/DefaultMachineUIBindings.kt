@@ -1,6 +1,6 @@
 package github.kasuminova.prototypemachinery.impl.ui.binding
 
-import github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachineAttributes
+import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeRegistry
 import github.kasuminova.prototypemachinery.api.ui.binding.MachineUIBindings
 import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
 import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
@@ -12,7 +12,7 @@ import net.minecraft.util.ResourceLocation
  *
  * 约定的内置 key（可按需扩展）：
  * - bool:  "formed", "active"
- * - double:"formed", "uptime", "attr:<namespace>:<path>"（仅支持内置 StandardMachineAttributes）
+ * - double:"formed", "uptime", "attr:<namespace>:<path>"（支持任意已注册的 MachineAttributeType）
  * - string:"machine_name", "machine_id"
  */
 public class DefaultMachineUIBindings(
@@ -44,7 +44,7 @@ public class DefaultMachineUIBindings(
         if (k.startsWith("attr:")) {
             val idStr = k.removePrefix("attr:")
             val rl = runCatching { ResourceLocation(idStr) }.getOrNull() ?: return null
-            val attrType = StandardMachineAttributes.getById(rl) ?: return null
+            val attrType = MachineAttributeRegistry.get(rl) ?: return null
             val map = machine.attributeMap
             return {
                 (map as? MachineAttributeMapImpl)?.getAttribute(attrType)?.value ?: 0.0

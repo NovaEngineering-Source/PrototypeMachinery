@@ -108,6 +108,102 @@ To avoid scanning all recipes frequently, the project uses indexing:
 - `IRecipeIndexRegistry` / `RecipeIndexRegistry`
 - `RequirementIndexFactory` builds indexes for each requirement type
 
+> Note: this “recipe indexing” refers to **runtime scanning acceleration** (shrinking the candidate set),
+> not JEI `IIngredients` indexing (search / lookup).
+
+### Goals & constraints
+
+- Goal: reduce the number of recipes that need expensive simulate-based checks in `FactoryRecipeScanningSystem`.
+- Constraint: indexes must be **conservative** (prefer false positives; avoid false negatives).
+- Only use cheap, observable machine state:
+  - Item / Fluid: prefer storage-backed key-level containers (can enumerate and count keys).
+  - Capability-backed containers without enumeration should yield “no opinion” (`lookup() == null`) or disable indexing.
+
+### Return semantics (recommended)
+
+- `RequirementIndex.lookup(machine)`:
+  - `null`: no opinion (e.g. machine has no observable containers of that type).
+  - `emptySet()`: strong filter meaning “no recipes match current state”.
+- `RecipeIndex.lookup(machine)` intersects non-null results.
+  - If all indices return `null`, the caller should treat it as “index unavailable” and fall back to normal scanning.
+
+### Planned indices by requirement type
+
+#### ITEM (`ItemRequirementComponent`)
+
+- Key: `PMKey<ItemStack>` prototype equality (count ignored).
+- Build:
+  - `recipesByInputKey: Map<PMKey<ItemStack>, Set<MachineRecipe>>`
+  - (optional) `requiredByRecipe: Map<MachineRecipe, Map<PMKey<ItemStack>, Long>>` for amount-level filtering
+- Lookup:
+  - Read only **PortMode.OUTPUT** item sources.
+  - Use only storage-backed containers (enumerate keys + amounts).
+  - Union by available keys, then (optionally) check totals against `requiredByRecipe`.
+
+#### FLUID (`FluidRequirementComponent`)
+
+- Key: `PMKey<FluidStack>` prototype equality.
+- Build:
+  - Use `inputs` + `inputsPerTick` for coarse “presence” filtering.
+  - Prefer amount-level filtering only for `inputs` initially, to avoid false negatives.
+- Lookup:
+  - Read only **PortMode.OUTPUT** fluid sources.
+  - Use only storage-backed containers.
+
+#### ENERGY (`EnergyRequirementComponent`)
+
+- Build a simple threshold table per recipe (e.g. `input`, optionally `input + inputPerTick`).
+- Lookup sums **PortMode.OUTPUT** `StructureEnergyContainer.stored` and filters by threshold.
+
+### Flattening wrapper requirements
+
+- `CheckpointRequirementComponent(requirement=...)`: unwrap and index the inner requirement.
+- `SelectiveRequirementComponent(candidates=[...])`: union candidates into indices (conservative).
+
+---
+
+## Item / Fluid chance + fuzzy inputs + random outputs (proposal)
+
+This is a design proposal to be implemented later.
+
+### Required rules
+
+1) During checks (simulate): treat chance as **100%**.
+2) During actual IO (execute): apply the effective chance.
+3) If chance and fuzzy IO coexist:
+   - checks still run fuzzy checks with chance=100%
+   - actual IO first decides chance; if it fails, skip the fuzzy operation.
+
+### Deterministic randomness
+
+Use `RecipeProcess.seed` via `RecipeProcess.getRandom(salt)`.
+For per-tick randomness, introduce a persisted tick counter process component and include it in the salt.
+
+### Chance above 200% and parallelism
+
+Let parallelism be $k$ and effective chance percent be $C$ ($c=C/100$, can be > 2).
+
+Split:
+
+$$c = g + p,\quad g=\lfloor c \rfloor,\; p\in[0,1)$$
+
+Define “number of successful executions” as:
+
+$$S = g\cdot k + \mathrm{Binomial}(k, p)$$
+
+This avoids the “all or nothing” extreme while staying stochastic and reproducible.
+
+### Fuzzy input locking
+
+- During checks: pick the first satisfiable candidate and lock it.
+- Locks must be rollbackable and thus stored in a process component (e.g. `locks[(requirementId, groupIndex, stage)]`).
+
+### Random output (weighted without replacement)
+
+- During checks: perform a strict capacity check (chance=100%).
+  - Conservative approach: validate the worst-case selection (top-N by required count).
+- During execution: pick `N` distinct candidates via weighted sampling without replacement using the process RNG.
+
 ## See also
 
 - [Multiblock structure system overview](../Structures.md)

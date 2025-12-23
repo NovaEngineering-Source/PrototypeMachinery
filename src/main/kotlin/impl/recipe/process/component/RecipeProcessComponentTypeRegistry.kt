@@ -19,6 +19,7 @@ public object RecipeProcessComponentTypeRegistry {
         register(RecipeOverlayProcessComponentType)
         register(SelectiveStateProcessComponentType)
         register(RecipeLifecycleStateProcessComponentType)
+        register(RequirementResolutionProcessComponentType)
     }
 
     public fun register(type: RecipeProcessComponentType<*>) {
