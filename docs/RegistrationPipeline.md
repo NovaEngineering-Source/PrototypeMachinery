@@ -1,5 +1,7 @@
 # 方块/物品/方块实体注册流水线
 
+English translation: [`docs/en/RegistrationPipeline.md`](./en/RegistrationPipeline.md)
+
 本项目并非把所有“复杂对象”都塞进 Forge Registry；而是：
 
 - **MachineType**：使用内部注册表（`MachineTypeRegistryImpl`）在 PreInit 注册

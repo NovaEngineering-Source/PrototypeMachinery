@@ -1,5 +1,7 @@
 # 机器类型注册（MachineType Registration）
 
+English translation: [`docs/en/MachineRegistration.md`](./en/MachineRegistration.md)
+
 本页描述 PrototypeMachinery 中 MachineType 的注册方式与加载时序。
 
 ## 你可以从哪里注册？

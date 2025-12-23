@@ -5,6 +5,17 @@ import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructu
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureInstance
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureInstanceData
 
+/**
+ * # StructureMatchContext - Recursive matching context
+ * # StructureMatchContext - 递归匹配上下文
+ *
+ * Context object used during structure matching.
+ * Implementations usually maintain a stack of "currently matching" structures, build [StructureInstance] trees,
+ * and expose helper hooks to enter/exit nested structures.
+ *
+ * 结构匹配期间使用的上下文对象。
+ * 实现通常维护“当前匹配结构”的栈，构建 [StructureInstance] 树，并通过 enter/exit 来管理嵌套结构。
+ */
 public interface StructureMatchContext {
 
     public val machine: MachineInstance

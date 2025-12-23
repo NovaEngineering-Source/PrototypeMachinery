@@ -1,5 +1,7 @@
 # Key-level IO（基于 PMKey 的 IO）
 
+English translation: [`docs/en/KeyLevelIO.md`](./en/KeyLevelIO.md)
+
 本项目的结构 IO（Structure IO）在内部已统一迁移为 **key-level** 交互：以 `PMKey<T>` + `Long` 数量作为核心数据模型，而不是频繁构造/比较 `ItemStack` / `FluidStack`。
 
 This document describes the **key-level** IO model used internally by PrototypeMachinery: `PMKey<T>` + `Long` counts, instead of stack-level `ItemStack` / `FluidStack` churn.

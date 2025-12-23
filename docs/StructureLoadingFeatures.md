@@ -1,5 +1,7 @@
 # 结构加载器特性说明
 
+> English translation: [docs/en/StructureLoadingFeatures.md](./en/StructureLoadingFeatures.md)
+
 > 本文以当前实现为准：`src/main/kotlin/common/structure/loader/StructureLoader.kt`。
 
 ## 已实现的高级特性

@@ -3,12 +3,12 @@ package github.kasuminova.prototypemachinery.api.recipe.selective
 import org.jetbrains.annotations.ApiStatus
 import java.util.concurrent.ConcurrentHashMap
 
+@ApiStatus.Experimental
 /**
  * Global registry for selective modifiers.
  *
  * 选择性修改器全局注册表。
  */
-@ApiStatus.Experimental
 public object SelectiveModifierRegistry {
 
     private val modifiers: MutableMap<String, SelectiveModifier> = ConcurrentHashMap()

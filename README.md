@@ -24,6 +24,8 @@ PrototypeMachinery 是一个面向 **Minecraft 1.12.2 (Forge)** 的模组/框架
 - 项目总览（入口）：[`PROJECT_OVERVIEW.md`](./PROJECT_OVERVIEW.md)
 - 文档索引：[`docs/README.md`](./docs/README.md)
 
+英文文档（翻译中）：[`docs/en/README.md`](./docs/en/README.md)
+
 常用主题直达：
 
 - 生命周期与加载顺序：[`docs/Lifecycle.md`](./docs/Lifecycle.md)
@@ -103,8 +105,10 @@ It also includes a client-side **structure projection preview** tool for buildin
 
 ### Documentation (start here)
 
-- Project overview (entry point): [`PROJECT_OVERVIEW.md`](./PROJECT_OVERVIEW.md)
+- Project overview (entry point): [`PROJECT_OVERVIEW.en.md`](./PROJECT_OVERVIEW.en.md) (original: [`PROJECT_OVERVIEW.md`](./PROJECT_OVERVIEW.md))
 - Docs index: [`docs/README.md`](./docs/README.md)
+
+English docs (work-in-progress translations): [`docs/en/README.md`](./docs/en/README.md)
 
 Quick links:
 

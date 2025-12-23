@@ -1,5 +1,7 @@
 # JEI 集成：维护文档（Internals）
 
+> English translation: [docs/en/JEI-Internals.md](./en/JEI-Internals.md)
+
 本文档面向维护者/二次开发者，覆盖 `src/main/kotlin/integration/jei` 包下的所有源码文件，并用中英对照的方式解释其职责与整体数据流。
 
 > 目标：当你想新增一种 requirement（自定义 ingredient type）、新增 renderer/handler、或排查 JEI UI/索引问题时，可以先从这里定位入口。

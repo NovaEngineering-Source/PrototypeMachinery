@@ -1,5 +1,7 @@
 # CraftTweaker（ZenScript）集成
 
+> English translation: [docs/en/CraftTweaker.md](./en/CraftTweaker.md)
+
 本项目提供 CraftTweaker/ZenScript 侧的“预览期 API”，用于：
 
 - 机器类型（MachineType）注册

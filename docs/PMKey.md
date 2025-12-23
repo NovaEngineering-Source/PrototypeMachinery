@@ -1,5 +1,7 @@
 # PMKey 系统（资源键）
 
+English translation: [`docs/en/PMKey.md`](./en/PMKey.md)
+
 PMKey（PrototypeMachinery Key）用于将“可堆叠资源”统一抽象为可比较、可序列化、可长期稳定的键。
 
 它主要服务于：

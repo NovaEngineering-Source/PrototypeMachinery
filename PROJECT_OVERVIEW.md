@@ -1,5 +1,7 @@
 # PrototypeMachinery 项目概要
 
+English translation (rough): [`PROJECT_OVERVIEW.en.md`](./PROJECT_OVERVIEW.en.md)
+
 > 本文档用于为后续维护者提供高层概览与核心逻辑说明。
 
 ## 1. 近期重要变更（对照代码现状）
@@ -25,6 +27,8 @@
 本项目的文档已按主题拆分到 `docs/` 目录；本文保留为“总览 + 归档”，方便快速扫一遍全局。
 
 - 文档索引（入口）：[`docs/README.md`](./docs/README.md)
+
+英文文档（翻译中）：[`docs/en/README.md`](./docs/en/README.md)
 
 
 ## 2. 模块索引（详细文档在 docs/）

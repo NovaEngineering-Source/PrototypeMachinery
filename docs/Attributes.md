@@ -1,5 +1,7 @@
 # 属性系统（Machine Attributes）
 
+English translation: [`docs/en/Attributes.md`](./en/Attributes.md)
+
 本项目的“属性系统”用于把各种倍率/效率/并行度等数值统一抽象出来，并支持在不同层级叠加（机器层基线 + 进程层 overlay）。
 
 ## 组成
@@ -68,4 +70,4 @@ overlay 允许每个 `RecipeProcess` 在机器基线基础上叠加额外修改�
 
 后续应提供一个真正的全局属性注册表，以支持第三方属性注册与稳定反序列化。
 
-另见：`docs/Localization.md`
+另见：[本地化（Localization / i18n）](./Localization.md)

@@ -1,5 +1,7 @@
 # 10 阶 Hatch 系统（Item / Fluid / Energy）
 
+English translation: [`docs/en/Hatches.md`](./en/Hatches.md)
+
 本项目实现了一个“10 阶梯度”的 Hatch 系统，用于提供机器外设级别的：
 
 - 物品输入/输出/输入输出（INPUT / OUTPUT / IO）

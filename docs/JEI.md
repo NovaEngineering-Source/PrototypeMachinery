@@ -1,5 +1,7 @@
 # JEI / HEI 集成（配方索引 + 默认 UI + Addon 扩展）
 
+> English translation: [docs/en/JEI.md](./en/JEI.md)
+
 本文档介绍 PrototypeMachinery 的 JEI/HEI（JEI 4.16 / MC 1.12.2）集成工作原理，并给出 addon 接入“VanillaTypes 之外 ingredient（气体/源质等）”的完整思路与代码示例。
 
 > 关键词：

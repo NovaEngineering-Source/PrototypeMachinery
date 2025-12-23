@@ -1,5 +1,7 @@
 # 机器逻辑与配方架构
 
+English translation: [`docs/en/MachineLogic.md`](./en/MachineLogic.md)
+
 本文描述 PrototypeMachinery 的“机器运行时骨架”与“配方执行”设计。
 
 本文以当前代码实现为准；若你在阅读时发现文档与实现不一致，请优先相信实现（并欢迎顺手修文档）。

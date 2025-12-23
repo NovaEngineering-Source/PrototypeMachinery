@@ -9,6 +9,16 @@ import github.kasuminova.prototypemachinery.impl.recipe.requirement.type.Paralle
 import net.minecraft.util.ResourceLocation
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * # RecipeRequirementTypes - Built-in requirement types
+ * # RecipeRequirementTypes - 内置需求类型集合
+ *
+ * Provides a set of built-in [RecipeRequirementType] instances and a small in-memory registry.
+ * This is mainly used as a convenient access point for framework-provided requirement types.
+ *
+ * 提供一组内置的 [RecipeRequirementType] 实例，并附带一个简易的内存注册表。
+ * 主要用于方便访问框架自带的需求类型。
+ */
 public object RecipeRequirementTypes {
 
     private val types: MutableMap<ResourceLocation, RecipeRequirementType<*>> = ConcurrentHashMap()

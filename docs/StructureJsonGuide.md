@@ -1,5 +1,7 @@
 # MachineStructure JSON 配置指南
 
+English translation: [`docs/en/StructureJsonGuide.md`](./en/StructureJsonGuide.md)
+
 本指南说明如何在 `config/prototypemachinery/structures/` 下编写 JSON 结构文件，并由 `StructureLoader` 加载为 `MachineStructure`。
 
 ## 文件位置

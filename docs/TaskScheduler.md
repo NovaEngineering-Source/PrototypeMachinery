@@ -1,5 +1,7 @@
 # 调度器（TaskScheduler）
 
+English translation: [`docs/en/TaskScheduler.md`](./en/TaskScheduler.md)
+
 TaskScheduler 用于承载机器运行时的“周期性任务/并发执行”的抽象。
 
 ## 代码位置

@@ -1,5 +1,7 @@
 # Machine UI Editor：Runtime JSON 对接（现状 + 契约 + 限制）
 
+English translation: [`docs/en/MachineUiEditorRuntime.md`](./en/MachineUiEditorRuntime.md)
+
 本文件描述 **Web Editor（Machine UI Editor）导出的 Runtime JSON** 在 PrototypeMachinery 模组侧的解释与构建方式。
 
 这份文档的目标是：

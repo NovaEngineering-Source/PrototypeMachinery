@@ -1,5 +1,7 @@
 # 多方块结构系统（MachineStructure）
 
+English translation: [`docs/en/Structures.md`](./en/Structures.md)
+
 本项目的结构系统用于描述“多方块机器”的形状、朝向、以及匹配逻辑。
 
 它由三部分组成：

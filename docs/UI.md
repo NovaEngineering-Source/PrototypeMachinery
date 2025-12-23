@@ -1,5 +1,7 @@
 # UI：默认 ModularUI + 脚本 UIRegistry
 
+English translation: [`docs/en/UI.md`](./en/UI.md)
+
 本项目的 UI 分两条线：
 
 1. **默认原生 UI**：基于 ModularUI，为机器/外设提供默认界面。
@@ -60,7 +62,7 @@ Runtime JSON 的注册入口位于 `UIRegistry`（ZenScript）：
 运行时解析与字段兼容策略详见：`impl/ui/runtime/MachineUiRuntimeJson.kt`。
 
 > 重要：Runtime JSON 的“字段契约 / 支持的 widget type / tabs/条件/绑定表达式”等以实现为准。
-> 建议把“对接契约”集中看 `docs/MachineUiEditorRuntime.md`，避免 UI.md 变成重复的大长篇。
+> 建议把“对接契约”集中看 [Machine UI Editor：Runtime JSON 对接（现状 + 契约 + 限制）](./MachineUiEditorRuntime.md)，避免 UI.md 变成重复的大长篇。
 
 ## 绑定（UIBindings）与表达式 key
 

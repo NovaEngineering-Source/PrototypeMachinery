@@ -6,11 +6,12 @@ import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttribu
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import org.jetbrains.annotations.ApiStatus
 
+@ApiStatus.Experimental
 /**
  * Runtime context passed to selective modifiers.
+ *
  * 传递给选择性修改器的运行时上下文。
  */
-@ApiStatus.Experimental
 public interface SelectiveContext {
 
     public val machine: MachineInstance

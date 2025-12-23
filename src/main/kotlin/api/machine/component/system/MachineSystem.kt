@@ -1,3 +1,5 @@
+@file:Suppress("PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+
 package github.kasuminova.prototypemachinery.api.machine.component.system
 
 import github.kasuminova.prototypemachinery.api.ecs.ComponentSystem
@@ -75,7 +77,6 @@ import github.kasuminova.prototypemachinery.api.machine.event.MachineTickEvent
  * @see MachineEvent
  * @see MachineTickEvent
  */
-@Suppress("PARAMETER_NAME_CHANGED_ON_OVERRIDE")
 public interface MachineSystem<C : MachineComponent> : ComponentSystem<MachineInstance, C> {
 
     /**

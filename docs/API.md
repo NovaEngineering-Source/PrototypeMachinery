@@ -1,5 +1,7 @@
 # 统一 API 入口（PrototypeMachineryAPI）
 
+English translation: [`docs/en/API.md`](./en/API.md)
+
 对外暴露的统一 API 入口位于：
 
 - `src/main/kotlin/api/PrototypeMachineryAPI.kt`

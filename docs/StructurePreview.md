@@ -1,5 +1,7 @@
 # 结构预览（客户端 / Structure Preview）
 
+English translation: [`docs/en/StructurePreview.md`](./en/StructurePreview.md)
+
 本文档介绍 PrototypeMachinery 的两条“客户端结构预览”能力：
 
 1. **世界内投影预览**（`/pm_preview`）：把结构投影到世界中（ghost / outline / block model）。

@@ -1,5 +1,7 @@
 # 资源存储（ResourceStorage / EnergyStorage）
 
+English translation: [`docs/en/Storage.md`](./en/Storage.md)
+
 本项目的存储实现主要面向“工业模组常见的大容量容器”场景：
 
 - **按类型计数**（type-based）而非“槽位 + ItemStack 堆叠”

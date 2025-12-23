@@ -1,5 +1,7 @@
 # 生命周期与加载顺序
 
+English translation: [`docs/en/Lifecycle.md`](./en/Lifecycle.md)
+
 本文用于帮助定位“为什么某个注册/加载必须在某阶段做”。
 
 ## 关键入口

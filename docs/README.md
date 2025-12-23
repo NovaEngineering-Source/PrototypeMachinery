@@ -4,6 +4,16 @@
 
 如果你是第一次阅读：建议先看 `PROJECT_OVERVIEW.md`（项目总览/入口），再按需深入下面各主题。
 
+## English translations
+
+本项目的文档以 `docs/`（中文）为主。
+
+如果你需要英文版本：
+
+- 英文索引入口：[`docs/en/README.md`](./en/README.md)
+
+目前优先覆盖 API/架构相关的核心页面（API、Machine Attributes、MachineLogic、PMKey、Key-level IO、Storage、TaskScheduler、Lifecycle、Registration、Localization），并逐步补齐结构系统相关页面（Structures、StructureLoadingFeatures、StructureJsonGuide、StructurePreview）、脚本/客户端集成页面（CraftTweaker、JEI / JEI-Internals）与模块功能页（Hatches），以及 UI 入口页（UI / MachineUiEditorRuntime）。
+
 ## 快速导航
 
 - **核心概念**
@@ -11,6 +21,7 @@
   - [机器逻辑与配方架构](./MachineLogic.md)
   - [资源键系统（PMKey）](./PMKey.md)
   - [资源存储（ResourceStorage / EnergyStorage）](./Storage.md)
+  - [本地化（Localization / i18n）](./Localization.md)
 
 - **多方块结构**
   - [结构系统总览](./Structures.md)

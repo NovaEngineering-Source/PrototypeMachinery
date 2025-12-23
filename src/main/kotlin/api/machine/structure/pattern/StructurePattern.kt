@@ -5,6 +5,19 @@ import net.minecraft.util.EnumFacing
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 
+/**
+ * # StructurePattern - Block predicate map (relative coordinates)
+ * # StructurePattern - 方块谓词模式（相对坐标）
+ *
+ * A structure pattern is a mapping from relative positions (controller origin = (0,0,0)) to [BlockPredicate].
+ * It is used by matchers to validate whether a region in the world satisfies the structure.
+ *
+ * 结构模式是“相对坐标（控制器原点 = (0,0,0)） -> [BlockPredicate]”的映射。
+ * 匹配器通过它来验证世界中的一片区域是否满足结构要求。
+ *
+ * - [isAreaLoaded] provides a fast-fail guard to avoid expensive predicate iteration on unloaded chunks.
+ * - [transform] enables orientation/rotation support (e.g. 24-way facing).
+ */
 public interface StructurePattern {
 
     public val blocks: Map<BlockPos, BlockPredicate>

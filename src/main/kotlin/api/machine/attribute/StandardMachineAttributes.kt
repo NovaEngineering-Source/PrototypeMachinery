@@ -6,21 +6,26 @@ import net.minecraft.util.ResourceLocation
 import net.minecraftforge.fml.relauncher.Side
 import net.minecraftforge.fml.relauncher.SideOnly
 
+/**
+ * # StandardMachineAttributes - Built-in machine attributes
+ * # StandardMachineAttributes - 内置机器属性
+ *
+ * Defines the framework-provided [MachineAttributeType] set.
+ * These attributes are commonly used by built-in systems (parallelism, speed, etc.).
+ *
+ * 定义框架提供的一组 [MachineAttributeType]。
+ * 这些属性通常被内置系统使用（并行度、速度等）。
+ *
+ * ## TODO (Temporary registry) / TODO（临时注册表）
+ *
+ * This object currently doubles as a minimal “attribute registry” (via [getById]).
+ * It is mainly for NBT deserialization, and should eventually be replaced by a real registry
+ * that supports third-party attribute registration.
+ *
+ * 当前对象也充当了一个最小的“属性注册表”（通过 [getById]）。
+ * 这主要用于 NBT 反序列化，后续应替换为真正的注册表，以支持第三方注册属性。
+ */
 public object StandardMachineAttributes {
-
-    /**
-     * Built-in attributes used by the framework.
-     * 框架内置属性。
-     *
-     * ## TODO (Temporary registry) / TODO（临时注册表）
-     *
-     * This object currently doubles as a minimal “attribute registry” (via [getById]).
-     * It is a temporary solution for NBT deserialization and should be replaced by a
-     * real registry that supports third-party attribute registration.
-     *
-     * 当前对象也充当了一个最小的“属性注册表”（通过 [getById]）。
-     * 这只是为了 NBT 反序列化的临时方案，后续应替换为真正的注册表，支持第三方注册属性。
-     */
 
     public val MAX_CONCURRENT_PROCESSES: MachineAttributeType = MachineAttributeTypeImpl(
         ResourceLocation("prototypemachinery", "max_concurrent_processes")
