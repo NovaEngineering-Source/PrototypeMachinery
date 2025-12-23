@@ -1,8 +1,8 @@
 package github.kasuminova.prototypemachinery.impl.machine.component.container
 
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
-import github.kasuminova.prototypemachinery.common.util.Action
-import github.kasuminova.prototypemachinery.common.util.IOType
+import github.kasuminova.prototypemachinery.api.util.PortMode
+import github.kasuminova.prototypemachinery.api.util.TransactionMode
 import net.minecraft.item.ItemStack
 
 public interface ItemContainerComponent : MachineComponent {
@@ -11,15 +11,15 @@ public interface ItemContainerComponent : MachineComponent {
 
     public val maxStackSize: Long
 
-    public fun isAllowedIOType(ioType: IOType): Boolean
+    public fun isAllowedPortMode(ioType: PortMode): Boolean
 
     public fun getItem(slot: Int): ItemStack
 
     public fun setItem(slot: Int, item: ItemStack)
 
-    public fun insertItem(stack: ItemStack, action: Action): InsertResult
+    public fun insertItem(stack: ItemStack, action: TransactionMode): InsertResult
 
-    public fun extractItem(amount: Long, action: Action, predicate: (ItemStack) -> Boolean): ExtractResult
+    public fun extractItem(amount: Long, action: TransactionMode, predicate: (ItemStack) -> Boolean): ExtractResult
 
     public sealed interface InsertResult {
         public data class Success(val remaining: ItemStack) : InsertResult

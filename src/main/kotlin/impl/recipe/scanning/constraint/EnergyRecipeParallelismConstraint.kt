@@ -4,9 +4,9 @@ import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
 import github.kasuminova.prototypemachinery.api.recipe.scanning.RecipeParallelismConstraint
-import github.kasuminova.prototypemachinery.common.util.Action
-import github.kasuminova.prototypemachinery.common.util.IOType
-import github.kasuminova.prototypemachinery.common.util.RecipeParallelism
+import github.kasuminova.prototypemachinery.api.util.PortMode
+import github.kasuminova.prototypemachinery.api.util.RecipeParallelism
+import github.kasuminova.prototypemachinery.api.util.TransactionMode
 import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureEnergyContainer
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.EnergyRequirementComponent
 import net.minecraft.util.ResourceLocation
@@ -26,11 +26,11 @@ public class EnergyRecipeParallelismConstraint(
 
         val sources = machine.structureComponentMap
             .getByInstanceOf(StructureEnergyContainer::class.java)
-            .filter { it.isAllowedIOType(IOType.OUTPUT) }
+            .filter { it.isAllowedPortMode(PortMode.OUTPUT) }
 
         val targets = machine.structureComponentMap
             .getByInstanceOf(StructureEnergyContainer::class.java)
-            .filter { it.isAllowedIOType(IOType.INPUT) }
+            .filter { it.isAllowedPortMode(PortMode.INPUT) }
 
         // 1) Inputs: start + perTick
         for (c in cs) {
@@ -65,7 +65,7 @@ public class EnergyRecipeParallelismConstraint(
         var remaining = required
         for (c in sources) {
             if (remaining <= 0L) break
-            remaining -= c.extractEnergy(remaining, Action.SIMULATE)
+            remaining -= c.extractEnergy(remaining, TransactionMode.SIMULATE)
         }
         return remaining <= 0L
     }
@@ -74,7 +74,7 @@ public class EnergyRecipeParallelismConstraint(
         var remaining = required
         for (c in targets) {
             if (remaining <= 0L) break
-            remaining -= c.insertEnergy(remaining, Action.SIMULATE)
+            remaining -= c.insertEnergy(remaining, TransactionMode.SIMULATE)
         }
         return remaining <= 0L
     }

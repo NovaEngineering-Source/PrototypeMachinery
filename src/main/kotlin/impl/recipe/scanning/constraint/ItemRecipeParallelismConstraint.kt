@@ -6,9 +6,9 @@ import github.kasuminova.prototypemachinery.api.machine.component.container.Stru
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
 import github.kasuminova.prototypemachinery.api.recipe.scanning.RecipeParallelismConstraint
-import github.kasuminova.prototypemachinery.common.util.Action
-import github.kasuminova.prototypemachinery.common.util.IOType
-import github.kasuminova.prototypemachinery.common.util.RecipeParallelism
+import github.kasuminova.prototypemachinery.api.util.PortMode
+import github.kasuminova.prototypemachinery.api.util.RecipeParallelism
+import github.kasuminova.prototypemachinery.api.util.TransactionMode
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.ItemRequirementComponent
 import net.minecraft.item.ItemStack
 import net.minecraft.util.ResourceLocation
@@ -28,11 +28,11 @@ public class ItemRecipeParallelismConstraint(
 
         val sources = machine.structureComponentMap
             .getByInstanceOf(StructureItemKeyContainer::class.java)
-            .filter { it.isAllowedIOType(IOType.OUTPUT) }
+            .filter { it.isAllowedPortMode(PortMode.OUTPUT) }
 
         val targets = machine.structureComponentMap
             .getByInstanceOf(StructureItemKeyContainer::class.java)
-            .filter { it.isAllowedIOType(IOType.INPUT) }
+            .filter { it.isAllowedPortMode(PortMode.INPUT) }
 
         // 1) Inputs (start): must be satisfiable
         for (c in cs) {
@@ -48,7 +48,7 @@ public class ItemRecipeParallelismConstraint(
 
                     for (container in sources) {
                         if (remaining <= 0L) break
-                        remaining -= container.extract(key, remaining, Action.SIMULATE)
+                        remaining -= container.extract(key, remaining, TransactionMode.SIMULATE)
                     }
 
                     if (remaining > 0L) return false
@@ -72,7 +72,7 @@ public class ItemRecipeParallelismConstraint(
 
                 for (container in targets) {
                     if (remainingCount <= 0L) break
-                    remainingCount -= container.insert(out, remainingCount, Action.SIMULATE)
+                    remainingCount -= container.insert(out, remainingCount, TransactionMode.SIMULATE)
                 }
 
                 if (remainingCount > 0L) return false

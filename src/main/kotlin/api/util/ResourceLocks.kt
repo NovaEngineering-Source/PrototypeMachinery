@@ -1,4 +1,4 @@
-package github.kasuminova.prototypemachinery.common.util
+package github.kasuminova.prototypemachinery.api.util
 
 import com.google.common.util.concurrent.Striped
 import github.kasuminova.prototypemachinery.api.scheduler.AffinityKey

@@ -20,9 +20,9 @@ import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
+import github.kasuminova.prototypemachinery.api.util.PortMode
+import github.kasuminova.prototypemachinery.api.util.TransactionMode
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
-import github.kasuminova.prototypemachinery.common.util.Action
-import github.kasuminova.prototypemachinery.common.util.IOType
 import github.kasuminova.prototypemachinery.impl.key.fluid.PMFluidKeyType
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.component.StructureComponentMapImpl
@@ -65,7 +65,7 @@ class FluidRequirementSystemPerTickTest {
     @Test
     fun `per tick drains fluid from output containers`() {
         val machine = DummyMachineInstance()
-        val src = DummyFluidContainer(machine, capacity = 1000, initialFluid = fluidA, initialAmount = 500, allowed = setOf(IOType.OUTPUT))
+        val src = DummyFluidContainer(machine, capacity = 1000, initialFluid = fluidA, initialAmount = 500, allowed = setOf(PortMode.OUTPUT))
         machine.structureComponentMap.add(src)
 
         val process = dummyProcess(machine)
@@ -84,7 +84,7 @@ class FluidRequirementSystemPerTickTest {
     @Test
     fun `per tick drain blocked when insufficient fluid`() {
         val machine = DummyMachineInstance()
-        val src = DummyFluidContainer(machine, capacity = 1000, initialFluid = fluidA, initialAmount = 50, allowed = setOf(IOType.OUTPUT))
+        val src = DummyFluidContainer(machine, capacity = 1000, initialFluid = fluidA, initialAmount = 50, allowed = setOf(PortMode.OUTPUT))
         machine.structureComponentMap.add(src)
 
         val process = dummyProcess(machine)
@@ -104,7 +104,7 @@ class FluidRequirementSystemPerTickTest {
     @Test
     fun `per tick outputs fluid into input containers`() {
         val machine = DummyMachineInstance()
-        val dst = DummyFluidContainer(machine, capacity = 1000, initialFluid = fluidA, initialAmount = 0, allowed = setOf(IOType.INPUT))
+        val dst = DummyFluidContainer(machine, capacity = 1000, initialFluid = fluidA, initialAmount = 0, allowed = setOf(PortMode.INPUT))
         machine.structureComponentMap.add(dst)
 
         val process = dummyProcess(machine)
@@ -123,7 +123,7 @@ class FluidRequirementSystemPerTickTest {
     @Test
     fun `per tick output blocked when full unless ignore_output_full`() {
         val machine = DummyMachineInstance()
-        val dst = DummyFluidContainer(machine, capacity = 100, initialFluid = fluidA, initialAmount = 100, allowed = setOf(IOType.INPUT))
+        val dst = DummyFluidContainer(machine, capacity = 100, initialFluid = fluidA, initialAmount = 100, allowed = setOf(PortMode.INPUT))
         machine.structureComponentMap.add(dst)
 
         val process = dummyProcess(machine)
@@ -142,7 +142,7 @@ class FluidRequirementSystemPerTickTest {
     @Test
     fun `per tick output allows partial when ignore_output_full`() {
         val machine = DummyMachineInstance()
-        val dst = DummyFluidContainer(machine, capacity = 100, initialFluid = fluidA, initialAmount = 95, allowed = setOf(IOType.INPUT))
+        val dst = DummyFluidContainer(machine, capacity = 100, initialFluid = fluidA, initialAmount = 95, allowed = setOf(PortMode.INPUT))
         machine.structureComponentMap.add(dst)
 
         val process = dummyProcess(machine)
@@ -167,7 +167,7 @@ class FluidRequirementSystemPerTickTest {
             capacity = 1000,
             initialFluid = fluidA,
             initialAmount = 200,
-            allowed = setOf(IOType.OUTPUT),
+            allowed = setOf(PortMode.OUTPUT),
             simulateExtractAlways = 200,
             executeExtractAlways = 0,
         )
@@ -206,7 +206,7 @@ class FluidRequirementSystemPerTickTest {
         private val capacity: Long,
         initialFluid: Fluid,
         initialAmount: Long,
-        private val allowed: Set<IOType>,
+        private val allowed: Set<PortMode>,
         private val simulateExtractAlways: Long? = null,
         private val executeExtractAlways: Long? = null,
     ) : StructureFluidKeyContainer {
@@ -214,7 +214,7 @@ class FluidRequirementSystemPerTickTest {
         private val fluid: Fluid = initialFluid
         private var amount: Long = initialAmount.coerceIn(0L, capacity)
 
-        override fun isAllowedIOType(ioType: IOType): Boolean = allowed.contains(ioType)
+        override fun isAllowedPortMode(ioType: PortMode): Boolean = allowed.contains(ioType)
 
         fun getFluidAmount(tank: Int): Long = if (tank == 0) amount else 0L
 
@@ -223,13 +223,13 @@ class FluidRequirementSystemPerTickTest {
             this.amount = amount.coerceIn(0L, capacity)
         }
 
-        override fun insert(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+        override fun insert(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
             if (amount <= 0L) return 0L
-            if (!isAllowedIOType(IOType.INPUT)) return 0L
+            if (!isAllowedPortMode(PortMode.INPUT)) return 0L
             return insertUnchecked(key, amount, action)
         }
 
-        override fun insertUnchecked(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+        override fun insertUnchecked(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
             if (amount <= 0L) return 0L
             val stack = key.get()
             if (stack.fluid != this.fluid) return 0L
@@ -238,28 +238,28 @@ class FluidRequirementSystemPerTickTest {
             val accepted = minOf(amount, space)
             if (accepted <= 0L) return 0L
 
-            if (action == Action.EXECUTE) {
+            if (action == TransactionMode.EXECUTE) {
                 this.amount += accepted
             }
             return accepted
         }
 
-        override fun extract(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+        override fun extract(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
             if (amount <= 0L) return 0L
-            if (!isAllowedIOType(IOType.OUTPUT)) return 0L
+            if (!isAllowedPortMode(PortMode.OUTPUT)) return 0L
             return extractUnchecked(key, amount, action)
         }
 
-        override fun extractUnchecked(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+        override fun extractUnchecked(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
             if (amount <= 0L) return 0L
             val stack = key.get()
             if (stack.fluid != this.fluid) return 0L
 
-            if (action == Action.SIMULATE && simulateExtractAlways != null) {
+            if (action == TransactionMode.SIMULATE && simulateExtractAlways != null) {
                 return minOf(amount, simulateExtractAlways).coerceAtLeast(0L)
             }
 
-            if (action == Action.EXECUTE && executeExtractAlways != null) {
+            if (action == TransactionMode.EXECUTE && executeExtractAlways != null) {
                 val out = minOf(amount, executeExtractAlways).coerceAtLeast(0L)
                 if (out <= 0L) return 0L
                 this.amount = (this.amount - out).coerceAtLeast(0L)
@@ -269,7 +269,7 @@ class FluidRequirementSystemPerTickTest {
             val extracted = minOf(amount, this.amount)
             if (extracted <= 0L) return 0L
 
-            if (action == Action.EXECUTE) {
+            if (action == TransactionMode.EXECUTE) {
                 this.amount -= extracted
             }
 

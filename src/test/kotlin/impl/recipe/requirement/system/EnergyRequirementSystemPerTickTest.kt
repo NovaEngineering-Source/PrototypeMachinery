@@ -18,9 +18,9 @@ import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
+import github.kasuminova.prototypemachinery.api.util.PortMode
+import github.kasuminova.prototypemachinery.api.util.TransactionMode
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
-import github.kasuminova.prototypemachinery.common.util.Action
-import github.kasuminova.prototypemachinery.common.util.IOType
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.component.StructureComponentMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureEnergyContainer
@@ -39,7 +39,7 @@ class EnergyRequirementSystemPerTickTest {
     @Test
     fun `per tick drains energy from output containers`() {
         val machine = DummyMachineInstance()
-        val src = DummyEnergyContainer(machine, capacity = 100, initial = 100, allowed = setOf(IOType.OUTPUT))
+        val src = DummyEnergyContainer(machine, capacity = 100, initial = 100, allowed = setOf(PortMode.OUTPUT))
         machine.structureComponentMap.add(src)
 
         val process = dummyProcess(machine)
@@ -58,7 +58,7 @@ class EnergyRequirementSystemPerTickTest {
     @Test
     fun `per tick drain blocked when insufficient energy`() {
         val machine = DummyMachineInstance()
-        val src = DummyEnergyContainer(machine, capacity = 100, initial = 10, allowed = setOf(IOType.OUTPUT))
+        val src = DummyEnergyContainer(machine, capacity = 100, initial = 10, allowed = setOf(PortMode.OUTPUT))
         machine.structureComponentMap.add(src)
 
         val process = dummyProcess(machine)
@@ -78,7 +78,7 @@ class EnergyRequirementSystemPerTickTest {
     @Test
     fun `per tick outputs energy into input containers`() {
         val machine = DummyMachineInstance()
-        val dst = DummyEnergyContainer(machine, capacity = 100, initial = 0, allowed = setOf(IOType.INPUT))
+        val dst = DummyEnergyContainer(machine, capacity = 100, initial = 0, allowed = setOf(PortMode.INPUT))
         machine.structureComponentMap.add(dst)
 
         val process = dummyProcess(machine)
@@ -97,7 +97,7 @@ class EnergyRequirementSystemPerTickTest {
     @Test
     fun `per tick output blocked when full unless ignore_output_full`() {
         val machine = DummyMachineInstance()
-        val dst = DummyEnergyContainer(machine, capacity = 10, initial = 10, allowed = setOf(IOType.INPUT))
+        val dst = DummyEnergyContainer(machine, capacity = 10, initial = 10, allowed = setOf(PortMode.INPUT))
         machine.structureComponentMap.add(dst)
 
         val process = dummyProcess(machine)
@@ -116,7 +116,7 @@ class EnergyRequirementSystemPerTickTest {
     @Test
     fun `per tick output allows partial when ignore_output_full`() {
         val machine = DummyMachineInstance()
-        val dst = DummyEnergyContainer(machine, capacity = 10, initial = 10, allowed = setOf(IOType.INPUT))
+        val dst = DummyEnergyContainer(machine, capacity = 10, initial = 10, allowed = setOf(PortMode.INPUT))
         machine.structureComponentMap.add(dst)
 
         val process = dummyProcess(machine)
@@ -142,7 +142,7 @@ class EnergyRequirementSystemPerTickTest {
             owner = machine,
             capacity = 100,
             initial = 50,
-            allowed = setOf(IOType.OUTPUT),
+            allowed = setOf(PortMode.OUTPUT),
             simulateExtractAlways = 50, // simulate claims it can provide
             executeExtractAlways = 0,   // execute provides nothing -> inconsistent
         )
@@ -175,7 +175,7 @@ class EnergyRequirementSystemPerTickTest {
         override val provider: Any? = null,
         override val capacity: Long,
         initial: Long,
-        private val allowed: Set<IOType>,
+        private val allowed: Set<PortMode>,
         private val simulateExtractAlways: Long? = null,
         private val executeExtractAlways: Long? = null,
     ) : StructureEnergyContainer {
@@ -185,43 +185,43 @@ class EnergyRequirementSystemPerTickTest {
         override val stored: Long
             get() = _stored
 
-        override fun isAllowedIOType(ioType: IOType): Boolean = allowed.contains(ioType)
+        override fun isAllowedPortMode(ioType: PortMode): Boolean = allowed.contains(ioType)
 
-        override fun insertEnergy(amount: Long, action: Action): Long {
+        override fun insertEnergy(amount: Long, action: TransactionMode): Long {
             if (amount <= 0L) return 0L
-            if (!isAllowedIOType(IOType.INPUT)) return 0L
+            if (!isAllowedPortMode(PortMode.INPUT)) return 0L
             return insertEnergyUnchecked(amount, action)
         }
 
-        override fun extractEnergy(amount: Long, action: Action): Long {
+        override fun extractEnergy(amount: Long, action: TransactionMode): Long {
             if (amount <= 0L) return 0L
-            if (!isAllowedIOType(IOType.OUTPUT)) return 0L
+            if (!isAllowedPortMode(PortMode.OUTPUT)) return 0L
             return extractEnergyUnchecked(amount, action)
         }
 
-        override fun insertEnergyUnchecked(amount: Long, action: Action): Long {
+        override fun insertEnergyUnchecked(amount: Long, action: TransactionMode): Long {
             if (amount <= 0L) return 0L
             val accepted = minOf(amount, capacity - _stored).coerceAtLeast(0L)
-            if (action == Action.EXECUTE) {
+            if (action == TransactionMode.EXECUTE) {
                 _stored += accepted
             }
             return accepted
         }
 
-        override fun extractEnergyUnchecked(amount: Long, action: Action): Long {
+        override fun extractEnergyUnchecked(amount: Long, action: TransactionMode): Long {
             if (amount <= 0L) return 0L
 
-            if (action == Action.SIMULATE && simulateExtractAlways != null) {
+            if (action == TransactionMode.SIMULATE && simulateExtractAlways != null) {
                 return minOf(amount, simulateExtractAlways)
             }
-            if (action == Action.EXECUTE && executeExtractAlways != null) {
+            if (action == TransactionMode.EXECUTE && executeExtractAlways != null) {
                 val out = minOf(amount, executeExtractAlways)
                 _stored = (_stored - out).coerceAtLeast(0L)
                 return out
             }
 
             val extracted = minOf(amount, _stored).coerceAtLeast(0L)
-            if (action == Action.EXECUTE) {
+            if (action == TransactionMode.EXECUTE) {
                 _stored -= extracted
             }
             return extracted

@@ -6,9 +6,9 @@ import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RequirementTransaction
-import github.kasuminova.prototypemachinery.common.util.Action
-import github.kasuminova.prototypemachinery.common.util.IOType
-import github.kasuminova.prototypemachinery.common.util.scaleByParallelism
+import github.kasuminova.prototypemachinery.api.util.PortMode
+import github.kasuminova.prototypemachinery.api.util.TransactionMode
+import github.kasuminova.prototypemachinery.api.util.scaleByParallelism
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.FluidRequirementComponent
 import net.minecraftforge.fluids.FluidStack
 
@@ -25,7 +25,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
         val machine = process.owner
         val sources = machine.structureComponentMap
             .getByInstanceOf(StructureFluidKeyContainer::class.java)
-            .filter { it.isAllowedIOType(IOType.OUTPUT) }
+            .filter { it.isAllowedPortMode(PortMode.OUTPUT) }
 
         if (sources.isEmpty()) {
             return blocked("blocked.fluid.no_sources", listOf(component.id))
@@ -41,7 +41,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
 
             for (c in sources) {
                 if (remaining <= 0L) break
-                remaining -= c.extract(input, remaining, Action.SIMULATE)
+                remaining -= c.extract(input, remaining, TransactionMode.SIMULATE)
             }
 
             if (remaining > 0L) {
@@ -63,10 +63,10 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
                 if (remaining <= 0L) break
 
                 // Probe quickly to avoid pointless writes.
-                val canTake = c.extract(input, remaining, Action.SIMULATE)
+                val canTake = c.extract(input, remaining, TransactionMode.SIMULATE)
                 if (canTake <= 0L) continue
 
-                val took = c.extract(input, remaining, Action.EXECUTE)
+                val took = c.extract(input, remaining, TransactionMode.EXECUTE)
                 if (took > 0L) {
                     val map = extractedByContainer.getOrPut(c) { LinkedHashMap() }
                     map[input] = (map[input] ?: 0L) + took
@@ -103,7 +103,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
         val sources = if (component.inputsPerTick.isNotEmpty()) {
             machine.structureComponentMap
                 .getByInstanceOf(StructureFluidKeyContainer::class.java)
-                .filter { it.isAllowedIOType(IOType.OUTPUT) }
+                .filter { it.isAllowedPortMode(PortMode.OUTPUT) }
         } else {
             emptyList()
         }
@@ -111,7 +111,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
         val targets = if (component.outputsPerTick.isNotEmpty()) {
             machine.structureComponentMap
                 .getByInstanceOf(StructureFluidKeyContainer::class.java)
-                .filter { it.isAllowedIOType(IOType.INPUT) }
+                .filter { it.isAllowedPortMode(PortMode.INPUT) }
         } else {
             emptyList()
         }
@@ -136,7 +136,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
 
             for (c in sources) {
                 if (remaining <= 0L) break
-                remaining -= c.extract(input, remaining, Action.SIMULATE)
+                remaining -= c.extract(input, remaining, TransactionMode.SIMULATE)
             }
 
             if (remaining > 0L) {
@@ -154,7 +154,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
 
                 for (c in targets) {
                     if (remaining <= 0L) break
-                    remaining -= c.insert(out, remaining, Action.SIMULATE)
+                    remaining -= c.insert(out, remaining, TransactionMode.SIMULATE)
                 }
 
                 if (remaining > 0L) {
@@ -177,10 +177,10 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
             for (c in sources) {
                 if (remaining <= 0L) break
 
-                val canTake = c.extract(input, remaining, Action.SIMULATE)
+                val canTake = c.extract(input, remaining, TransactionMode.SIMULATE)
                 if (canTake <= 0L) continue
 
-                val took = c.extract(input, remaining, Action.EXECUTE)
+                val took = c.extract(input, remaining, TransactionMode.EXECUTE)
                 if (took > 0L) {
                     val map = extractedByContainer.getOrPut(c) { LinkedHashMap() }
                     map[input] = (map[input] ?: 0L) + took
@@ -206,10 +206,10 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
             for (c in targets) {
                 if (remaining <= 0L) break
 
-                val canPut = c.insert(out, remaining, Action.SIMULATE)
+                val canPut = c.insert(out, remaining, TransactionMode.SIMULATE)
                 if (canPut <= 0L) continue
 
-                val put = c.insert(out, remaining, Action.EXECUTE)
+                val put = c.insert(out, remaining, TransactionMode.EXECUTE)
                 if (put > 0L) {
                     val map = insertedByContainer.getOrPut(c) { LinkedHashMap() }
                     map[out] = (map[out] ?: 0L) + put
@@ -244,7 +244,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
         val machine = process.owner
         val targets = machine.structureComponentMap
             .getByInstanceOf(StructureFluidKeyContainer::class.java)
-            .filter { it.isAllowedIOType(IOType.INPUT) }
+            .filter { it.isAllowedPortMode(PortMode.INPUT) }
 
         if (targets.isEmpty()) {
             return blocked("blocked.fluid.no_targets", listOf(component.id))
@@ -262,7 +262,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
 
             for (c in targets) {
                 if (remaining <= 0L) break
-                remaining -= c.insert(out, remaining, Action.SIMULATE)
+                remaining -= c.insert(out, remaining, TransactionMode.SIMULATE)
             }
 
             if (remaining > 0L) {
@@ -283,10 +283,10 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
             for (c in targets) {
                 if (remaining <= 0L) break
 
-                val canPut = c.insert(out, remaining, Action.SIMULATE)
+                val canPut = c.insert(out, remaining, TransactionMode.SIMULATE)
                 if (canPut <= 0L) continue
 
-                val put = c.insert(out, remaining, Action.EXECUTE)
+                val put = c.insert(out, remaining, TransactionMode.EXECUTE)
                 if (put > 0L) {
                     val map = insertedByContainer.getOrPut(c) { LinkedHashMap() }
                     map[out] = (map[out] ?: 0L) + put
@@ -315,8 +315,8 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
         extracted.forEach { (container, keys) ->
             keys.forEach { (key, amount) ->
                 if (amount <= 0L) return@forEach
-                // Use unchecked to restore even if IOType disallows normal insert.
-                container.insertUnchecked(key, amount, Action.EXECUTE)
+                // Use unchecked to restore even if PortMode disallows normal insert.
+                container.insertUnchecked(key, amount, TransactionMode.EXECUTE)
             }
         }
     }
@@ -325,8 +325,8 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
         inserted.forEach { (container, keys) ->
             keys.forEach { (key, amount) ->
                 if (amount <= 0L) return@forEach
-                // Use unchecked to restore even if IOType disallows normal extract.
-                container.extractUnchecked(key, amount, Action.EXECUTE)
+                // Use unchecked to restore even if PortMode disallows normal extract.
+                container.extractUnchecked(key, amount, TransactionMode.EXECUTE)
             }
         }
     }

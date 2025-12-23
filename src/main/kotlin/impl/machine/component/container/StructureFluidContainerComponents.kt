@@ -4,8 +4,8 @@ import github.kasuminova.prototypemachinery.api.key.PMKey
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.container.StructureFluidKeyContainer
 import github.kasuminova.prototypemachinery.api.storage.ResourceStorage
-import github.kasuminova.prototypemachinery.common.util.Action
-import github.kasuminova.prototypemachinery.common.util.IOType
+import github.kasuminova.prototypemachinery.api.util.PortMode
+import github.kasuminova.prototypemachinery.api.util.TransactionMode
 import net.minecraftforge.fluids.FluidStack
 import net.minecraftforge.fluids.capability.IFluidHandler
 
@@ -18,25 +18,25 @@ public class StructureFluidContainerComponent(
     override val owner: MachineInstance,
     override val provider: Any? = null,
     private val handler: IFluidHandler,
-    private val allowed: Set<IOType>
+    private val allowed: Set<PortMode>
 ) : StructureFluidKeyContainer {
 
     private companion object {
         private const val VANILLA_STACK_CAP: Int = Int.MAX_VALUE / 2
     }
 
-    override fun isAllowedIOType(ioType: IOType): Boolean = allowed.contains(ioType)
+    override fun isAllowedPortMode(ioType: PortMode): Boolean = allowed.contains(ioType)
 
-    override fun insert(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+    override fun insert(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        if (!isAllowedIOType(IOType.INPUT)) return 0L
+        if (!isAllowedPortMode(PortMode.INPUT)) return 0L
         return insertUnchecked(key, amount, action)
     }
 
-    override fun insertUnchecked(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+    override fun insertUnchecked(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
 
-        val doFill = action == Action.EXECUTE
+        val doFill = action == TransactionMode.EXECUTE
         val proto = key.get()
 
         var remaining = amount
@@ -53,16 +53,16 @@ public class StructureFluidContainerComponent(
         return insertedTotal
     }
 
-    override fun extract(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+    override fun extract(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        if (!isAllowedIOType(IOType.OUTPUT)) return 0L
+        if (!isAllowedPortMode(PortMode.OUTPUT)) return 0L
         return extractUnchecked(key, amount, action)
     }
 
-    override fun extractUnchecked(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+    override fun extractUnchecked(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
 
-        val doDrain = action == Action.EXECUTE
+        val doDrain = action == TransactionMode.EXECUTE
         val proto = key.get()
 
         var remaining = amount
@@ -89,32 +89,32 @@ public class StructureFluidStorageContainerComponent(
     override val owner: MachineInstance,
     override val provider: Any? = null,
     public val storage: ResourceStorage<PMKey<FluidStack>>,
-    public val allowed: Set<IOType>
+    public val allowed: Set<PortMode>
 ) : StructureFluidKeyContainer {
 
-    override fun isAllowedIOType(ioType: IOType): Boolean = allowed.contains(ioType)
+    override fun isAllowedPortMode(ioType: PortMode): Boolean = allowed.contains(ioType)
 
-    override fun insert(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+    override fun insert(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        if (!isAllowedIOType(IOType.INPUT)) return 0L
+        if (!isAllowedPortMode(PortMode.INPUT)) return 0L
         return insertUnchecked(key, amount, action)
     }
 
-    override fun insertUnchecked(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+    override fun insertUnchecked(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        val simulate = action == Action.SIMULATE
+        val simulate = action == TransactionMode.SIMULATE
         return storage.insert(key, amount, simulate)
     }
 
-    override fun extract(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+    override fun extract(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        if (!isAllowedIOType(IOType.OUTPUT)) return 0L
+        if (!isAllowedPortMode(PortMode.OUTPUT)) return 0L
         return extractUnchecked(key, amount, action)
     }
 
-    override fun extractUnchecked(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+    override fun extractUnchecked(key: PMKey<FluidStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        val simulate = action == Action.SIMULATE
+        val simulate = action == TransactionMode.SIMULATE
         return storage.extract(key, amount, simulate)
     }
 }

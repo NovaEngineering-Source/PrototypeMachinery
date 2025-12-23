@@ -8,10 +8,10 @@ import com.cleanroommc.modularui.value.sync.PanelSyncManager
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponent
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentProvider
+import github.kasuminova.prototypemachinery.api.util.PortMode
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 import github.kasuminova.prototypemachinery.common.block.hatch.HatchType
 import github.kasuminova.prototypemachinery.common.registry.HatchConfigRegistry
-import github.kasuminova.prototypemachinery.common.util.IOType
 import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureEnergyContainerComponent
 import github.kasuminova.prototypemachinery.impl.storage.EnergyStorageImpl
 import net.minecraft.nbt.NBTTagCompound
@@ -195,9 +195,9 @@ public class EnergyHatchBlockEntity(
 
     override fun createStructureComponents(machine: MachineInstance): Collection<StructureComponent> {
         val allowed = when (config.hatchType) {
-            HatchType.INPUT -> setOf(IOType.OUTPUT)
-            HatchType.OUTPUT -> setOf(IOType.INPUT)
-            HatchType.IO -> setOf(IOType.INPUT, IOType.OUTPUT)
+            HatchType.INPUT -> setOf(PortMode.OUTPUT)
+            HatchType.OUTPUT -> setOf(PortMode.INPUT)
+            HatchType.IO -> setOf(PortMode.INPUT, PortMode.OUTPUT)
         }
         return listOf(StructureEnergyContainerComponent(owner = machine, provider = this, storage = getEnergyStorage(), allowed = allowed))
     }

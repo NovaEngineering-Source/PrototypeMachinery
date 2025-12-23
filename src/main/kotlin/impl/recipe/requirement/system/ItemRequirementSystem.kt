@@ -6,11 +6,11 @@ import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RequirementTransaction
-import github.kasuminova.prototypemachinery.common.util.Action
-import github.kasuminova.prototypemachinery.common.util.IOType
-import github.kasuminova.prototypemachinery.common.util.RecipeParallelism
-import github.kasuminova.prototypemachinery.common.util.parallelism
-import github.kasuminova.prototypemachinery.common.util.scaleByParallelism
+import github.kasuminova.prototypemachinery.api.util.PortMode
+import github.kasuminova.prototypemachinery.api.util.RecipeParallelism
+import github.kasuminova.prototypemachinery.api.util.TransactionMode
+import github.kasuminova.prototypemachinery.api.util.parallelism
+import github.kasuminova.prototypemachinery.api.util.scaleByParallelism
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.ItemRequirementComponent
 import net.minecraft.item.ItemStack
 
@@ -24,7 +24,7 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
         val machine = process.owner
         val sources = machine.structureComponentMap
             .getByInstanceOf(StructureItemKeyContainer::class.java)
-            .filter { it.isAllowedIOType(IOType.OUTPUT) }
+            .filter { it.isAllowedPortMode(PortMode.OUTPUT) }
 
         if (sources.isEmpty()) {
             return blocked("blocked.item.no_sources", listOf(component.id))
@@ -39,7 +39,7 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
 
             for (c in sources) {
                 if (remaining <= 0L) break
-                remaining -= c.extract(key, remaining, Action.SIMULATE)
+                remaining -= c.extract(key, remaining, TransactionMode.SIMULATE)
             }
 
             if (remaining > 0L) {
@@ -56,10 +56,10 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
             for (c in sources) {
                 if (remaining <= 0L) break
 
-                val canTake = c.extract(key, remaining, Action.SIMULATE)
+                val canTake = c.extract(key, remaining, TransactionMode.SIMULATE)
                 if (canTake <= 0L) continue
 
-                val took = c.extract(key, remaining, Action.EXECUTE)
+                val took = c.extract(key, remaining, TransactionMode.EXECUTE)
                 if (took > 0L) {
                     val map = extractedByContainer.getOrPut(c) { LinkedHashMap() }
                     map[key] = (map[key] ?: 0L) + took
@@ -100,7 +100,7 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
         val machine = process.owner
         val targets = machine.structureComponentMap
             .getByInstanceOf(StructureItemKeyContainer::class.java)
-            .filter { it.isAllowedIOType(IOType.INPUT) }
+            .filter { it.isAllowedPortMode(PortMode.INPUT) }
 
         if (targets.isEmpty()) {
             return blocked("blocked.item.no_targets", listOf(component.id))
@@ -116,7 +116,7 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
 
             for (c in targets) {
                 if (remainingCount <= 0L) break
-                remainingCount -= c.insert(out, remainingCount, Action.SIMULATE)
+                remainingCount -= c.insert(out, remainingCount, TransactionMode.SIMULATE)
             }
 
             if (remainingCount > 0L) {
@@ -141,10 +141,10 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
             for (c in targets) {
                 if (remainingCount <= 0L) break
 
-                val canPut = c.insert(out, remainingCount, Action.SIMULATE)
+                val canPut = c.insert(out, remainingCount, TransactionMode.SIMULATE)
                 if (canPut <= 0L) continue
 
-                val inserted = c.insert(out, remainingCount, Action.EXECUTE)
+                val inserted = c.insert(out, remainingCount, TransactionMode.EXECUTE)
                 if (inserted > 0L) {
                     val map = insertedByContainer.getOrPut(c) { LinkedHashMap() }
                     map[out] = (map[out] ?: 0L) + inserted
@@ -188,7 +188,7 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
         extracted.forEach { (container, keys) ->
             keys.forEach { (key, amount) ->
                 if (amount <= 0L) return@forEach
-                container.insertUnchecked(key, amount, Action.EXECUTE)
+                container.insertUnchecked(key, amount, TransactionMode.EXECUTE)
             }
         }
     }
@@ -197,7 +197,7 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
         inserted.forEach { (container, keys) ->
             keys.forEach { (key, amount) ->
                 if (amount <= 0L) return@forEach
-                container.extractUnchecked(key, amount, Action.EXECUTE)
+                container.extractUnchecked(key, amount, TransactionMode.EXECUTE)
             }
         }
     }

@@ -8,10 +8,10 @@ import com.cleanroommc.modularui.value.sync.PanelSyncManager
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponent
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentProvider
+import github.kasuminova.prototypemachinery.api.util.PortMode
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 import github.kasuminova.prototypemachinery.common.block.hatch.HatchType
 import github.kasuminova.prototypemachinery.common.registry.HatchConfigRegistry
-import github.kasuminova.prototypemachinery.common.util.IOType
 import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureItemStorageContainerComponent
 import github.kasuminova.prototypemachinery.impl.storage.ItemResourceStorage
 import net.minecraft.nbt.NBTTagCompound
@@ -150,15 +150,15 @@ public class ItemHatchBlockEntity(
 
     override fun createStructureComponents(machine: MachineInstance): Collection<StructureComponent> {
         val allowed = when (config.hatchType) {
-            // NOTE: IOType is from the recipe/machine perspective:
-            // - sources (recipe inputs) must be EXTRACT-able => IOType.OUTPUT
-            // - targets (recipe outputs) must be INSERT-able => IOType.INPUT
+            // NOTE: PortMode is from the recipe/machine perspective:
+            // - sources (recipe inputs) must be EXTRACT-able => PortMode.OUTPUT
+            // - targets (recipe outputs) must be INSERT-able => PortMode.INPUT
             // HatchType is from the external/world perspective:
-            // - INPUT hatch: outside can insert -> machine should extract -> IOType.OUTPUT
-            // - OUTPUT hatch: outside can extract -> machine should insert -> IOType.INPUT
-            HatchType.INPUT -> setOf(IOType.OUTPUT)
-            HatchType.OUTPUT -> setOf(IOType.INPUT)
-            HatchType.IO -> setOf(IOType.INPUT, IOType.OUTPUT)
+            // - INPUT hatch: outside can insert -> machine should extract -> PortMode.OUTPUT
+            // - OUTPUT hatch: outside can extract -> machine should insert -> PortMode.INPUT
+            HatchType.INPUT -> setOf(PortMode.OUTPUT)
+            HatchType.OUTPUT -> setOf(PortMode.INPUT)
+            HatchType.IO -> setOf(PortMode.INPUT, PortMode.OUTPUT)
         }
 
         return listOf(

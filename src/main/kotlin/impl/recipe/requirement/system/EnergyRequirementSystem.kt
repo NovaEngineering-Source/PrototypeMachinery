@@ -4,9 +4,9 @@ import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RequirementTransaction
-import github.kasuminova.prototypemachinery.common.util.Action
-import github.kasuminova.prototypemachinery.common.util.IOType
-import github.kasuminova.prototypemachinery.common.util.scaleByParallelism
+import github.kasuminova.prototypemachinery.api.util.PortMode
+import github.kasuminova.prototypemachinery.api.util.TransactionMode
+import github.kasuminova.prototypemachinery.api.util.scaleByParallelism
 import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureEnergyContainer
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.EnergyRequirementComponent
 
@@ -19,7 +19,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
         val machine = process.owner
         val sources = machine.structureComponentMap
             .getByInstanceOf(StructureEnergyContainer::class.java)
-            .filter { it.isAllowedIOType(IOType.OUTPUT) }
+            .filter { it.isAllowedPortMode(PortMode.OUTPUT) }
 
         if (sources.isEmpty()) {
             return blocked("blocked.energy.no_sources", listOf(component.id))
@@ -29,7 +29,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
         var remaining = need
         for (c in sources) {
             if (remaining <= 0L) break
-            val took = c.extractEnergy(remaining, Action.SIMULATE)
+            val took = c.extractEnergy(remaining, TransactionMode.SIMULATE)
             remaining -= took
         }
 
@@ -43,10 +43,10 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
         for (c in sources) {
             if (remaining <= 0L) break
 
-            val sim = c.extractEnergy(remaining, Action.SIMULATE)
+            val sim = c.extractEnergy(remaining, TransactionMode.SIMULATE)
             if (sim <= 0L) continue
 
-            val took = c.extractEnergy(remaining, Action.EXECUTE)
+            val took = c.extractEnergy(remaining, TransactionMode.EXECUTE)
             if (took > 0L) {
                 extractedByContainer[c] = (extractedByContainer[c] ?: 0L) + took
                 remaining -= took
@@ -81,7 +81,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
         val sources = if (drainPerTick > 0L) {
             machine.structureComponentMap
                 .getByInstanceOf(StructureEnergyContainer::class.java)
-                .filter { it.isAllowedIOType(IOType.OUTPUT) }
+                .filter { it.isAllowedPortMode(PortMode.OUTPUT) }
         } else {
             emptyList()
         }
@@ -89,7 +89,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
         val targets = if (outputPerTick > 0L) {
             machine.structureComponentMap
                 .getByInstanceOf(StructureEnergyContainer::class.java)
-                .filter { it.isAllowedIOType(IOType.INPUT) }
+                .filter { it.isAllowedPortMode(PortMode.INPUT) }
         } else {
             emptyList()
         }
@@ -109,7 +109,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
             var remaining = drainPerTick
             for (c in sources) {
                 if (remaining <= 0L) break
-                remaining -= c.extractEnergy(remaining, Action.SIMULATE)
+                remaining -= c.extractEnergy(remaining, TransactionMode.SIMULATE)
             }
             if (remaining > 0L) {
                 return blocked("blocked.energy.missing_inputs", listOf(component.id, remaining.toString()))
@@ -120,7 +120,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
             var remaining = outputPerTick
             for (c in targets) {
                 if (remaining <= 0L) break
-                remaining -= c.insertEnergy(remaining, Action.SIMULATE)
+                remaining -= c.insertEnergy(remaining, TransactionMode.SIMULATE)
             }
             if (remaining > 0L) {
                 return blocked("blocked.energy.output_full", listOf(component.id, remaining.toString()))
@@ -136,10 +136,10 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
             for (c in sources) {
                 if (remaining <= 0L) break
 
-                val sim = c.extractEnergy(remaining, Action.SIMULATE)
+                val sim = c.extractEnergy(remaining, TransactionMode.SIMULATE)
                 if (sim <= 0L) continue
 
-                val took = c.extractEnergy(remaining, Action.EXECUTE)
+                val took = c.extractEnergy(remaining, TransactionMode.EXECUTE)
                 if (took > 0L) {
                     extractedByContainer[c] = (extractedByContainer[c] ?: 0L) + took
                     remaining -= took
@@ -159,10 +159,10 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
             for (c in targets) {
                 if (remaining <= 0L) break
 
-                val sim = c.insertEnergy(remaining, Action.SIMULATE)
+                val sim = c.insertEnergy(remaining, TransactionMode.SIMULATE)
                 if (sim <= 0L) continue
 
-                val accepted = c.insertEnergy(remaining, Action.EXECUTE)
+                val accepted = c.insertEnergy(remaining, TransactionMode.EXECUTE)
                 if (accepted > 0L) {
                     insertedByContainer[c] = (insertedByContainer[c] ?: 0L) + accepted
                     remaining -= accepted
@@ -194,7 +194,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
         val machine = process.owner
         val targets = machine.structureComponentMap
             .getByInstanceOf(StructureEnergyContainer::class.java)
-            .filter { it.isAllowedIOType(IOType.INPUT) }
+            .filter { it.isAllowedPortMode(PortMode.INPUT) }
 
         if (targets.isEmpty()) {
             return blocked("blocked.energy.no_targets", listOf(component.id))
@@ -206,7 +206,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
         var remaining = out
         for (c in targets) {
             if (remaining <= 0L) break
-            val accepted = c.insertEnergy(remaining, Action.SIMULATE)
+            val accepted = c.insertEnergy(remaining, TransactionMode.SIMULATE)
             remaining -= accepted
         }
 
@@ -220,10 +220,10 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
         for (c in targets) {
             if (remaining <= 0L) break
 
-            val sim = c.insertEnergy(remaining, Action.SIMULATE)
+            val sim = c.insertEnergy(remaining, TransactionMode.SIMULATE)
             if (sim <= 0L) continue
 
-            val accepted = c.insertEnergy(remaining, Action.EXECUTE)
+            val accepted = c.insertEnergy(remaining, TransactionMode.EXECUTE)
             if (accepted > 0L) {
                 insertedByContainer[c] = (insertedByContainer[c] ?: 0L) + accepted
                 remaining -= accepted
@@ -249,14 +249,14 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
     private fun rollbackExtracted(extracted: Map<StructureEnergyContainer, Long>) {
         extracted.forEach { (container, amount) ->
             if (amount <= 0L) return@forEach
-            container.insertEnergyUnchecked(amount, Action.EXECUTE)
+            container.insertEnergyUnchecked(amount, TransactionMode.EXECUTE)
         }
     }
 
     private fun rollbackInserted(inserted: Map<StructureEnergyContainer, Long>) {
         inserted.forEach { (container, amount) ->
             if (amount <= 0L) return@forEach
-            container.extractEnergyUnchecked(amount, Action.EXECUTE)
+            container.extractEnergyUnchecked(amount, TransactionMode.EXECUTE)
         }
     }
 

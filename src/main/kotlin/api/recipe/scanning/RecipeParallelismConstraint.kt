@@ -14,7 +14,7 @@ import net.minecraft.util.ResourceLocation
  * ### Design notes
  * - The scanning system will binary-search k in [1..limit].
  * - Each constraint decides whether the machine state can satisfy the requirement(s) at that k, typically via
- *   Action.SIMULATE.
+ *   TransactionMode.SIMULATE.
  * - If a requirement type has no registered constraint, the scanner will conservatively clamp k to 1.
  */
 public interface RecipeParallelismConstraint {

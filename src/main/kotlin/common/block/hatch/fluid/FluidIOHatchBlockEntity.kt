@@ -8,9 +8,9 @@ import com.cleanroommc.modularui.value.sync.PanelSyncManager
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponent
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentProvider
+import github.kasuminova.prototypemachinery.api.util.PortMode
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 import github.kasuminova.prototypemachinery.common.registry.HatchConfigRegistry
-import github.kasuminova.prototypemachinery.common.util.IOType
 import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureFluidStorageContainerComponent
 import github.kasuminova.prototypemachinery.impl.storage.FluidResourceStorage
 import net.minecraft.nbt.NBTTagCompound
@@ -279,10 +279,10 @@ public class FluidIOHatchBlockEntity(
 
     override fun createStructureComponents(machine: MachineInstance): Collection<StructureComponent> {
         return listOf(
-            // inputStorage: outside fills -> machine drains -> IOType.OUTPUT
-            StructureFluidStorageContainerComponent(owner = machine, provider = this, storage = inputStorage, allowed = setOf(IOType.OUTPUT)),
-            // outputStorage: outside drains -> machine fills -> IOType.INPUT
-            StructureFluidStorageContainerComponent(owner = machine, provider = this, storage = outputStorage, allowed = setOf(IOType.INPUT))
+            // inputStorage: outside fills -> machine drains -> PortMode.OUTPUT
+            StructureFluidStorageContainerComponent(owner = machine, provider = this, storage = inputStorage, allowed = setOf(PortMode.OUTPUT)),
+            // outputStorage: outside drains -> machine fills -> PortMode.INPUT
+            StructureFluidStorageContainerComponent(owner = machine, provider = this, storage = outputStorage, allowed = setOf(PortMode.INPUT))
         )
     }
 

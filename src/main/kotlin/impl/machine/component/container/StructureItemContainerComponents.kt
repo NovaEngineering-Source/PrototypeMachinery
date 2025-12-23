@@ -4,8 +4,8 @@ import github.kasuminova.prototypemachinery.api.key.PMKey
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.container.StructureItemKeyContainer
 import github.kasuminova.prototypemachinery.api.storage.SlottedResourceStorage
-import github.kasuminova.prototypemachinery.common.util.Action
-import github.kasuminova.prototypemachinery.common.util.IOType
+import github.kasuminova.prototypemachinery.api.util.PortMode
+import github.kasuminova.prototypemachinery.api.util.TransactionMode
 import github.kasuminova.prototypemachinery.impl.key.item.PMItemKey
 import github.kasuminova.prototypemachinery.impl.key.item.PMItemKeyType
 import net.minecraft.item.ItemStack
@@ -21,7 +21,7 @@ public class StructureItemContainerComponent(
     override val owner: MachineInstance,
     override val provider: Any? = null,
     private val handler: IItemHandler,
-    private val allowed: Set<IOType>
+    private val allowed: Set<PortMode>
 ) : StructureItemKeyContainer {
 
     private companion object {
@@ -41,18 +41,18 @@ public class StructureItemContainerComponent(
             return max.toLong()
         }
 
-    override fun isAllowedIOType(ioType: IOType): Boolean = allowed.contains(ioType)
+    override fun isAllowedPortMode(ioType: PortMode): Boolean = allowed.contains(ioType)
 
-    override fun insert(key: PMKey<ItemStack>, amount: Long, action: Action): Long {
+    override fun insert(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        if (!isAllowedIOType(IOType.INPUT)) return 0L
+        if (!isAllowedPortMode(PortMode.INPUT)) return 0L
         return insertUnchecked(key, amount, action)
     }
 
-    override fun insertUnchecked(key: PMKey<ItemStack>, amount: Long, action: Action): Long {
+    override fun insertUnchecked(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
 
-        val simulate = action == Action.SIMULATE
+        val simulate = action == TransactionMode.SIMULATE
         val proto = (key as? PMItemKey)?.uniqueKey?.getItemStackUnsafe() ?: key.get()
 
         var remaining = amount
@@ -77,16 +77,16 @@ public class StructureItemContainerComponent(
         return insertedTotal
     }
 
-    override fun extract(key: PMKey<ItemStack>, amount: Long, action: Action): Long {
+    override fun extract(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        if (!isAllowedIOType(IOType.OUTPUT)) return 0L
+        if (!isAllowedPortMode(PortMode.OUTPUT)) return 0L
         return extractUnchecked(key, amount, action)
     }
 
-    override fun extractUnchecked(key: PMKey<ItemStack>, amount: Long, action: Action): Long {
+    override fun extractUnchecked(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
 
-        val simulate = action == Action.SIMULATE
+        val simulate = action == TransactionMode.SIMULATE
         val wanted = (key as? PMItemKey)?.uniqueKey ?: PMItemKeyType.getUniqueKey(key.get())
 
         var remaining = amount
@@ -133,7 +133,7 @@ public class StructureItemStorageContainerComponent(
     override val owner: MachineInstance,
     override val provider: Any? = null,
     public val storage: SlottedResourceStorage<PMKey<ItemStack>>,
-    public val allowed: Set<IOType>
+    public val allowed: Set<PortMode>
 ) : StructureItemKeyContainer {
 
     public val slots: Int
@@ -142,29 +142,29 @@ public class StructureItemStorageContainerComponent(
     public val maxStackSize: Long
         get() = storage.maxCountPerType
 
-    override fun isAllowedIOType(ioType: IOType): Boolean = allowed.contains(ioType)
+    override fun isAllowedPortMode(ioType: PortMode): Boolean = allowed.contains(ioType)
 
-    override fun insert(key: PMKey<ItemStack>, amount: Long, action: Action): Long {
+    override fun insert(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        if (!isAllowedIOType(IOType.INPUT)) return 0L
+        if (!isAllowedPortMode(PortMode.INPUT)) return 0L
         return insertUnchecked(key, amount, action)
     }
 
-    override fun insertUnchecked(key: PMKey<ItemStack>, amount: Long, action: Action): Long {
+    override fun insertUnchecked(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        val simulate = action == Action.SIMULATE
+        val simulate = action == TransactionMode.SIMULATE
         return storage.insert(key, amount, simulate)
     }
 
-    override fun extract(key: PMKey<ItemStack>, amount: Long, action: Action): Long {
+    override fun extract(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        if (!isAllowedIOType(IOType.OUTPUT)) return 0L
+        if (!isAllowedPortMode(PortMode.OUTPUT)) return 0L
         return extractUnchecked(key, amount, action)
     }
 
-    override fun extractUnchecked(key: PMKey<ItemStack>, amount: Long, action: Action): Long {
+    override fun extractUnchecked(key: PMKey<ItemStack>, amount: Long, action: TransactionMode): Long {
         if (amount <= 0L) return 0L
-        val simulate = action == Action.SIMULATE
+        val simulate = action == TransactionMode.SIMULATE
         return storage.extract(key, amount, simulate)
     }
 }
