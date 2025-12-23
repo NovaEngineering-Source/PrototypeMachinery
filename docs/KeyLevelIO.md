@@ -32,15 +32,15 @@ This document describes the **key-level** IO model used internally by PrototypeM
 
 这些接口提供形如：
 
-- `insert(key, amount, action): Long`
-- `extract(key, amount, action): Long`
+- `insert(key, amount, mode): Long`
+- `extract(key, amount, mode): Long`
 
 返回值为**实际插入/提取的数量**（`Long`）。
 
-### Action（EXECUTE / SIMULATE）
+### TransactionMode（EXECUTE / SIMULATE）
 
-- `Action.SIMULATE`：只测算能插入/提取多少，不产生实际副作用。
-- `Action.EXECUTE`：真实执行。
+- `TransactionMode.SIMULATE`：只测算能插入/提取多少，不产生实际副作用。
+- `TransactionMode.EXECUTE`：真实执行。
 
 注意：扫描并行约束一般使用 `SIMULATE`；配方执行使用 `EXECUTE`。
 
