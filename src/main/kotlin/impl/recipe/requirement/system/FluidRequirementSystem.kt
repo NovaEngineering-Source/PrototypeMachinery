@@ -1,17 +1,20 @@
 package github.kasuminova.prototypemachinery.impl.recipe.requirement.system
 
+import github.kasuminova.prototypemachinery.api.key.PMKey
+import github.kasuminova.prototypemachinery.api.machine.component.container.StructureFluidKeyContainer
 import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RequirementTransaction
 import github.kasuminova.prototypemachinery.common.util.Action
 import github.kasuminova.prototypemachinery.common.util.IOType
-import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureFluidContainer
+import github.kasuminova.prototypemachinery.common.util.scaleByParallelism
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.FluidRequirementComponent
-import net.minecraftforge.fluids.Fluid
 import net.minecraftforge.fluids.FluidStack
 
 public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidRequirementComponent> {
+
+    private fun fluidNameOf(key: PMKey<FluidStack>): String = key.get().fluid.name
 
     override fun start(
         process: RecipeProcess,
@@ -21,7 +24,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
 
         val machine = process.owner
         val sources = machine.structureComponentMap
-            .getByInstanceOf(StructureFluidContainer::class.java)
+            .getByInstanceOf(StructureFluidKeyContainer::class.java)
             .filter { it.isAllowedIOType(IOType.OUTPUT) }
 
         if (sources.isEmpty()) {
@@ -30,57 +33,50 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
 
         // Pre-check by simulation so Blocked has no side effects.
         for (input in component.inputs) {
-            val required = input.count
+            val required = process.scaleByParallelism(input.count)
             if (required <= 0L) continue
 
-            val prototype = input.get()
-            val fluid = prototype.fluid
+            val fluidName = fluidNameOf(input)
             var remaining = required
 
             for (c in sources) {
                 if (remaining <= 0L) break
-                when (val sim = c.extractFluid(fluid, remaining, Action.SIMULATE)) {
-                    is StructureFluidContainer.ExtractResult.Success -> remaining -= sim.amount
-                    is StructureFluidContainer.ExtractResult.Empty -> {}
-                }
+                remaining -= c.extract(input, remaining, Action.SIMULATE)
             }
 
             if (remaining > 0L) {
-                return blocked("blocked.fluid.missing_inputs", listOf(component.id, fluid.name, remaining.toString()))
+                return blocked("blocked.fluid.missing_inputs", listOf(component.id, fluidName, remaining.toString()))
             }
         }
 
         // Execute and record per-container extraction for rollback.
-        val extractedByContainer = LinkedHashMap<StructureFluidContainer, MutableMap<Fluid, Long>>()
+        val extractedByContainer = LinkedHashMap<StructureFluidKeyContainer, MutableMap<PMKey<FluidStack>, Long>>()
 
         for (input in component.inputs) {
-            val required = input.count
+            val required = process.scaleByParallelism(input.count)
             if (required <= 0L) continue
 
-            val prototype = input.get()
-            val fluid = prototype.fluid
+            val fluidName = fluidNameOf(input)
             var remaining = required
 
             for (c in sources) {
                 if (remaining <= 0L) break
 
                 // Probe quickly to avoid pointless writes.
-                val sim = c.extractFluid(fluid, remaining, Action.SIMULATE)
-                val canTake = (sim as? StructureFluidContainer.ExtractResult.Success)?.amount ?: 0L
+                val canTake = c.extract(input, remaining, Action.SIMULATE)
                 if (canTake <= 0L) continue
 
-                val exec = c.extractFluid(fluid, remaining, Action.EXECUTE)
-                val took = (exec as? StructureFluidContainer.ExtractResult.Success)?.amount ?: 0L
+                val took = c.extract(input, remaining, Action.EXECUTE)
                 if (took > 0L) {
                     val map = extractedByContainer.getOrPut(c) { LinkedHashMap() }
-                    map[fluid] = (map[fluid] ?: 0L) + took
+                    map[input] = (map[input] ?: 0L) + took
                     remaining -= took
                 }
             }
 
             if (remaining > 0L) {
                 // Inconsistent state change between simulate/execute.
-                return failure("error.fluid.inconsistent_inputs", listOf(component.id, fluid.name, remaining.toString())) {
+                return failure("error.fluid.inconsistent_inputs", listOf(component.id, fluidName, remaining.toString())) {
                     rollbackExtracted(extractedByContainer)
                 }
             }
@@ -106,7 +102,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
         val machine = process.owner
         val sources = if (component.inputsPerTick.isNotEmpty()) {
             machine.structureComponentMap
-                .getByInstanceOf(StructureFluidContainer::class.java)
+                .getByInstanceOf(StructureFluidKeyContainer::class.java)
                 .filter { it.isAllowedIOType(IOType.OUTPUT) }
         } else {
             emptyList()
@@ -114,7 +110,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
 
         val targets = if (component.outputsPerTick.isNotEmpty()) {
             machine.structureComponentMap
-                .getByInstanceOf(StructureFluidContainer::class.java)
+                .getByInstanceOf(StructureFluidKeyContainer::class.java)
                 .filter { it.isAllowedIOType(IOType.INPUT) }
         } else {
             emptyList()
@@ -132,79 +128,68 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
 
         // Pre-check by simulation so Blocked has no side effects.
         for (input in component.inputsPerTick) {
-            val required = input.count
+            val required = process.scaleByParallelism(input.count)
             if (required <= 0L) continue
 
-            val prototype = input.get()
-            val fluid = prototype.fluid
+            val fluidName = fluidNameOf(input)
             var remaining = required
 
             for (c in sources) {
                 if (remaining <= 0L) break
-                when (val sim = c.extractFluid(fluid, remaining, Action.SIMULATE)) {
-                    is StructureFluidContainer.ExtractResult.Success -> remaining -= sim.amount
-                    is StructureFluidContainer.ExtractResult.Empty -> {}
-                }
+                remaining -= c.extract(input, remaining, Action.SIMULATE)
             }
 
             if (remaining > 0L) {
-                return blocked("blocked.fluid.missing_inputs", listOf(component.id, fluid.name, remaining.toString()))
+                return blocked("blocked.fluid.missing_inputs", listOf(component.id, fluidName, remaining.toString()))
             }
         }
 
         if (component.outputsPerTick.isNotEmpty() && !ignoreOutputFull) {
             for (out in component.outputsPerTick) {
-                val required = out.count
+                val required = process.scaleByParallelism(out.count)
                 if (required <= 0L) continue
 
-                val prototype = out.get()
-                val fluid = prototype.fluid
+                val fluidName = fluidNameOf(out)
                 var remaining = required
 
                 for (c in targets) {
                     if (remaining <= 0L) break
-                    when (val sim = c.insertFluid(prototype, remaining, Action.SIMULATE)) {
-                        is StructureFluidContainer.InsertResult.Success -> remaining = sim.remaining
-                        is StructureFluidContainer.InsertResult.Full -> {}
-                    }
+                    remaining -= c.insert(out, remaining, Action.SIMULATE)
                 }
 
                 if (remaining > 0L) {
-                    return blocked("blocked.fluid.output_full", listOf(component.id, fluid.name, remaining.toString()))
+                    return blocked("blocked.fluid.output_full", listOf(component.id, fluidName, remaining.toString()))
                 }
             }
         }
 
         // Execute and record deltas for rollback.
-        val extractedByContainer = LinkedHashMap<StructureFluidContainer, MutableMap<Fluid, Long>>()
-        val insertedByContainer = LinkedHashMap<StructureFluidContainer, MutableMap<Fluid, Long>>()
+        val extractedByContainer = LinkedHashMap<StructureFluidKeyContainer, MutableMap<PMKey<FluidStack>, Long>>()
+        val insertedByContainer = LinkedHashMap<StructureFluidKeyContainer, MutableMap<PMKey<FluidStack>, Long>>()
 
         for (input in component.inputsPerTick) {
-            val required = input.count
+            val required = process.scaleByParallelism(input.count)
             if (required <= 0L) continue
 
-            val prototype = input.get()
-            val fluid = prototype.fluid
+            val fluidName = fluidNameOf(input)
             var remaining = required
 
             for (c in sources) {
                 if (remaining <= 0L) break
 
-                val sim = c.extractFluid(fluid, remaining, Action.SIMULATE)
-                val canTake = (sim as? StructureFluidContainer.ExtractResult.Success)?.amount ?: 0L
+                val canTake = c.extract(input, remaining, Action.SIMULATE)
                 if (canTake <= 0L) continue
 
-                val exec = c.extractFluid(fluid, remaining, Action.EXECUTE)
-                val took = (exec as? StructureFluidContainer.ExtractResult.Success)?.amount ?: 0L
+                val took = c.extract(input, remaining, Action.EXECUTE)
                 if (took > 0L) {
                     val map = extractedByContainer.getOrPut(c) { LinkedHashMap() }
-                    map[fluid] = (map[fluid] ?: 0L) + took
+                    map[input] = (map[input] ?: 0L) + took
                     remaining -= took
                 }
             }
 
             if (remaining > 0L) {
-                return failure("error.fluid.inconsistent_tick_inputs", listOf(component.id, fluid.name, remaining.toString())) {
+                return failure("error.fluid.inconsistent_tick_inputs", listOf(component.id, fluidName, remaining.toString())) {
                     rollbackInserted(insertedByContainer)
                     rollbackExtracted(extractedByContainer)
                 }
@@ -212,33 +197,28 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
         }
 
         for (out in component.outputsPerTick) {
-            val required = out.count
+            val required = process.scaleByParallelism(out.count)
             if (required <= 0L) continue
 
-            val prototype = out.get()
-            val fluid = prototype.fluid
+            val fluidName = fluidNameOf(out)
             var remaining = required
 
             for (c in targets) {
                 if (remaining <= 0L) break
 
-                val sim = c.insertFluid(prototype, remaining, Action.SIMULATE)
-                val remainingAfterSim = (sim as? StructureFluidContainer.InsertResult.Success)?.remaining ?: remaining
-                val canPut = remaining - remainingAfterSim
+                val canPut = c.insert(out, remaining, Action.SIMULATE)
                 if (canPut <= 0L) continue
 
-                val exec = c.insertFluid(prototype, remaining, Action.EXECUTE)
-                val remainingAfterExec = (exec as? StructureFluidContainer.InsertResult.Success)?.remaining ?: remaining
-                val put = remaining - remainingAfterExec
+                val put = c.insert(out, remaining, Action.EXECUTE)
                 if (put > 0L) {
                     val map = insertedByContainer.getOrPut(c) { LinkedHashMap() }
-                    map[fluid] = (map[fluid] ?: 0L) + put
-                    remaining = remainingAfterExec
+                    map[out] = (map[out] ?: 0L) + put
+                    remaining -= put
                 }
             }
 
             if (remaining > 0L && !ignoreOutputFull) {
-                return failure("error.fluid.inconsistent_tick_outputs", listOf(component.id, fluid.name, remaining.toString())) {
+                return failure("error.fluid.inconsistent_tick_outputs", listOf(component.id, fluidName, remaining.toString())) {
                     rollbackInserted(insertedByContainer)
                     rollbackExtracted(extractedByContainer)
                 }
@@ -263,7 +243,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
 
         val machine = process.owner
         val targets = machine.structureComponentMap
-            .getByInstanceOf(StructureFluidContainer::class.java)
+            .getByInstanceOf(StructureFluidKeyContainer::class.java)
             .filter { it.isAllowedIOType(IOType.INPUT) }
 
         if (targets.isEmpty()) {
@@ -274,58 +254,49 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
 
         // Pre-check by simulation.
         for (out in component.outputs) {
-            val required = out.count
+            val required = process.scaleByParallelism(out.count)
             if (required <= 0L) continue
 
-            val prototype = out.get()
-            val fluid = prototype.fluid
+            val fluidName = fluidNameOf(out)
             var remaining = required
 
             for (c in targets) {
                 if (remaining <= 0L) break
-                when (val sim = c.insertFluid(prototype, remaining, Action.SIMULATE)) {
-                    is StructureFluidContainer.InsertResult.Success -> remaining = sim.remaining
-                    is StructureFluidContainer.InsertResult.Full -> {}
-                }
+                remaining -= c.insert(out, remaining, Action.SIMULATE)
             }
 
             if (remaining > 0L) {
                 if (ignoreOutputFull) continue
-                return blocked("blocked.fluid.output_full", listOf(component.id, fluid.name, remaining.toString()))
+                return blocked("blocked.fluid.output_full", listOf(component.id, fluidName, remaining.toString()))
             }
         }
 
-        val insertedByContainer = LinkedHashMap<StructureFluidContainer, MutableMap<Fluid, Long>>()
+        val insertedByContainer = LinkedHashMap<StructureFluidKeyContainer, MutableMap<PMKey<FluidStack>, Long>>()
 
         for (out in component.outputs) {
-            val required = out.count
+            val required = process.scaleByParallelism(out.count)
             if (required <= 0L) continue
 
-            val prototype = out.get()
-            val fluid = prototype.fluid
+            val fluidName = fluidNameOf(out)
             var remaining = required
 
             for (c in targets) {
                 if (remaining <= 0L) break
 
-                val sim = c.insertFluid(prototype, remaining, Action.SIMULATE)
-                val remainingAfterSim = (sim as? StructureFluidContainer.InsertResult.Success)?.remaining ?: remaining
-                val canPut = remaining - remainingAfterSim
+                val canPut = c.insert(out, remaining, Action.SIMULATE)
                 if (canPut <= 0L) continue
 
-                val exec = c.insertFluid(prototype, remaining, Action.EXECUTE)
-                val remainingAfterExec = (exec as? StructureFluidContainer.InsertResult.Success)?.remaining ?: remaining
-                val put = remaining - remainingAfterExec
+                val put = c.insert(out, remaining, Action.EXECUTE)
                 if (put > 0L) {
                     val map = insertedByContainer.getOrPut(c) { LinkedHashMap() }
-                    map[fluid] = (map[fluid] ?: 0L) + put
-                    remaining = remainingAfterExec
+                    map[out] = (map[out] ?: 0L) + put
+                    remaining -= put
                 }
             }
 
             if (remaining > 0L) {
                 if (ignoreOutputFull) continue
-                return failure("error.fluid.inconsistent_outputs", listOf(component.id, fluid.name, remaining.toString())) {
+                return failure("error.fluid.inconsistent_outputs", listOf(component.id, fluidName, remaining.toString())) {
                     rollbackInserted(insertedByContainer)
                 }
             }
@@ -340,32 +311,28 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
         }
     }
 
-    private fun rollbackExtracted(extracted: Map<StructureFluidContainer, Map<Fluid, Long>>) {
-        extracted.forEach { (container, fluids) ->
-            fluids.forEach { (fluid, amount) ->
+    private fun rollbackExtracted(extracted: Map<StructureFluidKeyContainer, Map<PMKey<FluidStack>, Long>>) {
+        extracted.forEach { (container, keys) ->
+            keys.forEach { (key, amount) ->
                 if (amount <= 0L) return@forEach
                 // Use unchecked to restore even if IOType disallows normal insert.
-                container.insertFluidUnchecked(FluidStack(fluid, 1), amount, Action.EXECUTE)
+                container.insertUnchecked(key, amount, Action.EXECUTE)
             }
         }
     }
 
-    private fun rollbackInserted(inserted: Map<StructureFluidContainer, Map<Fluid, Long>>) {
-        inserted.forEach { (container, fluids) ->
-            fluids.forEach { (fluid, amount) ->
+    private fun rollbackInserted(inserted: Map<StructureFluidKeyContainer, Map<PMKey<FluidStack>, Long>>) {
+        inserted.forEach { (container, keys) ->
+            keys.forEach { (key, amount) ->
                 if (amount <= 0L) return@forEach
                 // Use unchecked to restore even if IOType disallows normal extract.
-                container.extractFluidUnchecked(fluid, amount, Action.EXECUTE)
+                container.extractUnchecked(key, amount, Action.EXECUTE)
             }
         }
     }
 
     private fun noOpSuccess(): RequirementTransaction {
-        return object : RequirementTransaction {
-            override val result: ProcessResult = ProcessResult.Success
-            override fun commit() {}
-            override fun rollback() {}
-        }
+        return RequirementTransaction.NoOpSuccess
     }
 
     private fun blocked(reason: String, args: List<String> = emptyList()): RequirementTransaction {

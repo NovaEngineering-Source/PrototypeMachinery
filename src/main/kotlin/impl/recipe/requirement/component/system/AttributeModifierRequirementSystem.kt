@@ -116,10 +116,6 @@ public object AttributeModifierRequirementSystem : RecipeRequirementSystem<Attri
     }
 
     private fun noOpSuccess(): RequirementTransaction {
-        return object : RequirementTransaction {
-            override val result: ProcessResult = ProcessResult.Success
-            override fun commit() {}
-            override fun rollback() {}
-        }
+        return RequirementTransaction.NoOpSuccess
     }
 }

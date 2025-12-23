@@ -141,8 +141,7 @@ public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcesso
         process.components.orderedComponents.forEach { node ->
             val component = node.component
             val type = node.key as RecipeProcessComponentType<RecipeProcessComponent>
-            val system = type.system as? github.kasuminova.prototypemachinery.api.recipe.process.component.system.RecipeProcessSystem<RecipeProcessComponent>
-                ?: return@forEach
+            val system = type.system ?: return@forEach
 
             when (phase) {
                 Phase.PRE -> system.onPreTick(process, component)
@@ -268,11 +267,7 @@ public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcesso
     }
 
     private fun noOpSuccess(): RequirementTransaction {
-        return object : RequirementTransaction {
-            override val result: ProcessResult = ProcessResult.Success
-            override fun commit() {}
-            override fun rollback() {}
-        }
+        return RequirementTransaction.NoOpSuccess
     }
 
 }

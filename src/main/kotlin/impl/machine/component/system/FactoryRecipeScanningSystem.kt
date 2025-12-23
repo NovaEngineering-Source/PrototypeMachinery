@@ -2,12 +2,19 @@ package github.kasuminova.prototypemachinery.impl.machine.component.system
 
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
+import github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachineAttributes
 import github.kasuminova.prototypemachinery.api.machine.component.system.MachineSystem
 import github.kasuminova.prototypemachinery.api.machine.component.type.FactoryRecipeProcessorComponent
+import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.RecipeManager
+import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
+import github.kasuminova.prototypemachinery.api.recipe.scanning.RecipeParallelismConstraintRegistry
 import github.kasuminova.prototypemachinery.common.util.warnWithBlockEntity
+import github.kasuminova.prototypemachinery.impl.machine.attribute.OverlayMachineAttributeMapImpl
 import github.kasuminova.prototypemachinery.impl.recipe.process.RecipeProcessImpl
+import github.kasuminova.prototypemachinery.impl.recipe.requirement.component.ParallelismRequirementComponent
 import net.minecraft.util.ResourceLocation
+import kotlin.math.floor
 
 public class FactoryRecipeScanningSystem(
     private val recipeManager: RecipeManager
@@ -50,9 +57,19 @@ public class FactoryRecipeScanningSystem(
             // Minimal de-dupe: avoid spamming the same recipe every tick.
             if (alreadyRunningIds.contains(recipe.id)) continue
 
-            // NOTE: This is intentionally minimal: we do not attempt a full requirement match here.
-            // The processor system will run transactional start/tick/end stages.
             val process = RecipeProcessImpl(machine, recipe)
+
+            val limit = parallelLimit(machine, recipe)
+            val parallels = computeMaxParallelsByConstraints(machine, recipe, limit)
+            if (parallels <= 0) {
+                // Cannot satisfy even 1x inputs; skip this recipe.
+                continue
+            }
+
+            // Store effective parallelism for this process instance.
+            // Requirement systems will scale amounts by this value.
+            setProcessParallelism(process, parallels)
+
             component.startProcess(process)
 
             // Small policy: start at most one new process per tick.
@@ -69,5 +86,89 @@ public class FactoryRecipeScanningSystem(
     }
 
     override fun onPostTick(machine: MachineInstance, component: FactoryRecipeProcessorComponent) {}
+
+    private fun parallelLimit(machine: MachineInstance, recipe: MachineRecipe): Int {
+        val machineLimitRaw = machine.attributeMap.attributes[StandardMachineAttributes.PROCESS_PARALLELISM]?.value ?: 1.0
+        val machineLimit = floor(machineLimitRaw).toInt().coerceAtLeast(1)
+
+        val recipeCap = recipe.requirements[RecipeRequirementTypes.PARALLELISM]
+            ?.filterIsInstance<ParallelismRequirementComponent>()
+            ?.minOfOrNull { it.parallelism.coerceAtLeast(1L) }
+            ?.coerceAtMost(Int.MAX_VALUE.toLong())
+            ?.toInt()
+
+        return if (recipeCap != null) minOf(machineLimit, recipeCap) else machineLimit
+    }
+
+    /**
+     * Compute maximum parallels using registered scan-time constraints.
+     *
+     * - Built-in constraints (ITEM/FLUID/ENERGY) check both inputs and outputs.
+     * - If any requirement type lacks a registered constraint, we conservatively clamp the search limit to 1.
+     */
+    private fun computeMaxParallelsByConstraints(machine: MachineInstance, recipe: MachineRecipe, limit: Int): Int {
+        if (limit <= 0) return 0
+
+        var hi = limit
+        var hasUnknown = false
+
+        // Optional: allow constraints to provide upper bounds and detect unknown requirement types.
+        for ((type, comps) in recipe.requirements) {
+            if (type == RecipeRequirementTypes.PARALLELISM) continue
+            if (comps.isEmpty()) continue
+
+            val constraint = RecipeParallelismConstraintRegistry.get(type.id)
+            if (constraint == null) {
+                hasUnknown = true
+                continue
+            }
+
+            hi = minOf(hi, constraint.upperBound(machine, recipe, comps, hi).coerceAtLeast(0))
+        }
+
+        if (hasUnknown) {
+            // Unknown requirement types may scale with k; without constraints we can only safely run at k=1.
+            hi = minOf(hi, 1)
+        }
+
+        if (hi <= 0) return 0
+
+        if (hi == 1) {
+            return if (canSatisfyAllConstraints(machine, recipe, 1)) 1 else 0
+        }
+
+        var lo = 1
+        var best = 0
+
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            if (canSatisfyAllConstraints(machine, recipe, mid)) {
+                best = mid
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+
+        return best
+    }
+
+    private fun canSatisfyAllConstraints(machine: MachineInstance, recipe: MachineRecipe, parallels: Int): Boolean {
+        if (parallels <= 0) return false
+        for ((type, comps) in recipe.requirements) {
+            if (type == RecipeRequirementTypes.PARALLELISM) continue
+            if (comps.isEmpty()) continue
+
+            val constraint = RecipeParallelismConstraintRegistry.get(type.id) ?: continue
+            if (!constraint.canSatisfy(machine, recipe, comps, parallels)) return false
+        }
+        return true
+    }
+
+    private fun setProcessParallelism(process: RecipeProcessImpl, parallels: Int) {
+        val overlay = process.attributeMap as? OverlayMachineAttributeMapImpl ?: return
+        val instance = overlay.getOrCreateAttribute(StandardMachineAttributes.PROCESS_PARALLELISM, defaultBase = 1.0)
+        instance.base = parallels.coerceAtLeast(1).toDouble()
+    }
 
 }

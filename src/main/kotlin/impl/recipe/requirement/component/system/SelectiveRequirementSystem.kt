@@ -210,11 +210,7 @@ public object SelectiveRequirementSystem : RecipeRequirementSystem.Tickable<Sele
     }
 
     private fun noOpSuccess(): RequirementTransaction {
-        return object : RequirementTransaction {
-            override val result: ProcessResult = ProcessResult.Success
-            override fun commit() {}
-            override fun rollback() {}
-        }
+        return RequirementTransaction.NoOpSuccess
     }
 
     private fun failure(result: ProcessResult.Failure): RequirementTransaction {

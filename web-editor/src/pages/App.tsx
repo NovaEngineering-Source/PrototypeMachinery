@@ -28,7 +28,7 @@ export function App() {
               }}
             />
             <Text fw={700}>PrototypeMachinery</Text>
-            <Text c="dimmed">Web Editor (Draft)</Text>
+            <Text c="dimmed">Web Editor (WIP)</Text>
           </Group>
           <Group gap="xs">
             <Button

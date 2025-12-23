@@ -41,3 +41,19 @@ JEI/HEI 集成不属于 `PrototypeMachineryAPI` 的统一入口（它是典型�
 详见：
 
 - [生命周期与加载顺序](./Lifecycle.md)
+
+## Key-level IO（基于 PMKey 的结构 IO）
+
+PrototypeMachinery 的结构 IO（Structure IO）在内部已统一迁移为 **key-level**：
+
+- 使用 `PMKey<T>` + `Long` 数量作为核心语义
+- 扫描（parallelism 计算）与执行期复用同一套 key 匹配规则
+- 对外 capability（`IItemHandler` / `IFluidHandler`）仅作为边界适配层（因其 `Int` 限制会做分块/限幅）
+
+接口位置：
+
+- `src/main/kotlin/api/machine/component/container/StructureKeyContainers.kt`
+
+文档与迁移说明：
+
+- [Key-level IO（基于 PMKey 的 IO）](./KeyLevelIO.md)

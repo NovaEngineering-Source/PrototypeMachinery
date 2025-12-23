@@ -58,7 +58,7 @@ export function MachineUiPage() {
 
           <Group justify="space-between">
             <Text size="sm" c="dimmed">
-              说明：支持 tabs 预览、widgets/guides 编辑、以及 JSON/ZenScript 导入导出（ZenScript 仍是草案）。
+              说明：支持 tabs 预览、widgets/guides 编辑、以及 JSON/ZenScript 导入导出（推荐 runtime-json 注册形式）。
             </Text>
           </Group>
         </Stack>

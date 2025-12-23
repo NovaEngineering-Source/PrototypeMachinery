@@ -6,13 +6,14 @@ import github.kasuminova.prototypemachinery.api.recipe.requirement.component.sys
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RequirementTransaction
 import github.kasuminova.prototypemachinery.common.util.Action
 import github.kasuminova.prototypemachinery.common.util.IOType
+import github.kasuminova.prototypemachinery.common.util.scaleByParallelism
 import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureEnergyContainer
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.EnergyRequirementComponent
 
 public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyRequirementComponent> {
 
     override fun start(process: RecipeProcess, component: EnergyRequirementComponent): RequirementTransaction {
-        val need = component.input
+        val need = process.scaleByParallelism(component.input)
         if (need <= 0L) return noOpSuccess()
 
         val machine = process.owner
@@ -71,8 +72,8 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
         process: RecipeProcess,
         component: EnergyRequirementComponent
     ): RequirementTransaction {
-        val drainPerTick = component.inputPerTick.coerceAtLeast(0L)
-        val outputPerTick = component.outputPerTick.coerceAtLeast(0L)
+        val drainPerTick = process.scaleByParallelism(component.inputPerTick).coerceAtLeast(0L)
+        val outputPerTick = process.scaleByParallelism(component.outputPerTick).coerceAtLeast(0L)
 
         if (drainPerTick <= 0L && outputPerTick <= 0L) return noOpSuccess()
 
@@ -187,7 +188,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
     }
 
     override fun onEnd(process: RecipeProcess, component: EnergyRequirementComponent): RequirementTransaction {
-        val out = component.output
+        val out = process.scaleByParallelism(component.output)
         if (out <= 0L) return noOpSuccess()
 
         val machine = process.owner
@@ -260,11 +261,7 @@ public object EnergyRequirementSystem : RecipeRequirementSystem.Tickable<EnergyR
     }
 
     private fun noOpSuccess(): RequirementTransaction {
-        return object : RequirementTransaction {
-            override val result: ProcessResult = ProcessResult.Success
-            override fun commit() {}
-            override fun rollback() {}
-        }
+        return RequirementTransaction.NoOpSuccess
     }
 
     private fun blocked(reason: String, args: List<String> = emptyList()): RequirementTransaction {

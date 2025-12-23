@@ -9,6 +9,7 @@ import github.kasuminova.prototypemachinery.api.machine.component.MachineCompone
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentMap
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentType
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentMap
+import github.kasuminova.prototypemachinery.api.machine.component.container.StructureFluidKeyContainer
 import github.kasuminova.prototypemachinery.api.machine.component.system.MachineSystem
 import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
@@ -25,7 +26,6 @@ import github.kasuminova.prototypemachinery.common.util.IOType
 import github.kasuminova.prototypemachinery.impl.key.fluid.PMFluidKeyType
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.component.StructureComponentMapImpl
-import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureFluidContainer
 import github.kasuminova.prototypemachinery.impl.recipe.process.RecipeProcessImpl
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.FluidRequirementComponent
 import net.minecraft.init.Bootstrap
@@ -209,81 +209,71 @@ class FluidRequirementSystemPerTickTest {
         private val allowed: Set<IOType>,
         private val simulateExtractAlways: Long? = null,
         private val executeExtractAlways: Long? = null,
-    ) : StructureFluidContainer {
+    ) : StructureFluidKeyContainer {
 
         private val fluid: Fluid = initialFluid
         private var amount: Long = initialAmount.coerceIn(0L, capacity)
 
-        override val tanks: Int
-            get() = 1
-
-        override val maxFluidAmount: Long
-            get() = capacity
-
         override fun isAllowedIOType(ioType: IOType): Boolean = allowed.contains(ioType)
 
-        override fun getFluidAmount(tank: Int): Long = if (tank == 0) amount else 0L
+        fun getFluidAmount(tank: Int): Long = if (tank == 0) amount else 0L
 
-        override fun setFluidAmount(tank: Int, amount: Long) {
+        fun setFluidAmount(tank: Int, amount: Long) {
             if (tank != 0) return
             this.amount = amount.coerceIn(0L, capacity)
         }
 
-        override fun insertFluid(fluid: FluidStack, amount: Long, action: Action): StructureFluidContainer.InsertResult {
-            if (amount <= 0L) return StructureFluidContainer.InsertResult.Success(0L)
-            if (!isAllowedIOType(IOType.INPUT)) return StructureFluidContainer.InsertResult.Full
-            return insertFluidUnchecked(fluid, amount, action)
+        override fun insert(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+            if (amount <= 0L) return 0L
+            if (!isAllowedIOType(IOType.INPUT)) return 0L
+            return insertUnchecked(key, amount, action)
         }
 
-        override fun insertFluidUnchecked(fluid: FluidStack, amount: Long, action: Action): StructureFluidContainer.InsertResult {
-            if (amount <= 0L) return StructureFluidContainer.InsertResult.Success(0L)
-            if (fluid.fluid != this.fluid) return StructureFluidContainer.InsertResult.Full
+        override fun insertUnchecked(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+            if (amount <= 0L) return 0L
+            val stack = key.get()
+            if (stack.fluid != this.fluid) return 0L
 
             val space = (capacity - this.amount).coerceAtLeast(0L)
             val accepted = minOf(amount, space)
+            if (accepted <= 0L) return 0L
+
             if (action == Action.EXECUTE) {
                 this.amount += accepted
             }
-
-            val remaining = (amount - accepted).coerceAtLeast(0L)
-            return if (accepted <= 0L) {
-                StructureFluidContainer.InsertResult.Full
-            } else {
-                StructureFluidContainer.InsertResult.Success(remaining)
-            }
+            return accepted
         }
 
-        override fun extractFluid(fluid: Fluid, amount: Long, action: Action): StructureFluidContainer.ExtractResult {
-            if (amount <= 0L) return StructureFluidContainer.ExtractResult.Empty
-            if (!isAllowedIOType(IOType.OUTPUT)) return StructureFluidContainer.ExtractResult.Empty
-            return extractFluidUnchecked(fluid, amount, action)
+        override fun extract(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+            if (amount <= 0L) return 0L
+            if (!isAllowedIOType(IOType.OUTPUT)) return 0L
+            return extractUnchecked(key, amount, action)
         }
 
-        override fun extractFluidUnchecked(fluid: Fluid, amount: Long, action: Action): StructureFluidContainer.ExtractResult {
-            if (amount <= 0L) return StructureFluidContainer.ExtractResult.Empty
-            if (fluid != this.fluid) return StructureFluidContainer.ExtractResult.Empty
+        override fun extractUnchecked(key: PMKey<FluidStack>, amount: Long, action: Action): Long {
+            if (amount <= 0L) return 0L
+            val stack = key.get()
+            if (stack.fluid != this.fluid) return 0L
 
             if (action == Action.SIMULATE && simulateExtractAlways != null) {
-                val out = minOf(amount, simulateExtractAlways)
-                if (out <= 0L) return StructureFluidContainer.ExtractResult.Empty
-                return StructureFluidContainer.ExtractResult.Success(FluidStack(fluid, out.toInt()), out)
+                return minOf(amount, simulateExtractAlways).coerceAtLeast(0L)
             }
 
             if (action == Action.EXECUTE && executeExtractAlways != null) {
-                val out = minOf(amount, executeExtractAlways)
-                if (out <= 0L) return StructureFluidContainer.ExtractResult.Empty
+                val out = minOf(amount, executeExtractAlways).coerceAtLeast(0L)
+                if (out <= 0L) return 0L
                 this.amount = (this.amount - out).coerceAtLeast(0L)
-                return StructureFluidContainer.ExtractResult.Success(FluidStack(fluid, out.toInt()), out)
+                return out
             }
 
             val extracted = minOf(amount, this.amount)
-            if (extracted <= 0L) return StructureFluidContainer.ExtractResult.Empty
+            if (extracted <= 0L) return 0L
 
             if (action == Action.EXECUTE) {
                 this.amount -= extracted
             }
 
-            return StructureFluidContainer.ExtractResult.Success(FluidStack(fluid, extracted.toInt()), extracted)
+            return extracted
         }
     }
 

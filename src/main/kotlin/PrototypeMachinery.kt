@@ -8,6 +8,7 @@ import github.kasuminova.prototypemachinery.common.network.NetworkHandler
 import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
 import github.kasuminova.prototypemachinery.common.structure.loader.StructureLoader
 import github.kasuminova.prototypemachinery.impl.recipe.index.RecipeIndexRegistry
+import github.kasuminova.prototypemachinery.impl.recipe.scanning.DefaultRecipeParallelismConstraints
 import github.kasuminova.prototypemachinery.impl.scheduler.TaskSchedulerImpl
 import github.kasuminova.prototypemachinery.integration.crafttweaker.CraftTweakerExamples
 import net.minecraftforge.common.MinecraftForge
@@ -54,6 +55,9 @@ public object PrototypeMachinery {
         event.modMetadata.version = Tags.VERSION
 
         NetworkHandler.init()
+
+        // Register scan-time parallelism constraints (pluggable extension point for addons).
+        DefaultRecipeParallelismConstraints.registerAll()
 
         // Register scheduler to event bus
         // 注册调度器到事件总线

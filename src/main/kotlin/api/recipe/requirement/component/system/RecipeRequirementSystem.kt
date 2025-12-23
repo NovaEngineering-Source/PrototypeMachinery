@@ -120,6 +120,20 @@ public interface RecipeRequirementSystem<C : RecipeRequirementComponent> {
  */
 public interface RequirementTransaction {
 
+    /**
+     * A shared no-op success transaction instance.
+     *
+     * 通用的“成功且无副作用”的事务单例，用于避免在各处反复构造匿名对象。
+     *
+     * - result = [ProcessResult.Success]
+     * - commit()/rollback() 均为 no-op
+     */
+    public object NoOpSuccess : RequirementTransaction {
+        override val result: ProcessResult = ProcessResult.Success
+        override fun commit() {}
+        override fun rollback() {}
+    }
+
     /** Result of attempting to acquire the transaction / 获取事务的结果 */
     public val result: ProcessResult
 
