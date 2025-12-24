@@ -27,4 +27,12 @@ public data class PMJeiRequirementNode<C : RecipeRequirementComponent>(
 
     /** Index inside the originating component (if any). */
     public val index: Int = 0,
+
+    /**
+     * Optional metadata for render-time features (JEI-only).
+     *
+     * This is intentionally a loose map so new features can be added without changing
+     * the constructor signatures of requirement components.
+     */
+    public val metadata: Map<String, Any> = emptyMap(),
 )

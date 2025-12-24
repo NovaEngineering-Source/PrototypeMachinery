@@ -10,13 +10,17 @@ import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiMach
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementNode
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementRenderer
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiRequirementRendererRegistry
+import github.kasuminova.prototypemachinery.integration.jei.runtime.JeiRenderOptions
 
 /**
  * Layout definition that executes a data-driven [ScriptJeiLayoutSpec].
  */
 public class ScriptJeiMachineLayoutDefinition(
     private val spec: ScriptJeiLayoutSpec,
-) : PMJeiMachineLayoutDefinition {
+) : PMJeiMachineLayoutDefinition, JeiRenderOptions.Provider {
+
+    override val jeiRenderOptions: JeiRenderOptions.LayoutOverrides
+        get() = spec.renderOptions
 
     override val width: Int = spec.width
 

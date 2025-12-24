@@ -6,6 +6,7 @@ import com.cleanroommc.modularui.screen.ModularScreen
 import com.cleanroommc.modularui.screen.UISettings
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.RequirementPropertyKeys
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
 import github.kasuminova.prototypemachinery.integration.jei.api.JeiRecipeContext
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiDecoratorPlacement
@@ -15,6 +16,7 @@ import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiLayo
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiMachineLayoutDefinition
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiPlacedNode
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiRequirementRole
+import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiNodeMetaKeys
 import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlot
 import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotCollector
 import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotKind
@@ -25,6 +27,7 @@ import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequ
 import github.kasuminova.prototypemachinery.integration.jei.api.ui.PMJeiWidgetCollector
 import github.kasuminova.prototypemachinery.integration.jei.builtin.JeiBackgroundSpec
 import github.kasuminova.prototypemachinery.integration.jei.builtin.PMJeiIcons
+import github.kasuminova.prototypemachinery.integration.jei.builtin.ingredient.JeiChanceOverlay
 import github.kasuminova.prototypemachinery.integration.jei.builtin.widget.JeiNineSliceBackgroundWidget
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiDecoratorRegistry
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiFixedSlotProviderRegistry
@@ -163,147 +166,195 @@ public class JeiPanelRuntime private constructor(
         }
 
         public fun build(ctx: JeiRecipeContext, layout: PMJeiMachineLayoutDefinition): JeiPanelRuntime {
-            // 1) Resolve requirement nodes via renderers.
-            val nodes = mutableListOf<PMJeiRequirementNode<out RecipeRequirementComponent>>()
-            for ((type, list) in ctx.recipe.requirements) {
-                val renderer = JeiRequirementRendererRegistry.getUnsafe(type) ?: continue
-                for (component in list) {
-                    val split = renderer.splitUnsafe(ctx, component)
-                    nodes.addAll(split)
-                }
-            }
-
-            val requirementsView = RequirementsView(nodes)
-
-            // 2) Build layout plan.
-            val planBuilder = PlanBuilder()
-            layout.build(ctx, requirementsView, planBuilder)
-
-            // 3) Materialize plan: slots + widgets.
-            val slotCollector = SlotCollector()
-            val widgetCollector = WidgetCollector()
-
-            // 3.0) Background (9-slice). Drawn behind all other widgets.
-            // Default uses a fixed 2px border; callers may override via a reserved decorator id.
-            val bgPlacement = planBuilder.decorators.firstOrNull { it.decoratorId == JeiBackgroundSpec.id }
-            val bgSpec = if (bgPlacement != null) {
-                // Consume so it won't go through the normal decorator registry.
-                planBuilder.decorators.remove(bgPlacement)
-                JeiBackgroundSpec.parse(bgPlacement.data)
-            } else {
-                JeiBackgroundSpec.Spec(
-                    texture = PMJeiIcons.tex("jei_base.png"),
-                    borderPx = 2,
-                    fillCenter = false,
+            val effective = when (layout) {
+                is JeiRenderOptions.Provider -> layout.jeiRenderOptions.resolve()
+                else -> JeiRenderOptions.Effective(
+                    renderChanceOverlayOnSlots = JeiRenderOptions.renderChanceOverlayOnSlots,
+                    candidateSlotRenderMode = JeiRenderOptions.candidateSlotRenderMode,
                 )
             }
 
-            widgetCollector.add(
-                JeiNineSliceBackgroundWidget(
-                    texture = bgSpec.texture,
-                    cornerPx = bgSpec.borderPx,
-                    fillCenter = bgSpec.fillCenter,
-                    splitMode = JeiNineSliceBackgroundWidget.SplitMode.AUTO_PIXELS,
-                ).size(layout.width, layout.height)
-            )
-
-            // Build a fast node lookup.
-            val nodeById = nodes.associateBy { it.nodeId }
-
-            val fixedValuesBySlotNodeId: MutableMap<String, List<Any>> = LinkedHashMap()
-
-            for (placement in planBuilder.placedNodes) {
-                val node = nodeById[placement.nodeId]
-                if (node == null) {
-                    PrototypeMachinery.logger.warn(
-                        "JEI layout '${layout::class.java.name}' placed unknown nodeId='${placement.nodeId}' for recipe '${ctx.recipeId}'."
-                    )
-                    continue
+            return JeiRenderOptions.withEffective(effective) {
+                // 1) Resolve requirement nodes via renderers.
+                val nodesRaw = mutableListOf<PMJeiRequirementNode<out RecipeRequirementComponent>>()
+                for ((type, list) in ctx.recipe.requirements) {
+                    val renderer = JeiRequirementRendererRegistry.getUnsafe(type) ?: continue
+                    for (component in list) {
+                        val split = renderer.splitUnsafe(ctx, component)
+                        nodesRaw.addAll(split)
+                    }
                 }
 
-                val renderer = JeiRequirementRendererRegistry.getUnsafe(node.type)
-                if (renderer == null) {
-                    PrototypeMachinery.logger.warn(
-                        "JEI: missing renderer for requirementType='${node.type.id}' (nodeId='${node.nodeId}', recipe='${ctx.recipeId}')."
+                // 1.1) Precompute per-node render metadata.
+                val nodes: List<PMJeiRequirementNode<out RecipeRequirementComponent>> = attachChanceOverlayMetadata(nodesRaw, effective)
+
+                val requirementsView = RequirementsView(nodes)
+
+                // 2) Build layout plan.
+                val planBuilder = PlanBuilder()
+                layout.build(ctx, requirementsView, planBuilder)
+
+                // 3) Materialize plan: slots + widgets.
+                val slotCollector = SlotCollector()
+                val widgetCollector = WidgetCollector()
+
+                // 3.0) Background (9-slice). Drawn behind all other widgets.
+                // Default uses a fixed 2px border; callers may override via a reserved decorator id.
+                val bgPlacement = planBuilder.decorators.firstOrNull { it.decoratorId == JeiBackgroundSpec.id }
+                val bgSpec = if (bgPlacement != null) {
+                    // Consume so it won't go through the normal decorator registry.
+                    planBuilder.decorators.remove(bgPlacement)
+                    JeiBackgroundSpec.parse(bgPlacement.data)
+                } else {
+                    JeiBackgroundSpec.Spec(
+                        texture = PMJeiIcons.tex("jei_base.png"),
+                        borderPx = 2,
+                        fillCenter = false,
                     )
-                    continue
                 }
 
-                @Suppress("UNCHECKED_CAST")
-                val castNode = node as PMJeiRequirementNode<RecipeRequirementComponent>
-
-                val variant = selectVariant(ctx, renderer, castNode, placement)
-
-                renderer.declareJeiSlotsUnsafe(ctx, castNode, variant, placement.x, placement.y, slotCollector)
-                renderer.buildWidgetsUnsafe(ctx, castNode, variant, placement.x, placement.y, placement.data, widgetCollector)
-            }
-
-            for (decor in planBuilder.decorators) {
-                val decorator = JeiDecoratorRegistry.get(decor.decoratorId)
-                if (decorator == null) {
-                    PrototypeMachinery.logger.warn(
-                        "JEI: missing decorator '${decor.decoratorId}' (recipe='${ctx.recipeId}')."
-                    )
-                    continue
-                }
-                decorator.buildWidgets(ctx, decor.x, decor.y, decor.data, widgetCollector)
-            }
-
-            // Materialize fixed slots (node-less JEI ingredient slots).
-            for ((i, fixed) in planBuilder.fixedSlots.withIndex()) {
-                val provider = JeiFixedSlotProviderRegistry.get(fixed.providerId)
-                if (provider == null) {
-                    PrototypeMachinery.logger.warn(
-                        "JEI: missing fixed slot provider '${fixed.providerId}' (recipe='${ctx.recipeId}')."
-                    )
-                    continue
-                }
-
-                val kind = SimpleKind(provider.kindId)
-                val w = fixed.width
-                val h = fixed.height
-                if (w <= 0 || h <= 0) {
-                    PrototypeMachinery.logger.warn(
-                        "JEI: fixed slot '${fixed.providerId}' has invalid size (${w}x${h}) (recipe='${ctx.recipeId}')."
-                    )
-                    continue
-                }
-
-                val slotNodeId = "__fixed:${fixed.providerId.namespace}:${fixed.providerId.path}:$i"
-                val values = try {
-                    provider.getDisplayed(ctx)
-                } catch (t: Throwable) {
-                    PrototypeMachinery.logger.error(
-                        "JEI: fixed slot provider '${fixed.providerId}' failed for recipe='${ctx.recipeId}'.",
-                        t
-                    )
-                    emptyList()
-                }
-
-                val slot = JeiSlot(
-                    kind = kind,
-                    nodeId = slotNodeId,
-                    index = slotCollector.nextIndex(kind),
-                    role = fixed.role,
-                    x = fixed.x,
-                    y = fixed.y,
-                    width = w,
-                    height = h,
+                widgetCollector.add(
+                    JeiNineSliceBackgroundWidget(
+                        texture = bgSpec.texture,
+                        cornerPx = bgSpec.borderPx,
+                        fillCenter = bgSpec.fillCenter,
+                        splitMode = JeiNineSliceBackgroundWidget.SplitMode.AUTO_PIXELS,
+                    ).size(layout.width, layout.height)
                 )
 
-                slotCollector.add(slot)
-                fixedValuesBySlotNodeId[slotNodeId] = values
+                // Build a fast node lookup.
+                val nodeById = nodes.associateBy { it.nodeId }
+
+                val fixedValuesBySlotNodeId: MutableMap<String, List<Any>> = LinkedHashMap()
+
+                for (placement in planBuilder.placedNodes) {
+                    val node = nodeById[placement.nodeId]
+                    if (node == null) {
+                        PrototypeMachinery.logger.warn(
+                            "JEI layout '${layout::class.java.name}' placed unknown nodeId='${placement.nodeId}' for recipe '${ctx.recipeId}'."
+                        )
+                        continue
+                    }
+
+                    val renderer = JeiRequirementRendererRegistry.getUnsafe(node.type)
+                    if (renderer == null) {
+                        PrototypeMachinery.logger.warn(
+                            "JEI: missing renderer for requirementType='${node.type.id}' (nodeId='${node.nodeId}', recipe='${ctx.recipeId}')."
+                        )
+                        continue
+                    }
+
+                    @Suppress("UNCHECKED_CAST")
+                    val castNode = node as PMJeiRequirementNode<RecipeRequirementComponent>
+
+                    val variant = selectVariant(ctx, renderer, castNode, placement)
+
+                    renderer.declareJeiSlotsUnsafe(ctx, castNode, variant, placement.x, placement.y, slotCollector)
+                    renderer.buildWidgetsUnsafe(ctx, castNode, variant, placement.x, placement.y, placement.data, widgetCollector)
+                }
+
+                for (decor in planBuilder.decorators) {
+                    val decorator = JeiDecoratorRegistry.get(decor.decoratorId)
+                    if (decorator == null) {
+                        PrototypeMachinery.logger.warn(
+                            "JEI: missing decorator '${decor.decoratorId}' (recipe='${ctx.recipeId}')."
+                        )
+                        continue
+                    }
+                    decorator.buildWidgets(ctx, decor.x, decor.y, decor.data, widgetCollector)
+                }
+
+                // Materialize fixed slots (node-less JEI ingredient slots).
+                for ((i, fixed) in planBuilder.fixedSlots.withIndex()) {
+                    val provider = JeiFixedSlotProviderRegistry.get(fixed.providerId)
+                    if (provider == null) {
+                        PrototypeMachinery.logger.warn(
+                            "JEI: missing fixed slot provider '${fixed.providerId}' (recipe='${ctx.recipeId}')."
+                        )
+                        continue
+                    }
+
+                    val kind = SimpleKind(provider.kindId)
+                    val w = fixed.width
+                    val h = fixed.height
+                    if (w <= 0 || h <= 0) {
+                        PrototypeMachinery.logger.warn(
+                            "JEI: fixed slot '${fixed.providerId}' has invalid size (${w}x${h}) (recipe='${ctx.recipeId}')."
+                        )
+                        continue
+                    }
+
+                    val slotNodeId = "__fixed:${fixed.providerId.namespace}:${fixed.providerId.path}:$i"
+                    val values = try {
+                        provider.getDisplayed(ctx)
+                    } catch (t: Throwable) {
+                        PrototypeMachinery.logger.error(
+                            "JEI: fixed slot provider '${fixed.providerId}' failed for recipe='${ctx.recipeId}'.",
+                            t
+                        )
+                        emptyList()
+                    }
+
+                    val slot = JeiSlot(
+                        kind = kind,
+                        nodeId = slotNodeId,
+                        index = slotCollector.nextIndex(kind),
+                        role = fixed.role,
+                        x = fixed.x,
+                        y = fixed.y,
+                        width = w,
+                        height = h,
+                    )
+
+                    slotCollector.add(slot)
+                    fixedValuesBySlotNodeId[slotNodeId] = values
+                }
+
+                JeiPanelRuntime(
+                    ctx = ctx,
+                    width = layout.width,
+                    height = layout.height,
+                    slots = slotCollector.slots,
+                    widgets = widgetCollector.widgets,
+                    nodeById = nodeById,
+                    fixedValuesBySlotNodeId = fixedValuesBySlotNodeId,
+                )
+            }
+        }
+
+        private fun attachChanceOverlayMetadata(
+            nodes: List<PMJeiRequirementNode<out RecipeRequirementComponent>>,
+            effective: JeiRenderOptions.Effective,
+        ): List<PMJeiRequirementNode<out RecipeRequirementComponent>> {
+            val key = JeiNodeMetaKeys.CHANCE_OVERLAY_LABEL
+
+            if (!effective.renderChanceOverlayOnSlots) {
+                // Ensure the label is absent when overlay is disabled for this layout.
+                return nodes.map { n ->
+                    if (n.metadata.containsKey(key)) n.copy(metadata = n.metadata - key) else n
+                }
             }
 
-            return JeiPanelRuntime(
-                ctx = ctx,
-                width = layout.width,
-                height = layout.height,
-                slots = slotCollector.slots,
-                widgets = widgetCollector.widgets,
-                nodeById = nodeById,
-                fixedValuesBySlotNodeId = fixedValuesBySlotNodeId,
-            )
+            return nodes.map { n ->
+                val props = n.component.properties
+                val chance = (props[RequirementPropertyKeys.CHANCE] as? Number)?.toDouble()
+                val chanceAttr = when (val v = props[RequirementPropertyKeys.CHANCE_ATTRIBUTE]) {
+                    is ResourceLocation -> v.toString()
+                    is String -> v
+                    else -> null
+                }
+
+                val label = JeiChanceOverlay.buildLabel(chance, !chanceAttr.isNullOrBlank())
+                if (label.isNullOrBlank()) return@map n
+
+                val merged = if (n.metadata.isEmpty()) {
+                    mapOf(key to label)
+                } else {
+                    n.metadata + (key to label)
+                }
+
+                n.copy(metadata = merged)
+            }
         }
 
         private fun <C : RecipeRequirementComponent> selectVariant(

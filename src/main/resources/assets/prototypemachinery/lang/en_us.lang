@@ -59,6 +59,21 @@ prototypemachinery.jei.energy.amount.per_tick=%s FE/t
 # JEI - Fluid tooltip hints
 prototypemachinery.jei.fluid.tooltip.io=%s (%s)
 
+# JEI - Requirement semantics
+prototypemachinery.jei.requirement.chance=Chance: %s%%
+prototypemachinery.jei.requirement.chance_attribute=Affected by attribute: %s
+prototypemachinery.jei.requirement.fuzzy_input=Fuzzy input: %s candidates, requires %s
+prototypemachinery.jei.requirement.fuzzy_input.group=Grouped with: Fuzzy input #%s
+prototypemachinery.jei.requirement.fuzzy_input.candidate=Candidate: %s / %s
+prototypemachinery.jei.requirement.dynamic_input=Dynamic input: %s candidates, requires %s
+prototypemachinery.jei.requirement.dynamic_input.matcher=Matcher: %s
+prototypemachinery.jei.requirement.dynamic_input.group=Grouped with: Dynamic input #%s
+prototypemachinery.jei.requirement.dynamic_input.candidate=Candidate: %s / %s
+prototypemachinery.jei.requirement.random_output=Random output: pick %s of %s (no replacement)
+prototypemachinery.jei.requirement.random_output.group=Grouped with: Random output pool #%s
+prototypemachinery.jei.requirement.random_output.candidate=Candidate: %s / %s
+prototypemachinery.jei.requirement.random_output.weight=Weight: %s
+
 # Default Machine UI - recipe progress list
 prototypemachinery.gui.recipe_progress.idle=Idle
 prototypemachinery.gui.recipe_progress.running=Running

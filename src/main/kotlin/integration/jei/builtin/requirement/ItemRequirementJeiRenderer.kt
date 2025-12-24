@@ -6,6 +6,10 @@ import com.cleanroommc.modularui.theme.WidgetThemeEntry
 import com.cleanroommc.modularui.widget.Widget
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.DynamicItemInputGroup
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.FuzzyInputGroup
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.RandomOutputPool
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.RequirementPropertyKeys
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.ItemRequirementComponent
 import github.kasuminova.prototypemachinery.integration.jei.api.JeiRecipeContext
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiRequirementRole
@@ -18,6 +22,7 @@ import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequ
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementRenderer
 import github.kasuminova.prototypemachinery.integration.jei.api.ui.PMJeiWidgetCollector
 import github.kasuminova.prototypemachinery.integration.jei.builtin.PMJeiIcons
+import github.kasuminova.prototypemachinery.integration.jei.runtime.JeiRenderOptions
 import net.minecraft.item.ItemStack
 import net.minecraft.util.ResourceLocation
 
@@ -68,6 +73,109 @@ public object ItemRequirementJeiRenderer : PMJeiRequirementRenderer<ItemRequirem
                 role = PMJeiRequirementRole.OUTPUT,
                 index = i,
             )
+        }
+
+        // Fuzzy inputs
+        @Suppress("UNCHECKED_CAST")
+        val fuzzy = component.properties[RequirementPropertyKeys.FUZZY_INPUTS] as? List<FuzzyInputGroup<ItemStack>>
+        if (!fuzzy.isNullOrEmpty()) {
+            when (JeiRenderOptions.current().candidateSlotRenderMode) {
+                JeiRenderOptions.CandidateSlotRenderMode.EXPANDED -> {
+                    // Split into N slots: one per candidate.
+                    fuzzy.forEachIndexed { groupIndex, group ->
+                        for (candidateIndex in group.candidates.indices) {
+                            out += PMJeiRequirementNode(
+                                nodeId = "${component.id}:fuzzy_input:$groupIndex:$candidateIndex",
+                                type = type,
+                                component = component,
+                                role = PMJeiRequirementRole.INPUT,
+                                // Keep group index as node.index for compatibility with existing hint logic.
+                                index = groupIndex,
+                            )
+                        }
+                    }
+                }
+
+                JeiRenderOptions.CandidateSlotRenderMode.ALTERNATIVES -> {
+                    // One slot per fuzzy group; JEI cycles alternatives.
+                    fuzzy.forEachIndexed { i, _ ->
+                        out += PMJeiRequirementNode(
+                            nodeId = "${component.id}:fuzzy_input:$i",
+                            type = type,
+                            component = component,
+                            role = PMJeiRequirementRole.INPUT,
+                            index = i,
+                        )
+                    }
+                }
+            }
+        }
+
+        // Dynamic inputs
+        val dynamic = component.properties[RequirementPropertyKeys.DYNAMIC_ITEM_INPUTS] as? List<DynamicItemInputGroup>
+        if (!dynamic.isNullOrEmpty()) {
+            when (JeiRenderOptions.current().candidateSlotRenderMode) {
+                JeiRenderOptions.CandidateSlotRenderMode.EXPANDED -> {
+                    dynamic.forEachIndexed { groupIndex, group ->
+                        val shown = if (group.displayedCandidates.isNotEmpty()) group.displayedCandidates else listOf(group.pattern)
+                        for (candidateIndex in shown.indices) {
+                            out += PMJeiRequirementNode(
+                                nodeId = "${component.id}:dynamic_input:$groupIndex:$candidateIndex",
+                                type = type,
+                                component = component,
+                                role = PMJeiRequirementRole.INPUT,
+                                index = groupIndex,
+                            )
+                        }
+                    }
+                }
+
+                JeiRenderOptions.CandidateSlotRenderMode.ALTERNATIVES -> {
+                    dynamic.forEachIndexed { i, _ ->
+                        out += PMJeiRequirementNode(
+                            nodeId = "${component.id}:dynamic_input:$i",
+                            type = type,
+                            component = component,
+                            role = PMJeiRequirementRole.INPUT,
+                            index = i,
+                        )
+                    }
+                }
+            }
+        }
+
+        // Random outputs
+        @Suppress("UNCHECKED_CAST")
+        val random = component.properties[RequirementPropertyKeys.RANDOM_OUTPUTS] as? RandomOutputPool<ItemStack>
+        if (random != null && random.pickCount > 0 && random.candidates.isNotEmpty()) {
+            when (JeiRenderOptions.current().candidateSlotRenderMode) {
+                JeiRenderOptions.CandidateSlotRenderMode.EXPANDED -> {
+                    // Split into N slots: one per candidate.
+                    // We keep pool index = 0 (single pool) in the nodeId for future extension.
+                    for (candidateIndex in random.candidates.indices) {
+                        out += PMJeiRequirementNode(
+                            nodeId = "${component.id}:random_output:0:$candidateIndex",
+                            type = type,
+                            component = component,
+                            role = PMJeiRequirementRole.OUTPUT,
+                            index = candidateIndex,
+                        )
+                    }
+                }
+
+                JeiRenderOptions.CandidateSlotRenderMode.ALTERNATIVES -> {
+                    // One slot per pick; JEI cycles alternatives.
+                    for (i in 0 until random.pickCount) {
+                        out += PMJeiRequirementNode(
+                            nodeId = "${component.id}:random_output:$i",
+                            type = type,
+                            component = component,
+                            role = PMJeiRequirementRole.OUTPUT,
+                            index = i,
+                        )
+                    }
+                }
+            }
         }
 
         return out

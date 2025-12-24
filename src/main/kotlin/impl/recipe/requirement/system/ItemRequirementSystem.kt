@@ -3,10 +3,13 @@ package github.kasuminova.prototypemachinery.impl.recipe.requirement.system
 import github.kasuminova.prototypemachinery.api.key.PMKey
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeRegistry
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeType
+import github.kasuminova.prototypemachinery.api.machine.component.container.EnumerableItemKeyContainer
 import github.kasuminova.prototypemachinery.api.machine.component.container.StructureItemKeyContainer
 import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.DynamicItemInputGroup
 import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.FuzzyInputGroup
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.ItemRequirementMatcherRegistry
 import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.RandomOutputPool
 import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.RequirementPropertyKeys
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
@@ -26,7 +29,8 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
 
     override fun start(process: RecipeProcess, component: ItemRequirementComponent): RequirementTransaction {
         val fuzzyInputs = component.fuzzyInputsOrNull()
-        if (component.inputs.isEmpty() && fuzzyInputs.isNullOrEmpty()) {
+        val dynamicInputs = component.dynamicInputsOrNull()
+        if (component.inputs.isEmpty() && fuzzyInputs.isNullOrEmpty() && dynamicInputs.isNullOrEmpty()) {
             return noOpSuccess()
         }
 
@@ -45,7 +49,7 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
         // Capacity check uses an upper bound so the simulated check always covers any sampled execution.
         val checkTimes = maxOf(parallels.toLong(), ChanceMath.maxTimes(parallels, chancePercent))
 
-        val resolution = if (!fuzzyInputs.isNullOrEmpty()) getOrCreateResolution(process) else null
+        val resolution = if (!fuzzyInputs.isNullOrEmpty() || !dynamicInputs.isNullOrEmpty()) getOrCreateResolution(process) else null
         val pendingLockWrites = ArrayList<LockWrite>()
 
         // Resolve fuzzy inputs (choose + lock) in a side-effect-free way first.
@@ -67,10 +71,41 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
             }
         }
 
+        // Resolve dynamic inputs (enumerate candidates by matcher -> choose + lock).
+        val resolvedDynamic: List<ResolvedFuzzy<ItemStack>> = if (dynamicInputs.isNullOrEmpty()) {
+            emptyList()
+        } else {
+            dynamicInputs.mapIndexed { idx, group ->
+                val lockId = lockId(component.id, stage = "start", groupIndex = idx, kind = "dynamic")
+                val existing = resolution?.getLock(lockId) as? PMKey<ItemStack>
+                if (existing != null) {
+                    ResolvedFuzzy(lockId, existing, group.count)
+                } else {
+                    val matcher = ItemRequirementMatcherRegistry.get(group.matcherId)
+                        ?: return blocked("blocked.item.unknown_matcher", listOf(component.id, group.matcherId))
+
+                    val candidates = enumerateDynamicCandidates(sources, group, matcher)
+                    if (candidates.isEmpty()) {
+                        return blocked("blocked.item.missing_inputs", listOf(component.id, group.count.toString()))
+                    }
+
+                    val required = safeMul(group.count, checkTimes)
+                    val chosen = selectFirstSatisfiable(sources, candidates, required)
+                        ?: return blocked("blocked.item.missing_inputs", listOf(component.id, required.toString()))
+
+                    pendingLockWrites += LockWrite(lockId, chosen)
+                    ResolvedFuzzy(lockId, chosen, group.count)
+                }
+            }
+        }
+
         // Pre-check by simulation so that Blocked has no side effects.
         val neededCheck = aggregateRequiredByTimes(component.inputs, checkTimes)
         for (fz in resolvedFuzzy) {
             addCount(neededCheck, fz.key, safeMul(fz.count, checkTimes))
+        }
+        for (dz in resolvedDynamic) {
+            addCount(neededCheck, dz.key, safeMul(dz.count, checkTimes))
         }
 
         for ((key, requiredCount) in neededCheck) {
@@ -105,6 +140,9 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
         val neededExec = aggregateRequiredByTimes(component.inputs, execTimes)
         for (fz in resolvedFuzzy) {
             addCount(neededExec, fz.key, safeMul(fz.count, execTimes))
+        }
+        for (dz in resolvedDynamic) {
+            addCount(neededExec, dz.key, safeMul(dz.count, execTimes))
         }
 
         // Execute and record deltas for rollback.
@@ -319,8 +357,8 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
         }
     }
 
-    private fun lockId(requirementId: String, stage: String, groupIndex: Int): String =
-        "item|$requirementId|$stage|fuzzy|$groupIndex"
+    private fun lockId(requirementId: String, stage: String, groupIndex: Int, kind: String = "fuzzy"): String =
+        "item|$requirementId|$stage|$kind|$groupIndex"
 
     private data class LockWrite(val id: String, val key: PMKey<ItemStack>)
 
@@ -329,6 +367,46 @@ public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequi
     @Suppress("UNCHECKED_CAST")
     private fun ItemRequirementComponent.fuzzyInputsOrNull(): List<FuzzyInputGroup<ItemStack>>? {
         return properties[RequirementPropertyKeys.FUZZY_INPUTS] as? List<FuzzyInputGroup<ItemStack>>
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun ItemRequirementComponent.dynamicInputsOrNull(): List<DynamicItemInputGroup>? {
+        return properties[RequirementPropertyKeys.DYNAMIC_ITEM_INPUTS] as? List<DynamicItemInputGroup>
+    }
+
+    private fun enumerateDynamicCandidates(
+        sources: List<StructureItemKeyContainer>,
+        group: DynamicItemInputGroup,
+        matcher: ItemRequirementMatcherRegistry.Matcher,
+    ): List<PMKey<ItemStack>> {
+        val seen = LinkedHashSet<PMKey<ItemStack>>()
+        val pattern = group.pattern.get().copy().also { it.count = 1 }
+
+        // Enumerate concrete variants from all enumerable sources.
+        for (c in sources) {
+            val enum = c as? EnumerableItemKeyContainer ?: continue
+            for (k in enum.getAllKeysSnapshot()) {
+                if (seen.size >= group.maxCandidates) break
+                val cand = k.get()
+                if (cand.isEmpty) continue
+                val candCopy = cand.copy().also { it.count = 1 }
+                if (matcher.matches(candCopy, pattern)) {
+                    seen += k
+                }
+            }
+            if (seen.size >= group.maxCandidates) break
+        }
+
+        if (seen.isEmpty()) return emptyList()
+
+        // Deterministic ordering: registryName + meta + hash.
+        return seen.toList().sortedWith(
+            compareBy<PMKey<ItemStack>>(
+                { it.get().item.registryName?.toString().orEmpty() },
+                { it.get().metadata },
+                { it.hashCode() },
+            )
+        )
     }
 
     @Suppress("UNCHECKED_CAST")

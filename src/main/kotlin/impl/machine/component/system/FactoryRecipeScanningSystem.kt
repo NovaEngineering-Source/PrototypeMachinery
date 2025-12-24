@@ -7,6 +7,7 @@ import github.kasuminova.prototypemachinery.api.machine.component.system.Machine
 import github.kasuminova.prototypemachinery.api.machine.component.type.FactoryRecipeProcessorComponent
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.RecipeManager
+import github.kasuminova.prototypemachinery.api.recipe.index.IRecipeIndexRegistry
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
 import github.kasuminova.prototypemachinery.api.recipe.scanning.RecipeParallelismConstraintRegistry
 import github.kasuminova.prototypemachinery.common.util.warnWithBlockEntity
@@ -48,7 +49,24 @@ public class FactoryRecipeScanningSystem(
             return
         }
 
-        val candidates = recipeManager.getByGroups(groups)
+        // Try to use recipe index for filtering if available
+        var candidates: Collection<MachineRecipe>
+
+        val index = IRecipeIndexRegistry.INSTANCE.getIndex(machine.type)
+        if (index != null) {
+            // Index is available: use it to filter recipes first
+            val indexedCandidates = index.lookup(machine)
+            if (indexedCandidates.isNotEmpty()) {
+                // Index provided filtered results
+                candidates = indexedCandidates.filter { it.recipeGroups.any(groups::contains) }
+            } else {
+                // Index returned empty set (no recipes match)
+                candidates = emptyList()
+            }
+        } else {
+            // No index for this machine type, use full recipe scan
+            candidates = recipeManager.getByGroups(groups)
+        }
 
         // Iterate through candidate recipes
         for (recipe in candidates) {

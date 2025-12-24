@@ -59,6 +59,21 @@ prototypemachinery.jei.energy.amount.per_tick=%s FE/t
 # JEI - 流体 tooltip 提示
 prototypemachinery.jei.fluid.tooltip.io=%s（%s）
 
+# JEI - 需求语义
+prototypemachinery.jei.requirement.chance=概率：%s%%
+prototypemachinery.jei.requirement.chance_attribute=受属性影响：%s
+prototypemachinery.jei.requirement.fuzzy_input=模糊输入：%s 个候选，需求 %s
+prototypemachinery.jei.requirement.fuzzy_input.group=同组需求：模糊输入 #%s
+prototypemachinery.jei.requirement.fuzzy_input.candidate=候选：%s / %s
+prototypemachinery.jei.requirement.dynamic_input=动态输入：%s 个候选，需求 %s
+prototypemachinery.jei.requirement.dynamic_input.matcher=匹配器：%s
+prototypemachinery.jei.requirement.dynamic_input.group=同组需求：动态输入 #%s
+prototypemachinery.jei.requirement.dynamic_input.candidate=候选：%s / %s
+prototypemachinery.jei.requirement.random_output=随机输出：抽取 %s 个（候选 %s 个，无放回）
+prototypemachinery.jei.requirement.random_output.group=同组需求：随机输出池 #%s
+prototypemachinery.jei.requirement.random_output.candidate=候选：%s / %s
+prototypemachinery.jei.requirement.random_output.weight=权重：%s
+
 # 默认机械 UI - 配方进度列表
 prototypemachinery.gui.recipe_progress.idle=空闲
 prototypemachinery.gui.recipe_progress.running=工作中

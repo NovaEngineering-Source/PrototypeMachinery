@@ -19,6 +19,7 @@ import github.kasuminova.prototypemachinery.integration.jei.layout.script.Script
 import github.kasuminova.prototypemachinery.integration.jei.layout.script.ScriptJeiLayoutRule
 import github.kasuminova.prototypemachinery.integration.jei.layout.script.ScriptJeiLayoutSpec
 import github.kasuminova.prototypemachinery.integration.jei.layout.script.ScriptJeiMachineLayoutDefinition
+import github.kasuminova.prototypemachinery.integration.jei.runtime.JeiRenderOptions
 import net.minecraft.util.ResourceLocation
 import stanhebben.zenscript.annotations.ZenClass
 import stanhebben.zenscript.annotations.ZenMethod
@@ -34,6 +35,12 @@ public class LayoutBuilder {
     private val rules: MutableList<ScriptJeiLayoutRule> = ArrayList()
 
     private var autoPlaceRemaining: AutoPlaceRemainingSpec? = null
+
+    /** Optional layout-scoped override for chance label overlay. Null = use global default. */
+    private var chanceOverlayEnabled: Boolean? = null
+
+    /** Optional layout-scoped override for candidate render mode. Null = use global default. */
+    private var candidateSlotRenderMode: JeiRenderOptions.CandidateSlotRenderMode? = null
 
     /**
      * If enabled, role="INPUT" matches INPUT + INPUT_PER_TICK; role="OUTPUT" matches OUTPUT + OUTPUT_PER_TICK.
@@ -54,6 +61,37 @@ public class LayoutBuilder {
     @ZenMethod
     public fun mergePerTickRoles(enabled: Boolean): LayoutBuilder {
         this.mergePerTickRoles = enabled
+        return this
+    }
+
+    /**
+     * Enable/disable rendering the small chance label on the top-left of JEI slots for this layout.
+     *
+     * If not called, the global default is used.
+     */
+    @ZenMethod
+    public fun setChanceOverlayEnabled(enabled: Boolean): LayoutBuilder {
+        this.chanceOverlayEnabled = enabled
+        return this
+    }
+
+    /**
+     * Controls how fuzzy-input / random-output candidates are displayed in JEI for this layout.
+     *
+     * Supported values (case-insensitive):
+     * - "alternatives": one slot with cycling alternatives (default)
+     * - "expanded": split into N slots, each slot shows one fixed candidate
+     *
+     * If not called (or unknown value), the global default is used.
+     */
+    @ZenMethod
+    public fun setCandidateSlotRenderMode(mode: String): LayoutBuilder {
+        val m = mode.trim().lowercase(Locale.ROOT)
+        this.candidateSlotRenderMode = when (m) {
+            "expanded" -> JeiRenderOptions.CandidateSlotRenderMode.EXPANDED
+            "alternatives", "alternative", "cycle", "cycling" -> JeiRenderOptions.CandidateSlotRenderMode.ALTERNATIVES
+            else -> this.candidateSlotRenderMode
+        }
         return this
     }
 
@@ -402,6 +440,10 @@ public class LayoutBuilder {
             ScriptJeiLayoutSpec(
                 width = width,
                 height = height,
+                renderOptions = JeiRenderOptions.LayoutOverrides(
+                    renderChanceOverlayOnSlots = chanceOverlayEnabled,
+                    candidateSlotRenderMode = candidateSlotRenderMode,
+                ),
                 rules = rules.toList(),
                 autoPlaceRemaining = autoPlaceRemaining,
             )

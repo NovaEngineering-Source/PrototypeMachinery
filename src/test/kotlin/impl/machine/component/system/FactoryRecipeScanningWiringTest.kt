@@ -23,6 +23,7 @@ import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttrib
 import github.kasuminova.prototypemachinery.impl.machine.component.StructureComponentMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.component.type.FactoryRecipeProcessorComponentType
 import github.kasuminova.prototypemachinery.impl.recipe.RecipeManagerImpl
+import github.kasuminova.prototypemachinery.impl.recipe.index.RecipeIndexRegistry
 import net.minecraft.tileentity.TileEntity
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.ResourceLocation
@@ -38,6 +39,10 @@ class FactoryRecipeScanningWiringTest {
         val snapshot = RecipeManagerImpl.snapshotForTests()
         try {
             RecipeManagerImpl.clearForTests()
+
+            // Initialize the recipe index registry for testing
+            // This ensures the scanning system can use the index safely
+            RecipeIndexRegistry.initializeForTests()
 
             val group = ResourceLocation("test", "group")
 

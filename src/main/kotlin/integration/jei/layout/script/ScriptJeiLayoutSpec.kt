@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery.integration.jei.layout.script
 
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiRequirementRole
 import github.kasuminova.prototypemachinery.integration.jei.api.render.JeiSlotRole
+import github.kasuminova.prototypemachinery.integration.jei.runtime.JeiRenderOptions
 import net.minecraft.util.ResourceLocation
 
 /**
@@ -15,6 +16,8 @@ import net.minecraft.util.ResourceLocation
 public data class ScriptJeiLayoutSpec(
     public val width: Int,
     public val height: Int,
+    /** Optional per-layout JEI render option overrides. */
+    public val renderOptions: JeiRenderOptions.LayoutOverrides = JeiRenderOptions.LayoutOverrides(),
     public val rules: List<ScriptJeiLayoutRule>,
     public val autoPlaceRemaining: AutoPlaceRemainingSpec? = null,
 )

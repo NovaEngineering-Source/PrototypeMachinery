@@ -1,5 +1,6 @@
 package github.kasuminova.prototypemachinery.impl.recipe.index.type
 
+import github.kasuminova.prototypemachinery.api.key.PMKey
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
@@ -7,77 +8,80 @@ import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndex
 import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndexFactory
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
-import github.kasuminova.prototypemachinery.impl.key.item.PMItemKey
+import github.kasuminova.prototypemachinery.impl.machine.component.container.ItemContainerComponent
+import net.minecraft.item.ItemStack
 
 public class ItemRequirementIndex(
-    private val index: Map<PMItemKey, Set<MachineRecipe>>
+    private val index: Map<PMKey<ItemStack>, Set<MachineRecipe>>
 ) : RequirementIndex {
 
     public override fun lookup(machine: MachineInstance): Set<MachineRecipe>? {
-        // Pseudo-implementation as per prompt
-
         // 1. Get all ItemContainerComponents from the machine
-        // val itemComponents = machine.componentMap.getByInstanceOf(ItemContainerComponent::class.java)
+        val itemComponents = machine.componentMap.getByInstanceOf(ItemContainerComponent::class.java)
 
-        // 2. Collect all available items as ItemStackKeys
-        // val availableKeys = mutableSetOf<ItemStackKey>()
-        // for (component in itemComponents) {
-        //     for (stack in component.items) {
-        //         if (!stack.isEmpty) {
-        //             availableKeys.add(ItemStackKeyType.create(stack) as ItemStackKey)
-        //         }
-        //     }
-        // }
+        if (itemComponents.isEmpty()) {
+            // No item containers, no opinion on recipes
+            return null
+        }
+
+        // 2. Collect all available items as PMKey<ItemStack>
+        // We're only interested in the type (prototype), not the count
+        // because the index is a conservative filter
+        val availableKeys = mutableSetOf<PMKey<ItemStack>>()
+
+        for (component in itemComponents) {
+            for (slot in 0 until component.slots) {
+                val stack = component.getItem(slot)
+                if (!stack.isEmpty) {
+                    // Create a PMKey from the ItemStack
+                    // The count doesn't matter for equality, so we use 1
+                    val key = github.kasuminova.prototypemachinery.impl.key.item.PMItemKeyType.create(stack)
+                    availableKeys.add(key)
+                }
+            }
+        }
+
+        if (availableKeys.isEmpty()) {
+            // No items available, no recipes can match
+            return emptySet()
+        }
 
         // 3. Query the index
+        // Union of all recipes that match ANY available item
+        // This is conservative: it may include recipes that need other inputs,
+        // but won't exclude recipes that could potentially match
         val potentialRecipes = mutableSetOf<MachineRecipe>()
 
-        // In a real implementation, we would iterate availableKeys and addAll(index[key])
-        // However, recipes usually require MULTIPLE inputs.
-        // If we just union all recipes that match ANY input, we get a superset.
-        // If we intersect, we might miss recipes if we don't have ALL inputs yet?
-        // The prompt says: "RecipeIndex.lookup... to get a set of potential recipes that can be crafted"
-        // Usually, an index returns recipes that match *at least one* input, 
-        // and the full check verifies the rest.
-        // OR, if we have multiple inputs, we can be smarter.
-        // But for a simple index, "Union of recipes for all available items" is a safe "Potential" set.
-        // Wait, if I have Iron, and recipe needs Iron + Gold.
-        // Index(Iron) -> [RecipeA]
-        // Index(Gold) -> [RecipeA]
-        // If I only have Iron, Index returns [RecipeA].
-        // Then the full check fails because Gold is missing. This is correct.
-
-        // Mock logic for compilation
-        /*
         for (key in availableKeys) {
             val recipes = index[key]
             if (recipes != null) {
                 potentialRecipes.addAll(recipes)
             }
         }
-        */
 
-        return if (potentialRecipes.isEmpty()) null else potentialRecipes
+        return if (potentialRecipes.isEmpty()) emptySet() else potentialRecipes
     }
 
     public companion object Factory : RequirementIndexFactory {
         override val requirementType: RecipeRequirementType<*> = RecipeRequirementTypes.ITEM
 
         public override fun create(machineType: MachineType, recipes: List<MachineRecipe>): RequirementIndex? {
-            // 1. Check if machine has ItemRequirementComponents and if they are static
-            // if (!areItemComponentsStatic(machineType)) return null
-
-            val map = mutableMapOf<PMItemKey, MutableSet<MachineRecipe>>()
+            val map = mutableMapOf<PMKey<ItemStack>, MutableSet<MachineRecipe>>()
 
             for (recipe in recipes) {
-                // Extract item inputs from recipe
-                // val itemRequirements = recipe.requirements.filterIsInstance<ItemRequirement>()
-                // for (req in itemRequirements) {
-                //     for (stack in req.inputs) {
-                //          val key = ItemStackKeyType.create(stack) as ItemStackKey
-                //          map.computeIfAbsent(key) { mutableSetOf() }.add(recipe)
-                //     }
-                // }
+                // Get all ItemRequirementComponents from this recipe
+                val itemReqs = recipe.requirements[RecipeRequirementTypes.ITEM]
+                if (itemReqs.isNullOrEmpty()) continue
+
+                for (req in itemReqs) {
+                    if (req is github.kasuminova.prototypemachinery.impl.recipe.requirement.ItemRequirementComponent) {
+                        // Index each input item type
+                        for (inputKey in req.inputs) {
+                            // The key is already a PMKey<ItemStack>
+                            map.computeIfAbsent(inputKey) { mutableSetOf() }.add(recipe)
+                        }
+                    }
+                }
             }
 
             if (map.isEmpty()) return null

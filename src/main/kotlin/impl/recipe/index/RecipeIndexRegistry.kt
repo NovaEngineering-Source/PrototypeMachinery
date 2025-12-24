@@ -6,6 +6,7 @@ import github.kasuminova.prototypemachinery.api.recipe.index.IRecipeIndexRegistr
 import github.kasuminova.prototypemachinery.api.recipe.index.RecipeIndex
 import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndexFactory
 import github.kasuminova.prototypemachinery.impl.recipe.index.type.EnergyRequirementIndex
+import github.kasuminova.prototypemachinery.impl.recipe.index.type.FluidRequirementIndex
 import github.kasuminova.prototypemachinery.impl.recipe.index.type.ItemRequirementIndex
 import java.util.concurrent.ConcurrentHashMap
 
@@ -26,6 +27,7 @@ public object RecipeIndexRegistry : IRecipeIndexRegistry {
         IRecipeIndexRegistry.INSTANCE = this
         registerFactory(ItemRequirementIndex.Factory)
         registerFactory(EnergyRequirementIndex.Factory)
+        registerFactory(FluidRequirementIndex.Factory)
     }
 
     public override fun registerFactory(factory: RequirementIndexFactory) {
@@ -64,16 +66,36 @@ public object RecipeIndexRegistry : IRecipeIndexRegistry {
         }
     }
 
+    /**
+     * Initialize the registry for testing purposes.
+     * This should be called in test setup before any scanning system tests run.
+     *
+     * 用于测试目的初始化注册表。
+     * 应在测试设置中调用，在任何扫描系统测试运行之前。
+     */
+    internal fun initializeForTests() {
+        // No-op for now, as the init block already sets INSTANCE.
+    }
+
     private fun isEligibleForIndexing(machineType: MachineType): Boolean {
-        // TODO: Check all requirement components of the machine.
-        // If any component supports dynamic modification of inputs/outputs (e.g. via CraftTweaker scripts that change logic at runtime, 
-        // or specific upgrades that change input types), return false.
-        // For now, we assume true or check a flag on the component type.
-        /*
-        for (componentType in machineType.componentTypes) {
-             if (componentType.isDynamic) return false
-        }
-        */
+        // Check if any of the machine's recipes have dynamic modifiers.
+        // If a recipe uses dynamic modifiers (e.g., DynamicItemInputGroup),
+        // the machine should not be indexed since the actual requirements
+        // can only be determined at runtime.
+
+        // For now, we return true to enable indexing by default.
+        // A more complete implementation would:
+        // 1. Check all recipes for this machine type
+        // 2. Look for dynamic modifiers in their requirements
+        // 3. Return false if any dynamic modifiers are found
+
+        // Example of what to check for (pseudo-code):
+        // for (recipe in getRecipesForMachineType(machineType)) {
+        //     for (requirement in recipe.requirements.values.flatten()) {
+        //         if (requirement.hasDynamicModifiers()) return false
+        //     }
+        // }
+
         return true
     }
 

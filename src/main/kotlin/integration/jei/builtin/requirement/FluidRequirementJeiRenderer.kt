@@ -7,6 +7,9 @@ import com.cleanroommc.modularui.widget.Widget
 import github.kasuminova.prototypemachinery.api.key.PMKey
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.FuzzyInputGroup
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.RandomOutputPool
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.RequirementPropertyKeys
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.FluidRequirementComponent
 import github.kasuminova.prototypemachinery.integration.jei.api.JeiRecipeContext
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiRequirementRole
@@ -20,6 +23,7 @@ import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequ
 import github.kasuminova.prototypemachinery.integration.jei.api.render.PMJeiRequirementRenderer
 import github.kasuminova.prototypemachinery.integration.jei.api.ui.PMJeiWidgetCollector
 import github.kasuminova.prototypemachinery.integration.jei.builtin.PMJeiIcons
+import github.kasuminova.prototypemachinery.integration.jei.runtime.JeiRenderOptions
 import net.minecraft.util.ResourceLocation
 import net.minecraftforge.fluids.FluidStack
 
@@ -70,6 +74,71 @@ public object FluidRequirementJeiRenderer : PMJeiRequirementRenderer<FluidRequir
         addAll(component.outputs, PMJeiRequirementRole.OUTPUT, "output")
         addAll(component.inputsPerTick, PMJeiRequirementRole.INPUT_PER_TICK, "input_per_tick")
         addAll(component.outputsPerTick, PMJeiRequirementRole.OUTPUT_PER_TICK, "output_per_tick")
+
+        // Fuzzy inputs
+        @Suppress("UNCHECKED_CAST")
+        val fuzzy = component.properties[RequirementPropertyKeys.FUZZY_INPUTS] as? List<FuzzyInputGroup<FluidStack>>
+        if (!fuzzy.isNullOrEmpty()) {
+            when (JeiRenderOptions.current().candidateSlotRenderMode) {
+                JeiRenderOptions.CandidateSlotRenderMode.EXPANDED -> {
+                    for (groupIndex in fuzzy.indices) {
+                        val group = fuzzy[groupIndex]
+                        for (candidateIndex in group.candidates.indices) {
+                            out += PMJeiRequirementNode(
+                                nodeId = "${component.id}:fuzzy_input:$groupIndex:$candidateIndex",
+                                type = type,
+                                component = component,
+                                role = PMJeiRequirementRole.INPUT,
+                                index = groupIndex,
+                            )
+                        }
+                    }
+                }
+
+                JeiRenderOptions.CandidateSlotRenderMode.ALTERNATIVES -> {
+                    for (i in fuzzy.indices) {
+                        out += PMJeiRequirementNode(
+                            nodeId = "${component.id}:fuzzy_input:$i",
+                            type = type,
+                            component = component,
+                            role = PMJeiRequirementRole.INPUT,
+                            index = i,
+                        )
+                    }
+                }
+            }
+        }
+
+        // Random outputs
+        @Suppress("UNCHECKED_CAST")
+        val random = component.properties[RequirementPropertyKeys.RANDOM_OUTPUTS] as? RandomOutputPool<FluidStack>
+        if (random != null && random.pickCount > 0 && random.candidates.isNotEmpty()) {
+            when (JeiRenderOptions.current().candidateSlotRenderMode) {
+                JeiRenderOptions.CandidateSlotRenderMode.EXPANDED -> {
+                    for (candidateIndex in random.candidates.indices) {
+                        out += PMJeiRequirementNode(
+                            nodeId = "${component.id}:random_output:0:$candidateIndex",
+                            type = type,
+                            component = component,
+                            role = PMJeiRequirementRole.OUTPUT,
+                            index = candidateIndex,
+                        )
+                    }
+                }
+
+                JeiRenderOptions.CandidateSlotRenderMode.ALTERNATIVES -> {
+                    for (i in 0 until random.pickCount) {
+                        out += PMJeiRequirementNode(
+                            nodeId = "${component.id}:random_output:$i",
+                            type = type,
+                            component = component,
+                            role = PMJeiRequirementRole.OUTPUT,
+                            index = i,
+                        )
+                    }
+                }
+            }
+        }
 
         return out
     }

@@ -4,6 +4,8 @@ import crafttweaker.annotations.ZenRegister
 import crafttweaker.api.item.IItemStack
 import crafttweaker.api.liquid.ILiquidStack
 import crafttweaker.api.minecraft.CraftTweakerMC
+import github.kasuminova.prototypemachinery.api.key.PMKey
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.DynamicItemInputGroup
 import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.FuzzyInputGroup
 import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.RandomOutputPool
 import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.RequirementPropertyKeys
@@ -18,6 +20,7 @@ import github.kasuminova.prototypemachinery.impl.recipe.requirement.component.Pa
 import net.minecraft.item.ItemStack
 import net.minecraft.util.ResourceLocation
 import net.minecraftforge.fluids.FluidStack
+import net.minecraftforge.oredict.OreDictionary
 import stanhebben.zenscript.annotations.ZenClass
 import stanhebben.zenscript.annotations.ZenMethod
 
@@ -124,6 +127,84 @@ public class ZenRecipeRequirement internal constructor(
             val group = FuzzyInputGroup(keys, count)
             val props = mapOf<String, Any>(RequirementPropertyKeys.FUZZY_INPUTS to listOf(group))
 
+            return ZenRecipeRequirement(ItemRequirementComponent(id = id, properties = props))
+        }
+
+        @ZenMethod
+        @JvmStatic
+        public fun itemOreDictFuzzyInput(id: String, count: Long, oreDict: String): ZenRecipeRequirement {
+            require(count > 0) { "itemOreDictFuzzyInput: count must be > 0" }
+            val name = oreDict.trim()
+            require(name.isNotEmpty()) { "itemOreDictFuzzyInput: oreDict is blank" }
+
+            val ores = OreDictionary.getOres(name)
+            require(ores.isNotEmpty()) { "itemOreDictFuzzyInput: oreDict has no entries: $name" }
+
+            val keys = LinkedHashSet<PMKey<ItemStack>>(ores.size)
+            for (st in ores) {
+                if (st.isEmpty) continue
+                val copy = st.copy()
+                copy.count = 1
+                keys += PMItemKeyType.create(copy)
+            }
+            require(keys.isNotEmpty()) { "itemOreDictFuzzyInput: oreDict entries are empty: $name" }
+
+            val group = FuzzyInputGroup(keys.toList(), count)
+            val props = mapOf<String, Any>(RequirementPropertyKeys.FUZZY_INPUTS to listOf(group))
+            return ZenRecipeRequirement(ItemRequirementComponent(id = id, properties = props))
+        }
+
+        @ZenMethod
+        @JvmStatic
+        public fun itemDynamicInput(id: String, count: Long, pattern: IItemStack, matcherId: String): ZenRecipeRequirement {
+            return itemDynamicInputWithDisplayed(id, count, pattern, matcherId, emptyArray())
+        }
+
+        @ZenMethod
+        @JvmStatic
+        public fun itemDynamicInputWithDisplayed(
+            id: String,
+            count: Long,
+            pattern: IItemStack,
+            matcherId: String,
+            displayedCandidates: Array<IItemStack>
+        ): ZenRecipeRequirement {
+            require(count > 0L) { "itemDynamicInput: count must be > 0" }
+            val mId = matcherId.trim()
+            require(mId.isNotEmpty()) { "itemDynamicInput: matcherId is blank" }
+
+            val patMc: ItemStack = CraftTweakerMC.getItemStack(pattern)
+            require(!patMc.isEmpty) { "itemDynamicInput: pattern is empty" }
+            val patCopy = patMc.copy().also { it.count = 1 }
+            val patKey = PMItemKeyType.create(patCopy)
+
+            val displayed = ArrayList<github.kasuminova.prototypemachinery.api.key.PMKey<ItemStack>>()
+            val seen = LinkedHashSet<github.kasuminova.prototypemachinery.api.key.PMKey<ItemStack>>()
+
+            // Default JEI display fallback.
+            if (displayedCandidates.isEmpty()) {
+                seen += patKey
+                displayed += patKey
+            } else {
+                for (it in displayedCandidates) {
+                    val mc: ItemStack = CraftTweakerMC.getItemStack(it)
+                    if (mc.isEmpty) continue
+                    val copy = mc.copy().also { s -> s.count = 1 }
+                    val k = PMItemKeyType.create(copy)
+                    if (seen.add(k)) displayed += k
+                }
+                if (displayed.isEmpty()) {
+                    displayed += patKey
+                }
+            }
+
+            val group = DynamicItemInputGroup(
+                matcherId = mId,
+                pattern = patKey,
+                count = count,
+                displayedCandidates = displayed,
+            )
+            val props = mapOf<String, Any>(RequirementPropertyKeys.DYNAMIC_ITEM_INPUTS to listOf(group))
             return ZenRecipeRequirement(ItemRequirementComponent(id = id, properties = props))
         }
 

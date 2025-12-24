@@ -54,6 +54,23 @@ public interface StructureItemKeyContainer : StructureComponent {
 }
 
 /**
+ * Optional capability for slow-path matching.
+ *
+ * Some advanced requirements (e.g. dynamic matchers) may need to enumerate which concrete
+ * item keys exist in ports at runtime, then fall back to normal key-level extract/insert.
+ *
+ * This interface is intentionally *optional* and is NOT required by normal recipe IO.
+ */
+public interface EnumerableItemKeyContainer {
+
+    /**
+     * Returns a snapshot of distinct item keys currently present in this container.
+     * The returned collection must be safe to iterate.
+     */
+    public fun getAllKeysSnapshot(): Collection<PMKey<ItemStack>>
+}
+
+/**
  * # StructureFluidKeyContainer - Key-level Fluid Container
  * # StructureFluidKeyContainer - 结构流体 Key 容器视图
  *

@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery.impl.machine.component.container
 
 import github.kasuminova.prototypemachinery.api.key.PMKey
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
+import github.kasuminova.prototypemachinery.api.machine.component.container.EnumerableItemKeyContainer
 import github.kasuminova.prototypemachinery.api.machine.component.container.StructureItemKeyContainer
 import github.kasuminova.prototypemachinery.api.storage.SlottedResourceStorage
 import github.kasuminova.prototypemachinery.api.util.PortMode
@@ -22,7 +23,7 @@ public class StructureItemContainerComponent(
     override val provider: Any? = null,
     private val handler: IItemHandler,
     private val allowed: Set<PortMode>
-) : StructureItemKeyContainer {
+) : StructureItemKeyContainer, EnumerableItemKeyContainer {
 
     private companion object {
         // Forge IItemHandler is Int-based; keep external interaction bounded.
@@ -122,6 +123,20 @@ public class StructureItemContainerComponent(
 
         return extractedTotal
     }
+
+    override fun getAllKeysSnapshot(): Collection<PMKey<ItemStack>> {
+        val out = LinkedHashSet<PMKey<ItemStack>>()
+        for (i in 0 until handler.slots) {
+            val s = handler.getStackInSlot(i)
+            if (s.isEmpty) continue
+
+            // Snapshot the concrete variant (including NBT). Count is irrelevant for key equality.
+            val copy = s.copy()
+            copy.count = 1
+            out += PMItemKeyType.create(copy)
+        }
+        return out
+    }
 }
 
 /**
@@ -134,7 +149,7 @@ public class StructureItemStorageContainerComponent(
     override val provider: Any? = null,
     public val storage: SlottedResourceStorage<PMKey<ItemStack>>,
     public val allowed: Set<PortMode>
-) : StructureItemKeyContainer {
+) : StructureItemKeyContainer, EnumerableItemKeyContainer {
 
     public val slots: Int
         get() = storage.slotCount
@@ -166,5 +181,9 @@ public class StructureItemStorageContainerComponent(
         if (amount <= 0L) return 0L
         val simulate = mode == TransactionMode.SIMULATE
         return storage.extract(key, amount, simulate)
+    }
+
+    override fun getAllKeysSnapshot(): Collection<PMKey<ItemStack>> {
+        return storage.getAllResources()
     }
 }

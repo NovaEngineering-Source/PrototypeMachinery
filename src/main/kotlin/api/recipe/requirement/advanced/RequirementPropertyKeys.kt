@@ -20,6 +20,17 @@ public object RequirementPropertyKeys {
     /** Optional: random output pool (RandomOutputPool<*>). */
     public const val RANDOM_OUTPUTS: String = "random_outputs"
 
+    /**
+     * Optional: dynamic item input groups (List<DynamicItemInputGroup>).
+     *
+     * This enables predicate-like matching (e.g. NBT-aware / custom matchers) by enumerating
+     * candidate item keys from machine item containers at runtime, then choosing + locking
+     * a satisfiable candidate.
+     *
+     * 注意：该功能会在运行时枚举端口中的候选 key，因此可能更慢；仅在明确需要时启用。
+     */
+    public const val DYNAMIC_ITEM_INPUTS: String = "dynamic_item_inputs"
+
     /** Existing legacy flag: allow voiding when output is full. */
     public const val IGNORE_OUTPUT_FULL: String = "ignore_output_full"
 }
