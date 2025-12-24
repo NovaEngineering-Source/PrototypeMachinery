@@ -1,0 +1,48 @@
+{
+  "id": "examples:structure_with_custom_validators",
+  "name": "Custom Validator Example",
+  "description": "Demonstrates using ZenScript-registered validators",
+  "author": "PrototypeMachinery",
+
+  "size": {
+    "x": 3,
+    "y": 3,
+    "z": 3
+  },
+
+  "offset": {
+    "x": -1,
+    "y": -1,
+    "z": -1
+  },
+
+  "orientation": {
+    "front": "south",
+    "top": "up"
+  },
+
+  "validators": [
+    "examples:height_0_64",
+    "examples:overworld_only"
+  ],
+
+  "pattern": [
+    [
+      {"x": 0, "y": 0, "z": 0, "block": "minecraft:air"},
+      {"x": 1, "y": 0, "z": 0, "block": "minecraft:air"},
+      {"x": 2, "y": 0, "z": 0, "block": "minecraft:stone"}
+    ],
+    [
+      {"x": 0, "y": 1, "z": 0, "block": "minecraft:air"},
+      {"x": 1, "y": 1, "z": 0, "block": "minecraft:iron_block"},
+      {"x": 2, "y": 1, "z": 0, "block": "minecraft:stone"}
+    ],
+    [
+      {"x": 0, "y": 2, "z": 0, "block": "minecraft:stone"},
+      {"x": 1, "y": 2, "z": 0, "block": "minecraft:stone"},
+      {"x": 2, "y": 2, "z": 0, "block": "minecraft:stone"}
+    ]
+  ],
+
+  "components": []
+}
