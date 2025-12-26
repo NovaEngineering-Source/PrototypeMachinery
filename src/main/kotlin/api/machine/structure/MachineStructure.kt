@@ -45,6 +45,18 @@ public interface MachineStructure {
     /** Child structures for hierarchical definitions / 分层定义的子结构 */
     public val children: List<MachineStructure>
 
+    /**
+     * Whether the client should hide world block models when this structure is formed.
+     *
+     * This is a purely client-side visual feature and requires a compatible block model hider
+     * implementation (PrototypeMachinery ships with integration for the `component-model-hider` mod).
+     *
+     * 是否在结构成型时隐藏世界内方块模型（仅客户端表现）。
+     * 需要配合兼容的模型隐藏实现（本项目已集成 `component-model-hider`）。
+     */
+    public val hideWorldBlocks: Boolean
+        get() = false
+
     /** Create runtime data container / 创建运行时数据容器 */
     public fun createData(): StructureInstanceData
 

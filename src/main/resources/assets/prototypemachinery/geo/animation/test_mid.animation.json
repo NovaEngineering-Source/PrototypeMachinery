@@ -1,0 +1,32 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"test": {
+			"loop": true,
+			"animation_length": 3,
+			"bones": {
+				"test_mid": {
+					"position": {
+						"0.0": {
+							"vector": [0, -0.16, 0]
+						},
+						"0.25": {
+							"vector": [0, -0.16, 0]
+						}
+					}
+				},
+				"Electrode_Rotor": {
+					"rotation": {
+						"0.0": {
+							"vector": [0, 0, 0]
+						},
+						"3.0": {
+							"vector": [90, 0, 0]
+						}
+					}
+				}
+			}
+		}
+	},
+	"geckolib_format_version": 2
+}

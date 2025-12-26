@@ -9,8 +9,6 @@ import github.kasuminova.prototypemachinery.api.machine.component.AffinityKeyPro
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponent
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentProvider
-import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
-import github.kasuminova.prototypemachinery.api.machine.structure.StructureInstance
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.scheduler.ExecutionMode
 import github.kasuminova.prototypemachinery.api.scheduler.ISchedulable
@@ -20,16 +18,13 @@ import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
 import github.kasuminova.prototypemachinery.common.network.NetworkHandler
 import github.kasuminova.prototypemachinery.common.network.PacketSyncMachine
-import github.kasuminova.prototypemachinery.common.util.times
 import github.kasuminova.prototypemachinery.common.util.warnWithBlockEntity
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.attribute.MachineAttributeNbt
 import github.kasuminova.prototypemachinery.impl.machine.component.MachineComponentMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.component.StructureComponentMapImpl
-import github.kasuminova.prototypemachinery.impl.machine.structure.SliceStructure
-import github.kasuminova.prototypemachinery.impl.machine.structure.SliceStructureInstanceData
+import github.kasuminova.prototypemachinery.impl.machine.structure.StructureBlockPositions
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
-import github.kasuminova.prototypemachinery.impl.machine.structure.TemplateStructure
 import github.kasuminova.prototypemachinery.impl.machine.structure.match.StructureMatchContextImpl
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.util.EnumFacing
@@ -281,13 +276,9 @@ public class MachineInstanceImpl(
         val state = world.getBlockState(controllerPos)
 
         val facing = runCatching { state.getValue(MachineBlock.FACING) }.getOrDefault(EnumFacing.NORTH)
-        val twist = (blockEntity as? MachineBlockEntity)?.twist ?: EnumFacing.NORTH
+        val top = (blockEntity as? MachineBlockEntity)?.getTopFacing(facing) ?: EnumFacing.UP
 
-        val orientation = if (facing.axis == EnumFacing.Axis.Y) {
-            StructureOrientation(front = facing, top = twist)
-        } else {
-            StructureOrientation(front = facing, top = EnumFacing.UP)
-        }
+        val orientation = StructureOrientation(front = facing, top = top)
 
         val structure = StructureRegistryImpl.get(type.structure.id, orientation, facing)
             ?: type.structure.transform { it }
@@ -312,9 +303,7 @@ public class MachineInstanceImpl(
                     if (rootInstance == null) {
                         emptySet()
                     } else {
-                        val set = LinkedHashSet<BlockPos>()
-                        collectStructureBlockPositions(structure, rootInstance, controllerPos, set)
-                        set
+                        StructureBlockPositions.collect(structure, rootInstance, controllerPos)
                     }
                 }
 
@@ -386,63 +375,6 @@ public class MachineInstanceImpl(
         }
 
         return components
-    }
-
-    private fun collectStructureBlockPositions(
-        structure: MachineStructure,
-        instance: StructureInstance,
-        origin: BlockPos,
-        out: MutableSet<BlockPos>
-    ) {
-        val offsetOrigin = origin.add(structure.offset)
-
-        when (structure) {
-            is TemplateStructure -> {
-                for (relativePos in structure.pattern.blocks.keys) {
-                    out.add(offsetOrigin.add(relativePos))
-                }
-
-                for (child in structure.children) {
-                    val childInstances = instance.children[child].orEmpty()
-                    for (childInstance in childInstances) {
-                        collectStructureBlockPositions(child, childInstance, offsetOrigin, out)
-                    }
-                }
-            }
-
-            is SliceStructure -> {
-                val matchedCount = (instance.data as? SliceStructureInstanceData)?.matchedCount ?: 0
-                val count = matchedCount.coerceAtLeast(0)
-
-                var current = offsetOrigin
-                for (i in 0 until count) {
-                    for (relativePos in structure.pattern.blocks.keys) {
-                        out.add(current.add(relativePos))
-                    }
-                    current = current.add(structure.sliceOffset)
-                }
-
-                val accumulatedOffset = structure.sliceOffset * (count - 1).coerceAtLeast(0)
-                val childOrigin = offsetOrigin.add(accumulatedOffset)
-
-                for (child in structure.children) {
-                    val childInstances = instance.children[child].orEmpty()
-                    for (childInstance in childInstances) {
-                        collectStructureBlockPositions(child, childInstance, childOrigin, out)
-                    }
-                }
-            }
-
-            else -> {
-                // Unknown structure implementation: fallback to children traversal only.
-                for (child in structure.children) {
-                    val childInstances = instance.children[child].orEmpty()
-                    for (childInstance in childInstances) {
-                        collectStructureBlockPositions(child, childInstance, offsetOrigin, out)
-                    }
-                }
-            }
-        }
     }
 
 }

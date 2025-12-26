@@ -62,6 +62,8 @@ import kotlin.math.sin
  */
 internal class StructurePreview3DWidget(
     private val model: StructurePreviewModel,
+    /** Optional controller block requirement to be rendered at (0,0,0). */
+    private val controllerRequirement: BlockRequirement? = null,
     private val statusProvider: (() -> Map<BlockPos, StructurePreviewEntryStatus>)? = null,
     /** When true, only render cubes whose status is not MATCH. */
     private val issuesOnlyProvider: (() -> Boolean)? = null,
@@ -103,8 +105,19 @@ internal class StructurePreview3DWidget(
 
     private val cubes: List<Cube>
     private val blockEntries: List<BlockEntry>
-    private val min: BlockPos = model.bounds.min
-    private val maxB: BlockPos = model.bounds.max
+    // IMPORTANT: the preview coordinate system uses controller origin = (0,0,0), but most
+    // structures do not include the controller in their pattern. Ensure our local bounds always
+    // include the origin so rel coords stay non-negative and origin can be rendered.
+    private val min: BlockPos = BlockPos(
+        min(model.bounds.min.x, 0),
+        min(model.bounds.min.y, 0),
+        min(model.bounds.min.z, 0)
+    )
+    private val maxB: BlockPos = BlockPos(
+        max(model.bounds.max.x, 0),
+        max(model.bounds.max.y, 0),
+        max(model.bounds.max.z, 0)
+    )
 
     /** Full block state map (structure-local coords) for adjacency queries. */
     private val allBlockStates: Map<BlockPos, IBlockState>
@@ -147,11 +160,38 @@ internal class StructurePreview3DWidget(
     private var lastDragAbsY: Int = 0
 
     init {
-        cubes = buildBoundaryCubes(model)
-        blockEntries = buildBoundaryBlockEntries(model)
+        val cubesMut = buildBoundaryCubes(model).toMutableList()
+        val entriesMut = buildBoundaryBlockEntries(model).toMutableList()
+
+        // Force-add controller origin entry even if it's not part of the boundary set.
+        // This makes the origin visible and helps adjacency face-culling look more realistic.
+        if (controllerRequirement != null) {
+            val ox = 0 - min.x
+            val oy = 0 - min.y
+            val oz = 0 - min.z
+
+            // Replace any existing origin entry to enforce "origin is controller" semantics.
+            cubesMut.removeAll { it.x == ox && it.y == oy && it.z == oz }
+            cubesMut.add(Cube(ox, oy, oz, controllerRequirement.stableKey().hashCode()))
+
+            entriesMut.removeAll { it.relX == ox && it.relY == oy && it.relZ == oz }
+            entriesMut.add(BlockEntry(ox, oy, oz, controllerRequirement))
+        }
+
+        cubes = cubesMut
+        blockEntries = entriesMut
         blockModelGroups = groupByChunk(blockEntries)
 
-        allBlockStates = buildAllBlockStates(model)
+        val statesMut = buildAllBlockStates(model).toMutableMap()
+        if (controllerRequirement != null) {
+            val ox = 0 - min.x
+            val oy = 0 - min.y
+            val oz = 0 - min.z
+            val rel = BlockPos(ox, oy, oz)
+            val st = stateFromRequirementCached(controllerRequirement) ?: Blocks.AIR.defaultState
+            statesMut[rel] = st
+        }
+        allBlockStates = statesMut
         blockAccess = StructureBlockAccess(allBlockStates, ProjectionConfig.FULLBRIGHT_LIGHTMAP_UV)
     }
 

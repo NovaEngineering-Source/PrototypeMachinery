@@ -258,6 +258,7 @@ public object StructureLoader {
                 id = data.id,
                 orientation = DEFAULT_ORIENTATION,
                 offset = offset,
+                hideWorldBlocks = data.hideWorldBlocks,
                 pattern = pattern,
                 validators = validators,
                 children = children
@@ -277,6 +278,7 @@ public object StructureLoader {
                     id = data.id,
                     orientation = DEFAULT_ORIENTATION,
                     offset = offset,
+                    hideWorldBlocks = data.hideWorldBlocks,
                     pattern = pattern,
                     minCount = minCount,
                     maxCount = maxCount,

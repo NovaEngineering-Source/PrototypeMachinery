@@ -1,0 +1,11 @@
+{
+  "id": "example_structure_render_top_mid_tail_root",
+  "type": "template",
+  "hideWorldBlocks": true,
+  "offset": { "x": 0, "y": 0, "z": 0 },
+  "pattern": [],
+  "validators": [],
+  "children": [
+    "example_structure_render_top_mid_tail_top"
+  ]
+}

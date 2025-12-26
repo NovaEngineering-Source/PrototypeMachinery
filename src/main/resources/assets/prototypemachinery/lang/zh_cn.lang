@@ -30,6 +30,24 @@ pm.projection.hud.requirement.exact=预览需求: %s (%s:%s)
 pm.projection.hud.requirement.exact_fallback=预览需求: %s:%s
 pm.projection.hud.requirement.generic=预览需求: %s
 
+# 工具物品
+itemGroup.prototypemachinery=原型机械
+item.prototypemachinery.orientation_tool.name=控制器转向工具
+item.prototypemachinery.scanner_instrument.name=范围结构选择器
+item.prototypemachinery.build_instrument.name=机械构建器
+
+# 控制器转向工具：模式/提示
+pm.orientation_tool.enabled=控制器转向工具：已开启
+pm.orientation_tool.disabled=控制器转向工具：已关闭
+tooltip.prototypemachinery.orientation_tool.state=模式：%s
+tooltip.prototypemachinery.orientation_tool.state.on=开启（可旋转控制器，攻击更强，耐久消耗更高）
+tooltip.prototypemachinery.orientation_tool.state.off=关闭（铁制多用工具：镐/斧/铲）
+tooltip.prototypemachinery.orientation_tool.toggle_hint=潜行右键空气切换模式（潜行点击控制器：循环 24 向）
+
+# 成就/进度
+advancement.prototypemachinery.cherish_tool.title=爱惜工具
+advancement.prototypemachinery.cherish_tool.desc=使用“关闭”的控制器转向工具攻击一次生物。
+
 # 仓位 GUI
 # 多个 Hatch GUI 共用（包括流体仓 FluidHatchGUI、流体 IO 仓 FluidIOHatchGUI）：
 # - 自动输入 / 自动输出：开关按钮 tooltip

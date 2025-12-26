@@ -30,6 +30,24 @@ pm.projection.hud.requirement.exact=Preview requirement: %s (%s:%s)
 pm.projection.hud.requirement.exact_fallback=Preview requirement: %s:%s
 pm.projection.hud.requirement.generic=Preview requirement: %s
 
+# Tools
+itemGroup.prototypemachinery=Prototype Machinery
+item.prototypemachinery.orientation_tool.name=Controller Orientation Tool
+item.prototypemachinery.scanner_instrument.name=Structure Range Scanner
+item.prototypemachinery.build_instrument.name=Machine Builder
+
+# Orientation tool: modes/hints
+pm.orientation_tool.enabled=Controller Orientation Tool: Enabled
+pm.orientation_tool.disabled=Controller Orientation Tool: Disabled
+tooltip.prototypemachinery.orientation_tool.state=Mode: %s
+tooltip.prototypemachinery.orientation_tool.state.on=Enabled (can rotate controllers, higher damage, higher durability cost)
+tooltip.prototypemachinery.orientation_tool.state.off=Disabled (iron-tier multi-tool: pickaxe/axe/shovel)
+tooltip.prototypemachinery.orientation_tool.toggle_hint=Sneak + right-click air to toggle (sneak + click controller: cycle 24 orientations)
+
+# Advancements
+advancement.prototypemachinery.cherish_tool.title=Cherish Your Tools
+advancement.prototypemachinery.cherish_tool.desc=Hit an entity with the Controller Orientation Tool while it is disabled.
+
 # Hatch GUI
 # Used by multiple Hatch GUIs, including FluidHatchGUI and FluidIOHatchGUI:
 # - Auto Input / Auto Output: toggle buttons

@@ -41,6 +41,7 @@
   - （相关）[结构预览 GUI（/pm_preview_ui）](./StructurePreview.md)
 
 - **客户端集成（Client Integrations）**
+  - [渲染系统（机器控制器 / 透明与 Bloom 顺序 / 集中式 flush）](./RenderingSystem_SecureAssets.md)
   - [JEI / HEI 集成（配方索引 + 默认 UI + Addon 扩展）](./JEI.md)
   - [JEI 集成维护文档（Internals：integration/jei 全包索引）](./JEI-Internals.md)
 

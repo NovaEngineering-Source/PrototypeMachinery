@@ -162,6 +162,7 @@ internal object HatchRegisterer {
     private fun registerItemBlock(event: RegistryEvent.Register<Item>, block: Block) {
         val itemBlock = ItemBlock(block)
         itemBlock.registryName = block.registryName
+        itemBlock.setCreativeTab(PMCreativeTabs.MAIN)
         event.registry.register(itemBlock)
     }
 

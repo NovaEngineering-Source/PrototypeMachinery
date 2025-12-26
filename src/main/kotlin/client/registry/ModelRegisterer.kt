@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery.client.registry
 
 import github.kasuminova.prototypemachinery.common.registry.BlockRegisterer
 import github.kasuminova.prototypemachinery.common.registry.HatchRegisterer
+import github.kasuminova.prototypemachinery.common.registry.PMItems
 import net.minecraft.block.state.IBlockState
 import net.minecraft.client.renderer.block.model.ModelResourceLocation
 import net.minecraft.client.renderer.block.statemap.StateMapperBase
@@ -20,6 +21,7 @@ internal object ModelRegisterer {
     fun onModelRegistry(event: ModelRegistryEvent) {
         registerBlockModels()
         registerItemModels()
+        registerExtraItemModels()
         registerHatchItemModels()
     }
 
@@ -56,6 +58,18 @@ internal object ModelRegisterer {
                     ModelResourceLocation(baseLocation, "inventory")
                 )
             }
+        }
+    }
+
+    private fun registerExtraItemModels() {
+        val items = listOf(
+            PMItems.controllerOrientationTool,
+            PMItems.scannerInstrument,
+            PMItems.buildInstrument,
+        )
+        items.forEach { item ->
+            val name = item.registryName ?: return@forEach
+            ModelLoader.setCustomModelResourceLocation(item, 0, ModelResourceLocation(name, "inventory"))
         }
     }
 

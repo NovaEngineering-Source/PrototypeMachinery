@@ -1,0 +1,22 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"test": {
+			"loop": true,
+			"animation_length": 3,
+			"bones": {
+				"rv01_void_particle_reorganizer": {
+					"position": {
+						"0.0": {
+							"vector": [0, -0.16, 0]
+						},
+						"0.25": {
+							"vector": [0, -0.16, 0]
+						}
+					}
+				}
+			}
+		}
+	},
+	"geckolib_format_version": 2
+}

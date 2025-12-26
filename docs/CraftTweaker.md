@@ -6,6 +6,7 @@
 
 - 机器类型（MachineType）注册
 - UI 定义注册（UIRegistry）与数据绑定（UIBindings）
+- 客户端渲染绑定（RenderBindings：Gecko 结构/整机绑定）
 - Hatch 配置查询/更新（如有）
 
 ## 代码位置
@@ -23,6 +24,10 @@
   - `src/main/kotlin/integration/crafttweaker/zenclass/ui/PMUI.kt`
   - `src/main/kotlin/integration/crafttweaker/zenclass/ui/UIRegistry.kt`
   - `src/main/kotlin/integration/crafttweaker/zenclass/ui/UIBindings.kt`
+
+- 渲染绑定（客户端）：
+  - `src/main/kotlin/integration/crafttweaker/zenclass/render/ZenRenderBindings.kt`
+  - `src/main/kotlin/integration/crafttweaker/zenclass/render/ZenGeckoBindingBuilder.kt`
 
 - 示例脚本：`src/main/resources/assets/prototypemachinery/scripts/examples/*.zs`
 
@@ -67,6 +72,28 @@ builder 支持通过 structureId 延迟解析结构：
 对接细节（字段契约、兼容策略、支持的 widget type、visibleIf/enabledIf 与 tabs 的当前语义等）见：
 
 - [Machine UI Editor：Runtime JSON 对接（现状 + 契约 + 限制）](./MachineUiEditorRuntime.md)
+
+## RenderBindings（客户端渲染绑定）
+
+脚本侧入口：`mods.prototypemachinery.render.RenderBindings`
+
+目前提供基于 GeckoLib 的声明式绑定（注册资源位置与简单参数；实际渲染仅发生在客户端）：
+
+- `RenderBindings.bindGeckoToStructure(machineTypeId, structureId, GeckoBinding)`：把模型绑定到某个结构节点（推荐，支持结构 offset/slice）
+- `RenderBindings.bindGeckoToMachineType(machineTypeId, GeckoBinding)`：把模型绑定到整机（legacy/fallback）
+
+### `modelOffset(x, y, z)`：游戏内微调位移
+
+`GeckoBinding.modelOffset(x, y, z)` 用于给模型增加**额外局部平移**（单位：方块，支持小数），并且会随结构/控制器朝向（front/top）一起旋转。
+
+- 对于**结构级绑定**（`bindGeckoToStructure`）：结构 JSON 定义里的 `offset`（以及 slice 的累积 offset）会自动生效；`modelOffset` 是在此基础上的“再加一层微调”。
+- 对于**整机绑定**（`bindGeckoToMachineType`）：`modelOffset` 直接作为模型额外微调。
+
+示例脚本：
+
+- `src/main/resources/assets/prototypemachinery/scripts/examples/structure_render_top_mid_tail_bindings.zs`
+
+> 实战建议：先在结构 JSON 里把结构节点 offset 定好，再用 `modelOffset(...)` 做最后的对齐微调（通常是 0.0625 的倍数更直观，即 1/16 格）。
 
 ## See also
 

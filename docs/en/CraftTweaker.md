@@ -6,6 +6,7 @@ PrototypeMachinery exposes a *preview-stage* CraftTweaker/ZenScript API surface 
 
 - registering `MachineType`s from scripts
 - registering machine UIs (`UIRegistry`) and binding UI widgets to script data (`UIBindings`)
+- client-side render bindings (`RenderBindings`: Gecko structure / machine-type bindings)
 - (optionally) querying/updating hatch configs, depending on what your pack uses
 
 ## Where the code lives
@@ -23,6 +24,10 @@ PrototypeMachinery exposes a *preview-stage* CraftTweaker/ZenScript API surface 
   - `src/main/kotlin/integration/crafttweaker/zenclass/ui/PMUI.kt`
   - `src/main/kotlin/integration/crafttweaker/zenclass/ui/UIRegistry.kt`
   - `src/main/kotlin/integration/crafttweaker/zenclass/ui/UIBindings.kt`
+
+- Render bindings (client side):
+  - `src/main/kotlin/integration/crafttweaker/zenclass/render/ZenRenderBindings.kt`
+  - `src/main/kotlin/integration/crafttweaker/zenclass/render/ZenGeckoBindingBuilder.kt`
 
 - Example scripts:
   - `src/main/resources/assets/prototypemachinery/scripts/examples/*.zs`
@@ -76,6 +81,28 @@ Recommendations:
 - For the exact field contract / compatibility rules / supported widget types, refer to the contract doc below.
 
 See: [Machine UI Editor: Runtime JSON contract (current state)](./MachineUiEditorRuntime.md)
+
+## RenderBindings (client-side render bindings)
+
+Script entry point: `mods.prototypemachinery.render.RenderBindings`.
+
+Currently this provides declarative GeckoLib bindings (registering resource locations + simple flags; actual rendering is client-only):
+
+- `RenderBindings.bindGeckoToStructure(machineTypeId, structureId, GeckoBinding)`: bind a model to a specific structure node (recommended; respects structure offsets/slices)
+- `RenderBindings.bindGeckoToMachineType(machineTypeId, GeckoBinding)`: bind a model to the whole machine type (legacy / fallback)
+
+### `modelOffset(x, y, z)`: in-game alignment tweaks
+
+`GeckoBinding.modelOffset(x, y, z)` adds an **extra local-space translation** (in blocks; fractional values are allowed) that rotates with the structure/controller orientation (front/top).
+
+- For **structure-bound rendering** (`bindGeckoToStructure`): the structure JSON node `offset` (and slice accumulated offsets) is applied automatically; `modelOffset(...)` is an additional manual tweak on top.
+- For **machine-type binding** (`bindGeckoToMachineType`): `modelOffset(...)` is applied directly as the extra tweak.
+
+Example script:
+
+- `src/main/resources/assets/prototypemachinery/scripts/examples/structure_render_top_mid_tail_bindings.zs`
+
+Tip: it’s usually easiest to nail the structure JSON offsets first, then fine-tune with `modelOffset(...)` (multiples of 1/16 = 0.0625 are a common “pixel-grid” step).
 
 ## See also
 

@@ -17,6 +17,11 @@ English translation (rough): [`PROJECT_OVERVIEW.en.md`](./PROJECT_OVERVIEW.en.md
 - **GUI 贴图体系（切片 + 可选运行时 Atlas）**：结构预览相关贴图从“整张大图裁切表”迁移为“按组件切片的小图资源 + 稳定路径引用”。同时提供可选的运行时 GUI atlas（TextureMap + Stitcher）以减少大量小图的绑定开销。
    - 运行时 atlas：`src/main/kotlin/client/atlas/PmGuiAtlas.kt`
    - 构建期切片工具：`src/main/kotlin/devtools/atlas/GuiSliceGenerator.kt` + `src/main/resources/assets/prototypemachinery/pm_gui_slices/*.json`
+- **机器控制器朝向系统（FACING + TWIST）**：朝向被拆分为 `FACING`（6 向）+ `TWIST`（0..3）。放置时默认“面向玩家”，并支持运行时旋转时的模型实时更新。
+   - 代码入口：`common/block/MachineBlock.kt`、`common/block/entity/MachineBlockEntity.kt`、`client/model/ControllerModelBakeHandler.kt`、`common/util/TwistMath.kt`
+- **客户端机器渲染管线重构（集中式 flush + 透明/Bloom 顺序保证）**：机器 TESR 仅提交渲染数据，统一在 TESR batch 之后集中渲染（先不透明再半透明），Bloom 在 GT 环境下延后到 bloom 回调阶段绘制，避免错序导致的亮度异常。
+   - 设计/现状说明：[`docs/RenderingSystem_SecureAssets.md`](./docs/RenderingSystem_SecureAssets.md)
+   - 代码入口：`client/impl/render/MachineRenderDispatcher.kt`、`client/impl/render/binding/MachineBlockEntitySpecialRenderer.kt`、`mixin/minecraft/MixinRenderGlobal.java`
 - **结构匹配 fast-fail**：`StructurePattern` 具备 bounds（minPos/maxPos）并提供 `isAreaLoaded(...)`，在匹配前先检查覆盖范围是否已加载，避免未加载区块导致的误判与卡顿。
 - **事务化 Requirement 系统**：配方需求执行采用 `RequirementTransaction` 事务模型（start / tick / end），失败/阻塞时整体回滚以保持原子性。
 - **Requirement Overlay（按进程覆写）**：支持为单个 `RecipeProcess` 挂载 overlay，在执行前解析“生效的需求组件”。

@@ -32,6 +32,7 @@ PrototypeMachinery 是一个面向 **Minecraft 1.12.2 (Forge)** 的模组/框架
 - 结构系统：[`docs/Structures.md`](./docs/Structures.md)
 - 结构 JSON 指南：[`docs/StructureJsonGuide.md`](./docs/StructureJsonGuide.md)
 - 结构投影预览（客户端）：[`docs/StructurePreview.md`](./docs/StructurePreview.md)
+- 客户端渲染系统（机器控制器 / 透明与 Bloom 顺序 / 集中式 flush）：[`docs/RenderingSystem_SecureAssets.md`](./docs/RenderingSystem_SecureAssets.md)
 - 机器注册：[`docs/MachineRegistration.md`](./docs/MachineRegistration.md)
 - CraftTweaker 集成：[`docs/CraftTweaker.md`](./docs/CraftTweaker.md)
 - UI：[`docs/UI.md`](./docs/UI.md)

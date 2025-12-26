@@ -11,21 +11,40 @@ import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.api.machine.component.getFirstComponentOfType
 import github.kasuminova.prototypemachinery.api.machine.component.ui.UIProviderComponent
+import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.ui.definition.PanelDefinition
 import github.kasuminova.prototypemachinery.api.ui.definition.WidgetDefinition
 import github.kasuminova.prototypemachinery.client.gui.DefaultMachineUI
 import github.kasuminova.prototypemachinery.client.gui.UIBuilderHelper
+import github.kasuminova.prototypemachinery.common.util.TwistMath
 import github.kasuminova.prototypemachinery.common.util.warnWithBlockEntity
 import github.kasuminova.prototypemachinery.impl.MachineInstanceImpl
 import github.kasuminova.prototypemachinery.impl.scheduler.TaskSchedulerImpl
+import net.minecraft.block.state.IBlockState
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.network.NetworkManager
 import net.minecraft.network.play.server.SPacketUpdateTileEntity
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.ITickable
 import net.minecraft.util.ResourceLocation
+import net.minecraft.util.math.AxisAlignedBB
+import net.minecraft.util.math.BlockPos
+import net.minecraft.world.World
 
+/**
+ * Machine controller TileEntity.
+ *
+ * ## Orientation Model
+ * - **facing** (from blockstate): The direction the controller's front face points
+ * - **twist** (stored here): Clockwise rotation steps around facing (0-3)
+ *
+ * Together, (facing, twist) uniquely identifies one of 24 cube orientations.
+ */
 public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiData> {
+
+    public companion object {
+        private const val TESR_RENDER_BOUNDS_GROW_BLOCKS: Double = 4.0
+    }
 
     public lateinit var machine: MachineInstanceImpl
         private set
@@ -36,7 +55,11 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
     public var currentTotalTick: Long = 0
         private set
 
-    public var twist: EnumFacing = EnumFacing.NORTH
+    /**
+     * Clockwise rotation steps around the FACING axis (0-3).
+     * 0 = 0°, 1 = 90°, 2 = 180°, 3 = 270°
+     */
+    public var twist: Int = 0
         private set
 
     @Volatile
@@ -50,23 +73,56 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
         machine = MachineInstanceImpl(this, machineType)
     }
 
-    public fun setTwist(newTwist: EnumFacing) {
-        if (this.twist != newTwist) {
-            this.twist = newTwist
-            markDirty()
-            sync()
-        }
+    /**
+     * Sets the twist value (0-3) and schedules a sync to clients.
+     */
+    public fun setTwist(newTwist: Int) {
+        val clamped = newTwist and 3
+        if (this.twist == clamped) return
+
+        this.twist = clamped
+        markDirty()
+        sync()
+    }
+
+    /**
+     * Increments twist by 1 (clockwise 90°), wrapping 3→0.
+     */
+    public fun rotateTwistCW() {
+        setTwist(TwistMath.nextTwist(twist))
+    }
+
+    /**
+     * Decrements twist by 1 (counter-clockwise 90°), wrapping 0→3.
+     */
+    public fun rotateTwistCCW() {
+        setTwist(TwistMath.prevTwist(twist))
+    }
+
+    /**
+     * Returns the current orientation as a StructureOrientation.
+     * Requires the facing from blockstate.
+     */
+    public fun getOrientation(facing: EnumFacing): StructureOrientation {
+        return TwistMath.toStructureOrientation(facing, twist)
+    }
+
+    /**
+     * Returns the "top" direction for the current (facing, twist).
+     */
+    public fun getTopFacing(facing: EnumFacing): EnumFacing {
+        return TwistMath.getTopFromTwist(facing, twist)
     }
 
     /**
      * Schedule a full data sync to client.
-     * 计划向客户端进行全量数据同步。
-     *
-     * This method is debounced to ensure at most one sync packet is sent per tick.
-     * 此方法经过防抖处理，确保每个 tick 最多发送一个同步包。
      */
     public fun sync() {
         pendingSync = true
+    }
+
+    override fun getRenderBoundingBox(): AxisAlignedBB {
+        return AxisAlignedBB(pos).grow(TESR_RENDER_BOUNDS_GROW_BLOCKS)
     }
 
     override fun update() {
@@ -81,8 +137,6 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
             pendingSync = false
         }
 
-        // Structure refresh / formation should run on the main thread.
-        // 结构刷新/形成应当在主线程执行（避免并发 tick 线程访问 world）。
         if (!world.isRemote && ::machine.isInitialized) {
             machine.onControllerTick()
         }
@@ -103,7 +157,7 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
         machine.readNBT(machineNBT)
 
         if (compound.hasKey("Twist")) {
-            twist = EnumFacing.byIndex(compound.getInteger("Twist"))
+            twist = compound.getInteger("Twist") and 3
         }
     }
 
@@ -113,16 +167,16 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
         val machineNBT = NBTTagCompound()
         machine.writeNBT(machineNBT)
         nbt.setTag("MachineData", machineNBT)
-        nbt.setInteger("Twist", twist.index)
+        nbt.setInteger("Twist", twist)
         return nbt
     }
 
     override fun getUpdateTag(): NBTTagCompound {
         val tag = super.getUpdateTag()
         tag.setString("MachineID", machine.type.id.toString())
-        tag.setInteger("Twist", twist.index)
+        tag.setInteger("Twist", twist)
+        tag.setBoolean("Formed", machine.isFormed())
 
-        // Write initial sync data for components
         val machineNBT = NBTTagCompound()
         machine.componentMap.components.forEach { (type, component) ->
             if (component is MachineComponent.Synchronizable) {
@@ -138,7 +192,9 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
     }
 
     override fun handleUpdateTag(tag: NBTTagCompound) {
-        // Read basic data
+        val oldTwist = this.twist
+        val oldFormed = if (::machine.isInitialized) machine.isFormed() else false
+
         val machineId = tag.getString("MachineID")
         if (!::machine.isInitialized) {
             val machineType: MachineType? = PrototypeMachineryAPI.machineTypeRegistry[ResourceLocation(machineId)]
@@ -148,10 +204,9 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
         }
 
         if (tag.hasKey("Twist")) {
-            twist = EnumFacing.byIndex(tag.getInteger("Twist"))
+            twist = tag.getInteger("Twist") and 3
         }
 
-        // Read component sync data
         if (tag.hasKey("MachineData")) {
             val machineNBT = tag.getCompoundTag("MachineData")
             machine.componentMap.components.forEach { (type, component) ->
@@ -162,6 +217,22 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
                 }
             }
         }
+
+        machine.setFormed(tag.getBoolean("Formed"))
+
+        if (world != null && world.isRemote) {
+            val newFormed = machine.isFormed()
+            if (oldTwist != this.twist || oldFormed != newFormed) {
+                PrototypeMachinery.logger.info(
+                    "[OrientationSync] client-update pos={} machineId={} twist {}->{} formed {}->{}",
+                    pos, machineId, oldTwist, this.twist, oldFormed, newFormed
+                )
+            }
+        }
+
+        val s = world.getBlockState(pos)
+        world.markBlockRangeForRenderUpdate(pos, pos)
+        world.notifyBlockUpdate(pos, s, s, 3)
     }
 
     override fun getUpdatePacket(): SPacketUpdateTileEntity = SPacketUpdateTileEntity(pos, 1, updateTag)
@@ -170,11 +241,11 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
         handleUpdateTag(pkt.nbtCompound)
     }
 
+    override fun shouldRefresh(world: World, pos: BlockPos, oldState: IBlockState, newSate: IBlockState): Boolean =
+        oldState.block != newSate.block
+
     override fun invalidate() {
         super.invalidate()
-
-        // Unregister from scheduler
-        // 从调度器取消注册
         if (!world.isRemote) {
             if (::machine.isInitialized) {
                 TaskSchedulerImpl.unregister(machine)
@@ -187,9 +258,6 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
 
     override fun validate() {
         super.validate()
-
-        // Re-register to scheduler if needed
-        // 如果需要，重新注册到调度器
         if (!world.isRemote) {
             if (::machine.isInitialized) {
                 TaskSchedulerImpl.register(machine)
@@ -203,23 +271,17 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
     // ======================== IGuiHolder Implementation ========================
 
     override fun buildUI(data: PosGuiData, syncManager: PanelSyncManager, settings: UISettings): ModularPanel {
-        // First, try to get UIProviderComponent from the machine's components
-        // 首先，尝试从机器的组件中获取 UIProviderComponent
         val uiProvider = machine.componentMap.getFirstComponentOfType<UIProviderComponent>()
 
         if (uiProvider != null) {
             return uiProvider.buildPanel(syncManager)
         }
 
-        // Then: script/mod overrides (UIRegistry)
         val regDef: WidgetDefinition? = PrototypeMachineryAPI.machineUIRegistry.resolve(machine.type.id)
         if (regDef is PanelDefinition) {
             return UIBuilderHelper.buildPanel(regDef, syncManager, this)
         }
 
-        // Default fallback UI if no definition is provided
-        // 如果没有定义 UI，则显示默认备用界面
         return DefaultMachineUI.build(this, syncManager)
     }
-
 }

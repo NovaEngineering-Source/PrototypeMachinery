@@ -4,11 +4,13 @@ import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.common.block.entity.BlockEntity
 import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
 import github.kasuminova.prototypemachinery.common.gui.PrototypeMachineryGUIs
+import github.kasuminova.prototypemachinery.common.registry.PMItems
 import net.minecraft.block.BlockContainer
 import net.minecraft.block.SoundType
 import net.minecraft.block.material.Material
 import net.minecraft.block.properties.PropertyBool
 import net.minecraft.block.properties.PropertyEnum
+import net.minecraft.block.properties.PropertyInteger
 import net.minecraft.block.state.BlockStateContainer
 import net.minecraft.block.state.IBlockState
 import net.minecraft.entity.EntityLivingBase
@@ -27,6 +29,20 @@ import net.minecraftforge.fml.relauncher.SideOnly
 import javax.annotation.Nonnull
 import kotlin.math.abs
 
+/**
+ * Machine controller block.
+ *
+ * ## Blockstate Properties
+ * - **FACING**: The direction the controller's front face points (6 values)
+ * - **TWIST**: Clockwise rotation steps around FACING (0-3 → 0°/90°/180°/270°)
+ * - **FORMED**: Whether the machine structure is formed
+ *
+ * Together, (FACING, TWIST) uniquely identifies one of 24 cube orientations.
+ *
+ * ## Meta Persistence
+ * Only FACING is persisted in block meta (3 bits). TWIST is stored in TE and
+ * provided via [getActualState] for rendering.
+ */
 @Suppress("OVERRIDE_DEPRECATION")
 public open class MachineBlock(
     public val machineType: MachineType,
@@ -34,8 +50,13 @@ public open class MachineBlock(
 ) : BlockContainer(material) {
 
     public companion object {
+        /** The direction the controller's front face points. */
         public val FACING: PropertyEnum<EnumFacing> = PropertyEnum.create("facing", EnumFacing::class.java)
-        public val TWIST: PropertyEnum<EnumFacing> = PropertyEnum.create("twist", EnumFacing::class.java) { it!!.axis != EnumFacing.Axis.Y }
+
+        /** Clockwise rotation steps around FACING axis (0-3). */
+        public val TWIST: PropertyInteger = PropertyInteger.create("twist", 0, 3)
+
+        /** Whether the machine structure is formed. */
         public val FORMED: PropertyBool = PropertyBool.create("formed")
     }
 
@@ -45,11 +66,10 @@ public open class MachineBlock(
         setHarvestLevel("pickaxe", 1)
 
         setSoundType(SoundType.METAL)
-//        setCreativeTab()
 
         defaultState = this.blockState.baseState
             .withProperty(FACING, EnumFacing.NORTH)
-            .withProperty(TWIST, EnumFacing.NORTH)
+            .withProperty(TWIST, 0)
             .withProperty(FORMED, false)
 
         registryName = ResourceLocation(
@@ -63,15 +83,19 @@ public open class MachineBlock(
     // region BlockStates
 
     @Nonnull
-    override fun withRotation(state: IBlockState, rot: Rotation): IBlockState = state.withProperty(FACING, rot.rotate(state.getValue(FACING)))
+    override fun withRotation(state: IBlockState, rot: Rotation): IBlockState =
+        state.withProperty(FACING, rot.rotate(state.getValue(FACING)))
 
-    override fun createBlockState(): BlockStateContainer = BlockStateContainer(this, FACING, TWIST, FORMED)
+    override fun createBlockState(): BlockStateContainer =
+        BlockStateContainer(this, FACING, TWIST, FORMED)
 
     override fun getStateFromMeta(meta: Int): IBlockState {
+        // Only FACING is stored in meta (bits 0-2)
         return defaultState.withProperty(FACING, EnumFacing.byIndex(meta and 7))
     }
 
     override fun getMetaFromState(state: IBlockState): Int {
+        // Only persist FACING
         return state.getValue(FACING).index
     }
 
@@ -87,42 +111,33 @@ public open class MachineBlock(
         hand: EnumHand
     ): IBlockState {
         val front = getFacingFromEntity(pos, placer)
-        // Default twist logic: if front is horizontal, twist is usually not used (default NORTH).
-        // If front is UP/DOWN, twist depends on player's horizontal facing.
-        // For now, we just set default state, actual twist setting can be done via wrench or advanced placement logic.
         return this.defaultState.withProperty(FACING, front)
     }
 
     private fun getFacingFromEntity(pos: BlockPos, placer: EntityLivingBase): EnumFacing {
         if (abs(placer.posX - (pos.x + 0.5)) < 2.0 && abs(placer.posZ - (pos.z + 0.5)) < 2.0) {
             val d0 = placer.posY + placer.eyeHeight.toDouble()
-            if (d0 - pos.y.toDouble() > 2.0) return EnumFacing.DOWN
-            if (pos.y.toDouble() - d0 > 0.0) return EnumFacing.UP
+            if (d0 - pos.y.toDouble() > 2.0) return EnumFacing.UP
+            if (pos.y.toDouble() - d0 > 0.0) return EnumFacing.DOWN
         }
-        return placer.horizontalFacing.opposite
+        return placer.horizontalFacing
     }
 
-    override fun onBlockPlacedBy(worldIn: World, pos: BlockPos, state: IBlockState, placer: EntityLivingBase, stack: net.minecraft.item.ItemStack) {
+    override fun onBlockPlacedBy(
+        worldIn: World,
+        pos: BlockPos,
+        state: IBlockState,
+        placer: EntityLivingBase,
+        stack: net.minecraft.item.ItemStack
+    ) {
         super.onBlockPlacedBy(worldIn, pos, state, placer, stack)
-        val tile = worldIn.getTileEntity(pos) as? MachineBlockEntity ?: return
-
-        // Calculate twist for UP/DOWN facing
-        val facing = state.getValue(FACING)
-        if (facing == EnumFacing.UP || facing == EnumFacing.DOWN) {
-            // When facing UP/DOWN, the "top" of the machine (twist) aligns with player's facing
-            tile.setTwist(placer.horizontalFacing.opposite)
-        } else {
-            // For horizontal facing, twist is usually UP (which we map to NORTH in our property logic for simplicity, or handle explicitly)
-            // Since our TWIST property only accepts horizontal values (axis != Y), we use NORTH as default "Up" equivalent or just store player facing.
-            // Let's store the player's horizontal facing as twist, which can be used to rotate the texture if needed.
-            tile.setTwist(EnumFacing.NORTH)
-        }
+        // TE twist defaults to 0, no additional initialization needed.
     }
 
     override fun getActualState(state: IBlockState, worldIn: IBlockAccess, pos: BlockPos): IBlockState {
         val tileEntity = worldIn.getTileEntity(pos)
         var formed = false
-        var twist = EnumFacing.NORTH
+        var twist = 0
 
         if (tileEntity is MachineBlockEntity) {
             formed = tileEntity.machine.isFormed()
@@ -147,12 +162,15 @@ public open class MachineBlock(
         hitY: Float,
         hitZ: Float
     ): Boolean {
-        if (worldIn.isRemote) {
-            return true
-        }
-        if (worldIn.getTileEntity(pos) !is MachineBlockEntity) {
+        // If the player is holding the orientation tool, return false to let
+        // Item.onItemUse handle the rotation logic.
+        val held = playerIn.getHeldItem(hand)
+        if (!held.isEmpty && held.item === PMItems.controllerOrientationTool) {
             return false
         }
+
+        if (worldIn.isRemote) return true
+        if (worldIn.getTileEntity(pos) !is MachineBlockEntity) return false
         PrototypeMachineryGUIs.openController(playerIn, worldIn, pos)
         return true
     }
@@ -172,6 +190,13 @@ public open class MachineBlock(
 
     override fun isOpaqueCube(@Nonnull state: IBlockState): Boolean = false
 
+    override fun isFullBlock(state: IBlockState): Boolean = false
+
+    override fun isFullCube(state: IBlockState): Boolean = isFullBlock(state)
+
+    @SideOnly(Side.CLIENT)
+    override fun isTranslucent(state: IBlockState): Boolean = isFullBlock(state)
+
     // endregion
 
     // region BlockEntity
@@ -185,5 +210,4 @@ public open class MachineBlock(
     override fun hasTileEntity(state: IBlockState): Boolean = true
 
     // endregion
-
 }

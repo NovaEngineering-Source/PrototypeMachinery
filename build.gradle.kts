@@ -99,6 +99,7 @@ minecraft {
         args += "-Dfml.coreMods.load=$coremod_plugin_class_name"
     }
     if (use_mixins.toBoolean()) {
+        args += "-Dfml.coreMods.load=github.kasuminova.prototypemachinery.mixin.PMMixinLoader"
         args += "-Dmixin.hotSwap=true"
         args += "-Dmixin.checks.interfaces=true"
         args += "-Dmixin.debug.export=true"
@@ -140,6 +141,11 @@ repositories {
         }
     }
     maven {
+        // Geckolib
+        url = uri("https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/")
+    }
+    maven {
+        // CraftTweaker
         url = uri("https://maven.blamejared.com/")
     }
     mavenCentral()
@@ -165,10 +171,14 @@ dependencies {
     implementation(rfg.deobf("curse.maven:had-enough-items-557549:7282920"))
     // ZenUtils for zs reload support
     implementation(rfg.deobf("curse.maven:zenutil-401178:7304021"))
+    // GeckoLib
+    implementation("software.bernie.geckolib:geckolib-forge-1.12.2:3.0.31")
+    // Block hider dependency
+    implementation(rfg.deobf("curse.maven:component-model-hider-940949:4885858"))
     // ZenUtils dependency
     runtimeOnly(rfg.deobf("curse.maven:configanytime-870276:5212709"))
     // Bloom effect test
-    runtimeOnly(rfg.deobf("curse.maven:lumenized-1234162:6734060"))
+    implementation(rfg.deobf("curse.maven:lumenized-1234162:6734060"))
     runtimeOnly(rfg.deobf("curse.maven:ctm-267602:2915363"))
     runtimeOnly(rfg.deobf("curse.maven:codechickenlib-242818:2779848"))
     // Performance test tool
@@ -262,6 +272,17 @@ tasks.withType<Jar> {
                 attributeMap["FMLCorePluginContainsFMLMod"] = true.toString()
                 attributeMap["ForceLoadAsMod"] = (project.gradle.startParameter.taskNames[0] == "build").toString()
             }
+        }
+        if (use_mixins.toBoolean()) {
+            // Add mixin loader as FMLCorePlugin for production jar
+            val existingPlugin = attributeMap["FMLCorePlugin"]
+            if (existingPlugin != null) {
+                attributeMap["FMLCorePlugin"] = "$existingPlugin;github.kasuminova.prototypemachinery.mixin.PMMixinLoader"
+            } else {
+                attributeMap["FMLCorePlugin"] = "github.kasuminova.prototypemachinery.mixin.PMMixinLoader"
+            }
+            attributeMap["FMLCorePluginContainsFMLMod"] = true.toString()
+//            attributeMap["ForceLoadAsMod"] = (project.gradle.startParameter.taskNames[0] == "build").toString()
         }
         if (use_access_transformer.toBoolean()) {
             attributeMap["FMLAT"] = archives_base_name + "_at.cfg"

@@ -33,7 +33,9 @@ import github.kasuminova.prototypemachinery.client.preview.ui.widget.ScissorGrou
 import github.kasuminova.prototypemachinery.client.preview.ui.widget.StructurePreview3DWidget
 import github.kasuminova.prototypemachinery.client.util.ClientNextTick
 import github.kasuminova.prototypemachinery.impl.machine.structure.preview.StructurePreviewBuilder
+import net.minecraft.block.Block
 import net.minecraft.client.Minecraft
+import net.minecraft.init.Blocks
 import net.minecraft.util.ResourceLocation
 import net.minecraft.util.math.BlockPos
 import net.minecraft.util.text.TextComponentTranslation
@@ -48,6 +50,39 @@ import net.minecraft.util.text.TextComponentTranslation
  * - Optional embedded 3D view (JEI-friendly; does not require a world)
  */
 internal object StructurePreviewUiScreen {
+
+    /**
+     * Best-effort resolve controller block requirement for a structure.
+     *
+     * Notes:
+     * - UI currently opens by structureId only (no machineTypeId), so we infer via
+     *   `MachineType.structure.id == structureId`.
+     * - If multiple machine types share a structure, we pick a deterministic one (min id).
+     */
+    private fun resolveControllerRequirement(structureId: String): ExactBlockStateRequirement? {
+        val candidates = PrototypeMachineryAPI.machineTypeRegistry.all()
+            .filter { it.structure.id == structureId }
+            .sortedBy { it.id.toString() }
+
+        val machineType = candidates.firstOrNull() ?: return null
+
+        // Controller block registry name convention: <namespace>:<path>_controller
+        val controllerId = ResourceLocation(machineType.id.namespace, machineType.id.path + "_controller")
+        val block = Block.REGISTRY.getObject(controllerId)
+        if (block === Blocks.AIR) return null
+
+        @Suppress("DEPRECATION")
+        val state = block.defaultState
+
+        val id = block.registryName ?: controllerId
+        @Suppress("DEPRECATION")
+        val meta = block.getMetaFromState(state)
+        val props = state.propertyKeys.associate { prop ->
+            val v = state.getValue(prop)
+            prop.name to v.toString()
+        }
+        return ExactBlockStateRequirement(id, meta, props)
+    }
 
     private fun guiTex(path: String): UITexture {
         // ResourceLocation path is without the textures/ prefix and without .png
@@ -263,17 +298,23 @@ internal object StructurePreviewUiScreen {
 
         val mc = Minecraft.getMinecraft()
 
+        val controllerReq: ExactBlockStateRequirement? = resolveControllerRequirement(structureId)
+
         // --- Bottom layer: render panel (can be covered by all other elements) ---
         var statusSnapshot: Map<BlockPos, StructurePreviewEntryStatus> = emptyMap()
         val issuesOnly = BoolValue(false)
         val autoRotate = BoolValue(false)
         val showWireframe = BoolValue(true)
 
-        val sizeY = (model.bounds.max.y - model.bounds.min.y + 1).coerceAtLeast(1)
+        // Keep slider range consistent with 3D widget: include origin (0,0,0) in bounds.
+        val minY = kotlin.math.min(model.bounds.min.y, 0)
+        val maxY = kotlin.math.max(model.bounds.max.y, 0)
+        val sizeY = (maxY - minY + 1).coerceAtLeast(1)
         val sliceY = IntValue((sizeY / 2).coerceIn(0, sizeY - 1))
 
         val view3d = StructurePreview3DWidget(
             model = model,
+            controllerRequirement = controllerReq,
             statusProvider = { statusSnapshot },
             issuesOnlyProvider = { issuesOnly.boolValue },
             sliceModeProvider = { !state.show3d.boolValue },

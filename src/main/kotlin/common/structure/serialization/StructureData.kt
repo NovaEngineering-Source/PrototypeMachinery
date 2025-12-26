@@ -34,6 +34,7 @@ public data class StructureData(
     val id: String,
     val type: String,              // e.g., "template", "slice"
     val offset: BlockPosData = BlockPosData(0, 0, 0),
+    val hideWorldBlocks: Boolean = false,
     val pattern: List<StructurePatternElementData>,
     val validators: List<String> = emptyList(),  // Validator type IDs
     val children: List<String> = emptyList(),    // Child structure IDs (references)

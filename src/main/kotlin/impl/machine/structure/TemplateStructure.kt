@@ -13,6 +13,7 @@ public class TemplateStructure(
     override val id: String,
     override val orientation: StructureOrientation,
     override val offset: BlockPos,
+    override val hideWorldBlocks: Boolean = false,
     override val pattern: StructurePattern,
     override val validators: List<StructureValidator> = emptyList(),
     override val children: List<MachineStructure> = emptyList()
@@ -28,6 +29,7 @@ public class TemplateStructure(
             id,
             orientation.transform(rotation),
             StructureUtils.rotatePos(offset, rotation),
+            hideWorldBlocks,
             pattern.transform(rotation),
             validators,
             children.map { it.transform(rotation) }
