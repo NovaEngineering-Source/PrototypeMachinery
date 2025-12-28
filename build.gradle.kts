@@ -183,6 +183,7 @@ dependencies {
     runtimeOnly(rfg.deobf("curse.maven:codechickenlib-242818:2779848"))
     // Performance test tool
     runtimeOnly(rfg.deobf("curse.maven:spark-361579:3542217"))
+//    runtimeOnly(rfg.deobf("curse.maven:flare-692142:6598523"))
 
     // linux only
     if (System.getProperty("os.name").lowercase().contains("linux")) {
@@ -337,6 +338,29 @@ tasks.test {
     testLogging {
         events("passed", "skipped", "failed", "standardOut", "standardError")
         showStandardStreams = true
+    }
+}
+
+// Allow narrowing JMH runs from command line, e.g.:
+//   ./gradlew jmh -PjmhInclude=GeckoMatrixTransformJmhBenchmark
+// or a full regex supported by JMH.
+jmh {
+    val include = (project.findProperty("jmhInclude") as? String)?.trim().orEmpty()
+    if (include.isNotEmpty()) {
+        includes.set(listOf(include))
+    }
+
+    // Enable JMH profilers from command line, e.g.:
+    //   ./gradlew jmh -PjmhInclude=... -PjmhProfilers=gc
+    //   ./gradlew jmh -PjmhProfilers=gc,stack
+    val profilersProp = (project.findProperty("jmhProfilers") as? String)?.trim().orEmpty()
+    if (profilersProp.isNotEmpty()) {
+        profilersProp.split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .forEach { profiler ->
+                profilers.add(profiler)
+            }
     }
 }
 

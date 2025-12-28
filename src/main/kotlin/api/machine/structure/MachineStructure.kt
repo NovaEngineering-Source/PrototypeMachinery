@@ -33,6 +33,15 @@ public interface MachineStructure {
     /** Unique identifier for this structure / 此结构的唯一 ID */
     public val id: String
 
+    /**
+     * Human-friendly display name for UI.
+     *
+     * - Defaults to [id] for backward compatibility.
+     * - JSON loader can override this with a dedicated `name` field.
+     */
+    public val name: String
+        get() = id
+
     /** Base orientation (front, top) / 基础朝向（正面、顶部） */
     public val orientation: StructureOrientation
 

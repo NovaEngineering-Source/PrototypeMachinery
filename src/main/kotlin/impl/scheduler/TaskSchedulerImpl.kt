@@ -48,8 +48,12 @@ internal object TaskSchedulerImpl : TaskScheduler {
      * 运行时探测：协程库由前置模组提供；若缺失则禁止启用协程后端。
      */
     private fun isCoroutinesAvailable(): Boolean {
-        // Use reflection to avoid hard-crashing when the prerequisite mod is missing.
-        return runCatching { Class.forName("kotlinx.coroutines.Job") }.isSuccess
+        // Reflection-free: use a direct class reference.
+        // If coroutines are missing, this will throw NoClassDefFoundError which we catch.
+        return runCatching {
+            kotlinx.coroutines.Job::class.java
+            true
+        }.getOrDefault(false)
     }
 
     private fun coerceSettingsForAvailability(s: SchedulerRuntimeSettings): SchedulerRuntimeSettings {

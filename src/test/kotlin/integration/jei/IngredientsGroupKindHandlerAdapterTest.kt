@@ -8,12 +8,12 @@ import mezz.jei.api.IGuiHelper
 import mezz.jei.api.gui.IGuiIngredientGroup
 import mezz.jei.api.gui.IRecipeLayout
 import mezz.jei.api.ingredients.IIngredientRenderer
+import mezz.jei.api.ingredients.IIngredients
+import mezz.jei.api.recipe.IFocus
 import mezz.jei.api.recipe.IIngredientType
 import net.minecraft.util.ResourceLocation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import java.lang.reflect.Proxy
-import java.util.Collections
 
 class IngredientsGroupKindHandlerAdapterTest {
 
@@ -27,51 +27,59 @@ class IngredientsGroupKindHandlerAdapterTest {
         override fun getIngredientClass(): Class<out GasStack> = GasStack::class.java
     }
 
-    private class RecordingGroup<T> {
+    private class RecordingGroup<T> : IGuiIngredientGroup<T> {
         var lastInit: List<Any?>? = null
         var lastSetIndex: Int? = null
         var lastSetValues: List<T>? = null
         var lastBackgroundIndex: Int? = null
 
-        val proxy: IGuiIngredientGroup<T> = Proxy.newProxyInstance(
-            IGuiIngredientGroup::class.java.classLoader,
-            arrayOf(IGuiIngredientGroup::class.java),
-        ) { _, method, args ->
-            when (method.name) {
-                "init" -> {
-                    val a = args?.toList().orEmpty()
-                    // Distinguish overloads by parameter count.
-                    lastInit = if (a.size == 4) listOf("simple") + a else listOf("full") + a
-                    null
-                }
+        override fun init(slotIndex: Int, input: Boolean, xPosition: Int, yPosition: Int) {
+            lastInit = listOf("simple", slotIndex, input, xPosition, yPosition)
+        }
 
-                "set" -> {
-                    val a = args?.toList().orEmpty()
-                    if (a.size >= 2) {
-                        @Suppress("UNCHECKED_CAST")
-                        lastSetIndex = a[0] as? Int
+        override fun init(
+            slotIndex: Int,
+            input: Boolean,
+            ingredientRenderer: IIngredientRenderer<T>,
+            xPosition: Int,
+            yPosition: Int,
+            width: Int,
+            height: Int,
+            paddingX: Int,
+            paddingY: Int
+        ) {
+            lastInit = listOf("full", slotIndex, input, ingredientRenderer, xPosition, yPosition, width, height, paddingX, paddingY)
+        }
 
-                        @Suppress("UNCHECKED_CAST")
-                        lastSetValues = when (val v = a[1]) {
-                            is java.util.List<*> -> v.filterNotNull() as List<T>
-                            null -> emptyList()
-                            else -> listOf(v as T)
-                        }
-                    }
-                    null
-                }
+        override fun set(ingredients: IIngredients) {
+            // Not used by this test.
+        }
 
-                "setBackground" -> {
-                    val a = args?.toList().orEmpty()
-                    lastBackgroundIndex = a.getOrNull(0) as? Int
-                    null
-                }
+        override fun set(slotIndex: Int, ingredients: MutableList<T>?) {
+            lastSetIndex = slotIndex
+            lastSetValues = ingredients?.toList().orEmpty()
+        }
 
-                "getGuiIngredients" -> Collections.emptyMap<Int, Any>()
+        override fun set(slotIndex: Int, ingredient: T?) {
+            lastSetIndex = slotIndex
+            lastSetValues = ingredient?.let { listOf(it) } ?: emptyList()
+        }
 
-                else -> null
-            }
-        } as IGuiIngredientGroup<T>
+        override fun setBackground(slotIndex: Int, background: mezz.jei.api.gui.IDrawable) {
+            lastBackgroundIndex = slotIndex
+        }
+
+        override fun addTooltipCallback(tooltipCallback: mezz.jei.api.gui.ITooltipCallback<T>) {
+            // Not used by this test.
+        }
+
+        override fun setOverrideDisplayFocus(focus: IFocus<T>?) {
+            // Not used by this test.
+        }
+
+        override fun getGuiIngredients(): MutableMap<Int, out mezz.jei.api.gui.IGuiIngredient<T>> {
+            return mutableMapOf()
+        }
     }
 
     private class TestLayout<T>(private val group: IGuiIngredientGroup<T>) : IRecipeLayout {
@@ -113,18 +121,50 @@ class IngredientsGroupKindHandlerAdapterTest {
     }
 
     private fun dummyGuiHelper(): IGuiHelper {
-        return Proxy.newProxyInstance(
-            IGuiHelper::class.java.classLoader,
-            arrayOf(IGuiHelper::class.java),
-        ) { _, _, _ ->
-            throw UnsupportedOperationException("IGuiHelper methods should not be called by this test")
-        } as IGuiHelper
+        return object : IGuiHelper {
+            override fun toString(): String = "DummyIGuiHelper"
+
+            // This test must not call any IGuiHelper methods.
+            // Implementations throw to ensure we notice accidental usage.
+            override fun <V> createDrawableIngredient(ingredient: V): mezz.jei.api.gui.IDrawable {
+                throw UnsupportedOperationException("IGuiHelper methods should not be called by this test")
+            }
+
+            override fun createBlankDrawable(width: Int, height: Int): mezz.jei.api.gui.IDrawableStatic {
+                throw UnsupportedOperationException("IGuiHelper methods should not be called by this test")
+            }
+
+            override fun drawableBuilder(resourceLocation: ResourceLocation, u: Int, v: Int, width: Int, height: Int): mezz.jei.api.gui.IDrawableBuilder {
+                throw UnsupportedOperationException("IGuiHelper methods should not be called by this test")
+            }
+
+            override fun createAnimatedDrawable(
+                drawable: mezz.jei.api.gui.IDrawableStatic,
+                ticksPerCycle: Int,
+                startDirection: mezz.jei.api.gui.IDrawableAnimated.StartDirection,
+                inverted: Boolean
+            ): mezz.jei.api.gui.IDrawableAnimated {
+                throw UnsupportedOperationException("IGuiHelper methods should not be called by this test")
+            }
+
+            override fun getSlotDrawable(): mezz.jei.api.gui.IDrawableStatic {
+                throw UnsupportedOperationException("IGuiHelper methods should not be called by this test")
+            }
+
+            override fun createCraftingGridHelper(craftInputSlot1: Int, craftInputSlot2: Int): mezz.jei.api.gui.ICraftingGridHelper {
+                throw UnsupportedOperationException("IGuiHelper methods should not be called by this test")
+            }
+
+            override fun createTickTimer(ticksPerCycle: Int, startValue: Int, countDown: Boolean): mezz.jei.api.gui.ITickTimer {
+                throw UnsupportedOperationException("IGuiHelper methods should not be called by this test")
+            }
+        }
     }
 
     @Test
     fun `init uses simple overload when no renderer`() {
         val group = RecordingGroup<GasStack>()
-        val layout = TestLayout(group.proxy)
+        val layout = TestLayout(group)
 
         val handler = IngredientsGroupKindHandlerAdapter(
             kind = GasKind,
@@ -150,7 +190,7 @@ class IngredientsGroupKindHandlerAdapterTest {
     @Test
     fun `init uses full overload when renderer exists and set forwards values`() {
         val group = RecordingGroup<GasStack>()
-        val layout = TestLayout(group.proxy)
+        val layout = TestLayout(group)
 
         val renderer = IIngredientRenderer<GasStack> { _, _, _, _ -> }
 

@@ -11,6 +11,7 @@ import net.minecraft.util.math.BlockPos
 
 public class TemplateStructure(
     override val id: String,
+    override val name: String = id,
     override val orientation: StructureOrientation,
     override val offset: BlockPos,
     override val hideWorldBlocks: Boolean = false,
@@ -27,6 +28,7 @@ public class TemplateStructure(
     override fun transform(rotation: (EnumFacing) -> EnumFacing): MachineStructure {
         return TemplateStructure(
             id,
+            name,
             orientation.transform(rotation),
             StructureUtils.rotatePos(offset, rotation),
             hideWorldBlocks,

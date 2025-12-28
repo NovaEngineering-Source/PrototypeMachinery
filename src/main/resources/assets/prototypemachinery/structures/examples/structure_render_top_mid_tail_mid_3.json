@@ -1,7 +1,9 @@
 {
   "id": "example_structure_render_top_mid_tail_mid_3",
+  "name": "Render Demo: Mid 3",
   "type": "template",
-  "offset": { "x": -1, "y": 0, "z": 0 },
+  "hideWorldBlocks": true,
+  "offset": { "x": -3, "y": 0, "z": 0 },
   "pattern": [
     {"pos":{"x":0,"y":0,"z":0},"blockId":"minecraft:gold_block","meta":0},
     {"pos":{"x":0,"y":0,"z":1},"blockId":"minecraft:gold_block","meta":0},
@@ -34,7 +36,5 @@
     {"pos":{"x":0,"y":4,"z":4},"blockId":"minecraft:gold_block","meta":0}
   ],
   "validators": [],
-  "children": [
-    "example_structure_render_top_mid_tail_tail"
-  ]
+  "children": []
 }

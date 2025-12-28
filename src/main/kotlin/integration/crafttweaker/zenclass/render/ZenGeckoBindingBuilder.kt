@@ -27,6 +27,10 @@ public class ZenGeckoBindingBuilder {
     private var animation: ResourceLocation? = null
 
     private var defaultAnimationName: String? = null
+
+    private val animationLayers: MutableList<String> = mutableListOf()
+    private var animationStateKey: String? = null
+    private var animationLayersStateKey: String? = null
     private var yOffset: Double = 0.0
     private var modelOffsetX: Double = 0.0
     private var modelOffsetY: Double = 0.0
@@ -57,6 +61,42 @@ public class ZenGeckoBindingBuilder {
     @ZenMethod
     public fun defaultAnimation(name: String): ZenGeckoBindingBuilder {
         this.defaultAnimationName = name
+        return this
+    }
+
+    /**
+     * Add an animation layer name to be played concurrently.
+     *
+     * Order matters: later layers overwrite conflicting bone transforms.
+     */
+    @ZenMethod
+    public fun animationLayer(name: String): ZenGeckoBindingBuilder {
+        val n = name.trim()
+        if (n.isNotEmpty()) {
+            animationLayers.add(n)
+        }
+        return this
+    }
+
+    /**
+     * Read the active animation name from the machine's synchronized ZSDataComponent.
+     *
+     * The value must be a string, e.g. "open".
+     */
+    @ZenMethod
+    public fun animationStateKey(key: String): ZenGeckoBindingBuilder {
+        this.animationStateKey = key.trim().takeIf { it.isNotEmpty() }
+        return this
+    }
+
+    /**
+     * Read animation layers from the machine's synchronized ZSDataComponent.
+     *
+     * The value must be a comma-separated string list, e.g. "base_idle,overlay_glow".
+     */
+    @ZenMethod
+    public fun animationLayersStateKey(key: String): ZenGeckoBindingBuilder {
+        this.animationLayersStateKey = key.trim().takeIf { it.isNotEmpty() }
         return this
     }
 
@@ -132,6 +172,9 @@ public class ZenGeckoBindingBuilder {
             texture = t,
             animation = animation,
             defaultAnimationName = defaultAnimationName,
+            animationLayers = animationLayers.toList(),
+            animationStateKey = animationStateKey,
+            animationLayersStateKey = animationLayersStateKey,
             pass = pass,
             modelOffsetX = modelOffsetX,
             modelOffsetY = modelOffsetY,

@@ -19,6 +19,31 @@ public data class GeckoModelBinding(
     /** Optional default animation name inside the animation file. */
     public val defaultAnimationName: String? = null,
 
+    /**
+     * Optional list of animation names to be played concurrently (layered).
+     *
+     * - If non-empty, this takes precedence over [defaultAnimationName].
+     * - Order matters: later layers overwrite conflicting bone transforms.
+     */
+    public val animationLayers: List<String> = emptyList(),
+
+    /**
+     * Optional ZSDataComponent key to override the effective animation name at runtime.
+     *
+     * This key is read on the client from the machine's synchronized ZSDataComponent,
+     * enabling server-authoritative animation selection.
+     *
+     * Value format: a single string, e.g. "open".
+     */
+    public val animationStateKey: String? = null,
+
+    /**
+     * Optional ZSDataComponent key to override the effective animation layer list at runtime.
+     *
+     * Value format: comma-separated list, e.g. "base_idle,overlay_glow".
+     */
+    public val animationLayersStateKey: String? = null,
+
     /** Render pass selection (future: bloom / translucent routing). */
     public val pass: RenderPass = RenderPass.DEFAULT,
 

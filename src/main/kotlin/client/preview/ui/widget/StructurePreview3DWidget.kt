@@ -10,6 +10,7 @@ import github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactB
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.StructurePreviewModel
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ui.StructurePreviewEntryStatus
 import github.kasuminova.prototypemachinery.client.preview.ProjectionConfig
+import github.kasuminova.prototypemachinery.client.util.BufferBuilderPool
 import net.minecraft.block.Block
 import net.minecraft.block.material.Material
 import net.minecraft.block.properties.IProperty
@@ -74,7 +75,11 @@ internal class StructurePreview3DWidget(
     /** When true, slowly rotates the camera automatically. */
     private val autoRotateProvider: (() -> Boolean)? = null,
     /** When false, hide wireframe overlays (axes + cube lines) to better see block model rendering. */
-    private val wireframeProvider: (() -> Boolean)? = null
+    private val wireframeProvider: (() -> Boolean)? = null,
+    /** Optional set of positions (model coords, controller origin = (0,0,0)) to highlight. */
+    private val selectedPositionsProvider: (() -> Set<BlockPos>?)? = null,
+    /** Optional callback invoked when user clicks a rendered block (model coords). */
+    private val onBlockClicked: ((pos: BlockPos, requirement: BlockRequirement) -> Unit)? = null
 ) : Widget<StructurePreview3DWidget>() {
 
     private data class Cube(val x: Int, val y: Int, val z: Int, val keyHash: Int)
@@ -103,8 +108,50 @@ internal class StructurePreview3DWidget(
         val approxBlockCount: Int
     )
 
+    private data class StructureDims(
+        val sizeX: Int,
+        val sizeY: Int,
+        val sizeZ: Int
+    ) {
+        val maxDim: Int = max(sizeX, max(sizeY, sizeZ))
+        val centerX: Double = sizeX * 0.5
+        val centerY: Double = sizeY * 0.5
+        val centerZ: Double = sizeZ * 0.5
+    }
+
+    private data class IntAabb(
+        val minX: Int,
+        val minY: Int,
+        val minZ: Int,
+        val maxX: Int,
+        val maxY: Int,
+        val maxZ: Int
+    ) {
+        val centerX: Double = (minX.toDouble() + (maxX + 1).toDouble()) * 0.5
+        val centerY: Double = (minY.toDouble() + (maxY + 1).toDouble()) * 0.5
+        val centerZ: Double = (minZ.toDouble() + (maxZ + 1).toDouble()) * 0.5
+
+        val radiusSq: Double = run {
+            val rx = (maxX + 1 - minX) * 0.5
+            val ry = (maxY + 1 - minY) * 0.5
+            val rz = (maxZ + 1 - minZ) * 0.5
+            rx * rx + ry * ry + rz * rz
+        }
+    }
+
+    private data class ViewportRect(
+        val x: Int,
+        val y: Int,
+        val w: Int,
+        val h: Int,
+        val guiScale: Int
+    )
+
     private val cubes: List<Cube>
     private val blockEntries: List<BlockEntry>
+
+    /** Fast lookup for click-picking: shifted relPos (within local bounds) -> requirement. */
+    private val requirementByShiftedPos: Map<BlockPos, BlockRequirement>
     // IMPORTANT: the preview coordinate system uses controller origin = (0,0,0), but most
     // structures do not include the controller in their pattern. Ensure our local bounds always
     // include the origin so rel coords stay non-negative and origin can be rendered.
@@ -159,6 +206,14 @@ internal class StructurePreview3DWidget(
     private var lastDragAbsX: Int = 0
     private var lastDragAbsY: Int = 0
 
+    private var pressAbsX: Int = 0
+    private var pressAbsY: Int = 0
+
+    // Click requests are handled inside draw() after matrices are set.
+    private var pendingClickAbsX: Int = 0
+    private var pendingClickAbsY: Int = 0
+    private var pendingClick: Boolean = false
+
     init {
         val cubesMut = buildBoundaryCubes(model).toMutableList()
         val entriesMut = buildBoundaryBlockEntries(model).toMutableList()
@@ -180,6 +235,7 @@ internal class StructurePreview3DWidget(
 
         cubes = cubesMut
         blockEntries = entriesMut
+        requirementByShiftedPos = blockEntries.associate { it.relPos to it.requirement }
         blockModelGroups = groupByChunk(blockEntries)
 
         val statesMut = buildAllBlockStates(model).toMutableMap()
@@ -255,6 +311,8 @@ internal class StructurePreview3DWidget(
                 dragButton = mouseButton
                 lastDragAbsX = ctx.absMouseX
                 lastDragAbsY = ctx.absMouseY
+                pressAbsX = lastDragAbsX
+                pressAbsY = lastDragAbsY
                 return true
             }
         })
@@ -264,6 +322,19 @@ internal class StructurePreview3DWidget(
             override fun release(mouseButton: Int): Boolean {
                 if (!dragging) return false
                 if (mouseButton != dragButton) return false
+
+                val ctx = context
+                val dxTotal = abs(ctx.absMouseX - pressAbsX)
+                val dyTotal = abs(ctx.absMouseY - pressAbsY)
+
+                // Treat as click if mouse barely moved.
+                // We do NOT pick immediately here because GL matrices/viewport are set in draw().
+                if (mouseButton == 0 && dxTotal <= 3 && dyTotal <= 3) {
+                    pendingClickAbsX = ctx.absMouseX
+                    pendingClickAbsY = ctx.absMouseY
+                    pendingClick = true
+                }
+
                 dragging = false
                 dragButton = -1
                 return true
@@ -322,44 +393,24 @@ internal class StructurePreview3DWidget(
         if (!isEnabled || !areAncestorsEnabled()) return
         if (area.w() <= 2 || area.h() <= 2) return
 
-        // dt-based smoothing for camera parameters (FPS-independent).
-        // Use exponential smoothing: alpha = 1 - exp(-dt / tau).
-        // Smaller tau => snappier; bigger tau => smoother.
-        val nowMs = Minecraft.getSystemTime()
-        val dtSec = if (lastFrameTimeMs < 0L) 0.0 else ((nowMs - lastFrameTimeMs).toDouble() / 1000.0)
-        lastFrameTimeMs = nowMs
-
-        // Avoid giant jumps if the UI was paused/unfocused.
-        val clampedDt = min(dtSec, 0.25)
-
-        val tau = if (dragging) 0.06 else 0.12
-        val alpha = (1.0 - exp(-clampedDt / tau)).toFloat()
-
-        yawSmoothDeg += (yawTargetDeg - yawSmoothDeg) * alpha
-        pitchSmoothDeg += (pitchTargetDeg - pitchSmoothDeg) * alpha
-        zoomSmooth += (zoomTarget - zoomSmooth) * alpha
-
         val mc = Minecraft.getMinecraft()
-        val scaled = ScaledResolution(mc)
-        val scale = scaled.scaleFactor
+        val nowMs = Minecraft.getSystemTime()
+        updateCameraSmoothing(nowMs)
 
-        val scX = area.x() * scale
-        val scY = mc.displayHeight - (area.y() + area.h()) * scale
-        val scW = area.w() * scale
-        val scH = area.h() * scale
+        val vp = computeViewport(context, mc)
 
         GlStateManager.pushMatrix()
         GlStateManager.pushAttrib()
 
         // Clip to widget area.
         GL11.glEnable(GL11.GL_SCISSOR_TEST)
-        GL11.glScissor(scX, scY, scW, scH)
+        GL11.glScissor(vp.x, vp.y, vp.w, vp.h)
 
         // IMPORTANT: align viewport with widget area.
         // Without setting viewport, projection aspect is computed from the widget,
         // but NDC is still mapped to the full-screen viewport, which causes perspective
         // distortion and depth oddities while rotating.
-        GL11.glViewport(scX, scY, scW, scH)
+        GL11.glViewport(vp.x, vp.y, vp.w, vp.h)
 
         // Setup 3D.
         GlStateManager.enableBlend()
@@ -382,37 +433,16 @@ internal class StructurePreview3DWidget(
         GlStateManager.pushMatrix()
         GlStateManager.loadIdentity()
 
-        val sizeX = (maxB.x - min.x + 1).coerceAtLeast(1)
-        val sizeY = (maxB.y - min.y + 1).coerceAtLeast(1)
-        val sizeZ = (maxB.z - min.z + 1).coerceAtLeast(1)
-        val maxDim = max(sizeX, max(sizeY, sizeZ)).toFloat()
+        val dims = computeStructureDims()
+        applyCameraTransform(dims)
 
-        // Place camera.
-        val baseDistance = maxDim * 2.6f
-        val cameraDist = baseDistance * zoomSmooth
-        GlStateManager.translate(0f, 0f, -cameraDist)
-        GlStateManager.rotate(pitchSmoothDeg, 1f, 0f, 0f)
-        GlStateManager.rotate(yawSmoothDeg, 0f, 1f, 0f)
-
-        // Center structure around origin.
-        val cx = sizeX * 0.5f
-        val cy = sizeY * 0.5f
-        val cz = sizeZ * 0.5f
-        GlStateManager.translate(-cx, -cy, -cz)
+        // Handle click picking after matrices are configured.
+        handlePendingClick(mc, vp)
 
         // Textured block models (performance path: VBO, built incrementally).
         drawBlockModels(context)
 
-        // Wireframe overlays.
-        GlStateManager.disableTexture2D()
-
-        if (wireframeProvider?.invoke() != false) {
-            // Draw axes (subtle).
-            drawAxes(sizeX.toFloat(), sizeY.toFloat(), sizeZ.toFloat())
-
-            // Draw cubes.
-            drawCubes(context)
-        }
+        drawWireframeOverlays(context, dims)
 
         // Restore matrices.
         GlStateManager.popMatrix() // MODELVIEW
@@ -429,6 +459,228 @@ internal class StructurePreview3DWidget(
 
         // Let base class handle hover timers etc.
         super.draw(context, widgetTheme)
+    }
+
+    private fun drawWireframeOverlays(context: ModularGuiContext, dims: StructureDims) {
+        // Wireframe overlays.
+        GlStateManager.disableTexture2D()
+
+        // If the host hides wireframe to better see block models, still draw a clear selection outline.
+        val selectedNow = selectedPositionsProvider?.invoke()
+        if ((wireframeProvider?.invoke() == false) && !selectedNow.isNullOrEmpty()) {
+            drawSelectionOutline(selectedNow)
+        }
+
+        if (wireframeProvider?.invoke() != false) {
+            // Draw axes (subtle).
+            drawAxes(dims.sizeX.toFloat(), dims.sizeY.toFloat(), dims.sizeZ.toFloat())
+
+            // Draw cubes.
+            drawCubes(context)
+        }
+    }
+
+    private fun updateCameraSmoothing(nowMs: Long) {
+        // dt-based smoothing for camera parameters (FPS-independent).
+        // Use exponential smoothing: alpha = 1 - exp(-dt / tau).
+        // Smaller tau => snappier; bigger tau => smoother.
+        val dtSec = if (lastFrameTimeMs < 0L) 0.0 else ((nowMs - lastFrameTimeMs).toDouble() / 1000.0)
+        lastFrameTimeMs = nowMs
+
+        // Avoid giant jumps if the UI was paused/unfocused.
+        val clampedDt = min(dtSec, 0.25)
+
+        val tau = if (dragging) 0.06 else 0.12
+        val alpha = (1.0 - exp(-clampedDt / tau)).toFloat()
+
+        yawSmoothDeg += (yawTargetDeg - yawSmoothDeg) * alpha
+        pitchSmoothDeg += (pitchTargetDeg - pitchSmoothDeg) * alpha
+        zoomSmooth += (zoomTarget - zoomSmooth) * alpha
+    }
+
+    private fun computeViewport(context: ModularGuiContext, mc: Minecraft): ViewportRect {
+        val scaled = ScaledResolution(mc)
+        val scale = scaled.scaleFactor
+
+        // Compute viewport/scissor in *screen* pixels.
+        // Do NOT rely on Area.x/y because parent TransformWidgets / viewport stacks may move the widget
+        // without updating absolute bookkeeping.
+        val xGui = context.transformX(0f, 0f)
+        val yGui = context.transformY(0f, 0f)
+
+        val scX = xGui * scale
+        val scY = mc.displayHeight - (yGui + area.h()) * scale
+        val scW = area.w() * scale
+        val scH = area.h() * scale
+        return ViewportRect(scX, scY, scW, scH, scale)
+    }
+
+    private fun handlePendingClick(mc: Minecraft, vp: ViewportRect) {
+        val cb = onBlockClicked ?: return
+        if (!pendingClick) return
+
+        pendingClick = false
+        pickBlockAtScreen(
+            mc = mc,
+            guiScale = vp.guiScale,
+            absMouseX = pendingClickAbsX,
+            absMouseY = pendingClickAbsY,
+            viewportX = vp.x,
+            viewportY = vp.y,
+            viewportW = vp.w,
+            viewportH = vp.h
+        )?.let { (relPos, req) ->
+            cb.invoke(relPos, req)
+        }
+    }
+
+    private fun computeStructureDims(): StructureDims {
+        val sizeX = (maxB.x - min.x + 1).coerceAtLeast(1)
+        val sizeY = (maxB.y - min.y + 1).coerceAtLeast(1)
+        val sizeZ = (maxB.z - min.z + 1).coerceAtLeast(1)
+        return StructureDims(sizeX, sizeY, sizeZ)
+    }
+
+    private fun applyCameraTransform(dims: StructureDims) {
+        val maxDim = dims.maxDim.toFloat()
+
+        // Place camera.
+        val baseDistance = maxDim * 2.6f
+        val cameraDist = baseDistance * zoomSmooth
+        GlStateManager.translate(0f, 0f, -cameraDist)
+        GlStateManager.rotate(pitchSmoothDeg, 1f, 0f, 0f)
+        GlStateManager.rotate(yawSmoothDeg, 0f, 1f, 0f)
+
+        // Center structure around origin.
+        GlStateManager.translate(-dims.centerX.toFloat(), -dims.centerY.toFloat(), -dims.centerZ.toFloat())
+    }
+
+    private fun drawVbo(vbo: VertexBuffer) {
+        vbo.bindBuffer()
+        // DefaultVertexFormats.BLOCK layout:
+        // pos(3f)=0..11, color(4ub)=12..15, uv0(2f)=16..23, uv2(2s)=24..27 ; stride=28
+        GL11.glVertexPointer(3, GL11.GL_FLOAT, 28, 0L)
+        GL11.glColorPointer(4, GL11.GL_UNSIGNED_BYTE, 28, 12L)
+
+        OpenGlHelper.setClientActiveTexture(OpenGlHelper.defaultTexUnit)
+        GL11.glTexCoordPointer(2, GL11.GL_FLOAT, 28, 16L)
+
+        OpenGlHelper.setClientActiveTexture(OpenGlHelper.lightmapTexUnit)
+        GL11.glTexCoordPointer(2, GL11.GL_SHORT, 28, 24L)
+
+        OpenGlHelper.setClientActiveTexture(OpenGlHelper.defaultTexUnit)
+        vbo.drawArrays(GL11.GL_QUADS)
+        vbo.unbindBuffer()
+    }
+
+    private fun approximateCameraPosition(dims: StructureDims): Triple<Double, Double, Double> {
+        val maxDim = dims.maxDim.toDouble()
+        val baseDistance = maxDim * 2.6
+        val cameraDist = baseDistance * zoomSmooth.toDouble()
+
+        val yawRad = Math.toRadians(yawSmoothDeg.toDouble())
+        val pitchRad = Math.toRadians(pitchSmoothDeg.toDouble())
+        val cosPitch = cos(pitchRad)
+        val sinPitch = sin(pitchRad)
+        val sinYaw = sin(yawRad)
+        val cosYaw = cos(yawRad)
+
+        val cx = dims.centerX
+        val cy = dims.centerY
+        val cz = dims.centerZ
+
+        val camX = cx - cameraDist * cosPitch * sinYaw
+        val camY = cy - cameraDist * sinPitch
+        val camZ = cz + cameraDist * cosPitch * cosYaw
+        return Triple(camX, camY, camZ)
+    }
+
+    /**
+     * Draw a selection highlight that does not block block-model textures.
+     * This is used when wireframe overlays are disabled.
+     */
+    private fun drawSelectionOutline(selected: Set<BlockPos>) {
+        // Ensure selection is visible even when depth-tested geometry covers it.
+        GlStateManager.disableDepth()
+        try {
+            GL11.glLineWidth(2.0f)
+
+            val t = Tessellator.getInstance()
+            val b = t.buffer
+            b.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR)
+
+            for (p in selected) {
+                val sx = p.x - min.x
+                val sy = p.y - min.y
+                val sz = p.z - min.z
+
+                // Skip out-of-bounds selections.
+                if (sx < 0 || sy < 0 || sz < 0) continue
+                if (sx > (maxB.x - min.x) || sy > (maxB.y - min.y) || sz > (maxB.z - min.z)) continue
+
+                // Use the same selection blue as drawCubes.
+                addWireCube(b, sx.toDouble(), sy.toDouble(), sz.toDouble(), 0x2E, 0x6B, 0xFF, 0xDD)
+            }
+
+            t.draw()
+        } finally {
+            GL11.glLineWidth(1.0f)
+            GlStateManager.enableDepth()
+        }
+    }
+
+    private fun pickBlockAtScreen(
+        mc: Minecraft,
+        guiScale: Int,
+        absMouseX: Int,
+        absMouseY: Int,
+        viewportX: Int,
+        viewportY: Int,
+        viewportW: Int,
+        viewportH: Int
+    ): Pair<BlockPos, BlockRequirement>? {
+        if (requirementByShiftedPos.isEmpty()) return null
+
+        val (mx, my) = PreviewPickingUtil.toDisplayPixelMouse(mc, guiScale, absMouseX, absMouseY)
+
+        // Quick reject: click outside our viewport.
+        if (!PreviewPickingUtil.isInsideViewport(mx, my, viewportX, viewportY, viewportW, viewportH)) return null
+
+        val matrices = PreviewPickingUtil.readCurrentMatrices(viewportX, viewportY, viewportW, viewportH)
+        val ray = PreviewPickingUtil.computePickRay(mx, my, matrices) ?: return null
+
+        val hit = pickNearestCube(ray) ?: return null
+        val shifted = BlockPos(hit.x, hit.y, hit.z)
+        val req = requirementByShiftedPos[shifted] ?: return null
+
+        // Convert shifted relPos back to model coords (controller origin = (0,0,0)).
+        val relPos = BlockPos(hit.x + min.x, hit.y + min.y, hit.z + min.z)
+        return relPos to req
+    }
+
+    private fun pickNearestCube(ray: PreviewPickingUtil.Ray3f): Cube? {
+        // Ray vs AABB for each cube (pick nearest positive t).
+        var bestT = Float.POSITIVE_INFINITY
+        var bestCube: Cube? = null
+
+        for (c in cubes) {
+            val t = PreviewPickingUtil.rayAabbHit(
+                ray.ox, ray.oy, ray.oz,
+                ray.dx, ray.dy, ray.dz,
+                c.x.toFloat(),
+                c.y.toFloat(),
+                c.z.toFloat(),
+                (c.x + 1).toFloat(),
+                (c.y + 1).toFloat(),
+                (c.z + 1).toFloat()
+            )
+            if (t != null && t < bestT) {
+                bestT = t
+                bestCube = c
+            }
+        }
+
+        return bestCube
     }
 
     private fun drawBlockModels(context: ModularGuiContext) {
@@ -467,6 +719,114 @@ internal class StructurePreview3DWidget(
 
         mc.renderEngine.bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE)
 
+        enableBlockModelClientState()
+
+        // Approx camera position (in structure local coords) for translucent sorting.
+        val dims = computeStructureDims()
+        val (camX, camY, camZ) = approximateCameraPosition(dims)
+
+        val selected = selectChunkMeshesForThisFrame()
+
+        // Render order similar to vanilla chunk rendering.
+        // SOLID / CUTOUT_MIPPED / CUTOUT: no sorting.
+        GlStateManager.disableBlend()
+        GlStateManager.depthMask(true)
+        GlStateManager.enableAlpha()
+        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1f)
+        GlStateManager.shadeModel(GL11.GL_FLAT)
+
+        renderChunkLayer(selected) { it.solid }
+        renderChunkLayer(selected) { it.cutoutMipped }
+        renderChunkLayer(selected) { it.cutout }
+
+        // TRANSLUCENT: back-to-front sorting (chunk granularity).
+        GlStateManager.tryBlendFuncSeparate(
+            GlStateManager.SourceFactor.SRC_ALPHA,
+            GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+            GlStateManager.SourceFactor.ONE,
+            GlStateManager.DestFactor.ZERO
+        )
+        GlStateManager.enableBlend()
+        GlStateManager.depthMask(false)
+        GlStateManager.shadeModel(GL11.GL_SMOOTH)
+
+        renderTranslucentBackToFront(selected, camX, camY, camZ)
+
+        disableBlockModelClientState()
+
+        GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL)
+        GlStateManager.depthMask(true)
+        GlStateManager.disableBlend()
+        GlStateManager.disableAlpha()
+        GlStateManager.enableCull()
+        GlStateManager.popMatrix()
+    }
+
+    private inline fun renderChunkLayer(
+        meshes: List<BlockModelChunkMesh>,
+        crossinline vboSelector: (BlockModelChunkMesh) -> VertexBuffer?
+    ) {
+        for (m in meshes) {
+            val vbo = vboSelector(m) ?: continue
+            drawVbo(vbo)
+        }
+    }
+
+    private fun renderTranslucentBackToFront(
+        meshes: List<BlockModelChunkMesh>,
+        camX: Double,
+        camY: Double,
+        camZ: Double
+    ) {
+        val translucentMeshes = ArrayList<Pair<BlockModelChunkMesh, Double>>()
+        for (m in meshes) {
+            if (m.translucent != null) {
+                translucentMeshes.add(m to meshDistSq(m, camX, camY, camZ))
+            }
+        }
+
+        if (translucentMeshes.isNotEmpty()) {
+            translucentMeshes.sortByDescending { it.second }
+            for ((m, _) in translucentMeshes) {
+                val vbo = m.translucent ?: continue
+                drawVbo(vbo)
+            }
+        }
+    }
+
+    private fun meshDistSq(m: BlockModelChunkMesh, camX: Double, camY: Double, camZ: Double): Double {
+        val dx = m.centerX - camX
+        val dy = m.centerY - camY
+        val dz = m.centerZ - camZ
+        return dx * dx + dy * dy + dz * dz
+    }
+
+    private fun selectChunkMeshesForThisFrame(): List<BlockModelChunkMesh> {
+        val meshes = builtBlockModelMeshes
+        if (meshes.isEmpty()) {
+            blockModelRenderCursor = 0
+            return emptyList()
+        }
+
+        val start = blockModelRenderCursor
+        val maxChunksThisFrame =
+            if (meshes.size <= ProjectionConfig.RENDER_ALL_CHUNKS_IF_UNDER) Int.MAX_VALUE else ProjectionConfig.MAX_CHUNKS_RENDER_PER_FRAME
+
+        // Budgeted selection: iterate a moving window each frame.
+        val selected = ArrayList<BlockModelChunkMesh>(minOf(64, maxChunksThisFrame))
+        var iter = 0
+        while (selected.size < maxChunksThisFrame && iter < meshes.size) {
+            val idx = (start + iter) % meshes.size
+            val m = meshes[idx]
+            val hasAny = (m.solid != null) || (m.cutoutMipped != null) || (m.cutout != null) || (m.translucent != null)
+            if (hasAny) selected.add(m)
+            iter++
+        }
+        blockModelRenderCursor = (start + iter) % meshes.size
+        return selected
+    }
+
+    private fun enableBlockModelClientState() {
         // Enable required client states for DefaultVertexFormats.BLOCK.
         GL11.glEnableClientState(GL11.GL_VERTEX_ARRAY)
         GL11.glEnableClientState(GL11.GL_COLOR_ARRAY)
@@ -481,120 +841,9 @@ internal class StructurePreview3DWidget(
 
         // Restore active tex unit.
         OpenGlHelper.setClientActiveTexture(OpenGlHelper.defaultTexUnit)
+    }
 
-        fun drawVbo(vbo: VertexBuffer) {
-            vbo.bindBuffer()
-            // DefaultVertexFormats.BLOCK layout:
-            // pos(3f)=0..11, color(4ub)=12..15, uv0(2f)=16..23, uv2(2s)=24..27 ; stride=28
-            GL11.glVertexPointer(3, GL11.GL_FLOAT, 28, 0L)
-            GL11.glColorPointer(4, GL11.GL_UNSIGNED_BYTE, 28, 12L)
-
-            OpenGlHelper.setClientActiveTexture(OpenGlHelper.defaultTexUnit)
-            GL11.glTexCoordPointer(2, GL11.GL_FLOAT, 28, 16L)
-
-            OpenGlHelper.setClientActiveTexture(OpenGlHelper.lightmapTexUnit)
-            GL11.glTexCoordPointer(2, GL11.GL_SHORT, 28, 24L)
-
-            OpenGlHelper.setClientActiveTexture(OpenGlHelper.defaultTexUnit)
-            vbo.drawArrays(GL11.GL_QUADS)
-            vbo.unbindBuffer()
-        }
-
-        // Approx camera position (in structure local coords) for translucent sorting.
-        val sizeX = (maxB.x - min.x + 1).coerceAtLeast(1)
-        val sizeY = (maxB.y - min.y + 1).coerceAtLeast(1)
-        val sizeZ = (maxB.z - min.z + 1).coerceAtLeast(1)
-        val cx = sizeX * 0.5
-        val cy = sizeY * 0.5
-        val cz = sizeZ * 0.5
-
-        val maxDim = max(sizeX, max(sizeY, sizeZ)).toDouble()
-        val baseDistance = maxDim * 2.6
-        val cameraDist = baseDistance * zoomSmooth.toDouble()
-
-        val yawRad = Math.toRadians(yawSmoothDeg.toDouble())
-        val pitchRad = Math.toRadians(pitchSmoothDeg.toDouble())
-        val cosPitch = cos(pitchRad)
-        val sinPitch = sin(pitchRad)
-        val sinYaw = sin(yawRad)
-        val cosYaw = cos(yawRad)
-
-        val camX = cx - cameraDist * cosPitch * sinYaw
-        val camY = cy - cameraDist * sinPitch
-        val camZ = cz + cameraDist * cosPitch * cosYaw
-
-        fun meshDistSq(m: BlockModelChunkMesh): Double {
-            val dx = m.centerX - camX
-            val dy = m.centerY - camY
-            val dz = m.centerZ - camZ
-            return dx * dx + dy * dy + dz * dz
-        }
-
-        val meshes = builtBlockModelMeshes
-        val start = blockModelRenderCursor
-        val maxChunksThisFrame = if (meshes.size <= ProjectionConfig.RENDER_ALL_CHUNKS_IF_UNDER) Int.MAX_VALUE else ProjectionConfig.MAX_CHUNKS_RENDER_PER_FRAME
-
-        // Budgeted selection: iterate a moving window each frame.
-        val selected = ArrayList<BlockModelChunkMesh>(minOf(64, maxChunksThisFrame))
-        var iter = 0
-        while (selected.size < maxChunksThisFrame && iter < meshes.size) {
-            val idx = (start + iter) % meshes.size
-            val m = meshes[idx]
-            val hasAny = (m.solid != null) || (m.cutoutMipped != null) || (m.cutout != null) || (m.translucent != null)
-            if (hasAny) selected.add(m)
-            iter++
-        }
-        blockModelRenderCursor = if (meshes.isEmpty()) 0 else ((start + iter) % meshes.size)
-
-        // Render order similar to vanilla chunk rendering.
-        // SOLID / CUTOUT_MIPPED / CUTOUT: no sorting.
-        GlStateManager.disableBlend()
-        GlStateManager.depthMask(true)
-        GlStateManager.enableAlpha()
-        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1f)
-        GlStateManager.shadeModel(GL11.GL_FLAT)
-
-        for (m in selected) {
-            val vbo = m.solid ?: continue
-            drawVbo(vbo)
-        }
-
-        for (m in selected) {
-            val vbo = m.cutoutMipped ?: continue
-            drawVbo(vbo)
-        }
-
-        for (m in selected) {
-            val vbo = m.cutout ?: continue
-            drawVbo(vbo)
-        }
-
-        // TRANSLUCENT: back-to-front sorting (chunk granularity).
-        GlStateManager.tryBlendFuncSeparate(
-            GlStateManager.SourceFactor.SRC_ALPHA,
-            GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
-            GlStateManager.SourceFactor.ONE,
-            GlStateManager.DestFactor.ZERO
-        )
-        GlStateManager.enableBlend()
-        GlStateManager.depthMask(false)
-        GlStateManager.shadeModel(GL11.GL_SMOOTH)
-
-        val translucentMeshes = ArrayList<Pair<BlockModelChunkMesh, Double>>()
-        for (m in selected) {
-            if (m.translucent != null) {
-                translucentMeshes.add(m to meshDistSq(m))
-            }
-        }
-
-        if (translucentMeshes.isNotEmpty()) {
-            translucentMeshes.sortByDescending { it.second }
-            for ((m, _) in translucentMeshes) {
-                val vbo = m.translucent ?: continue
-                drawVbo(vbo)
-            }
-        }
-
+    private fun disableBlockModelClientState() {
         // Disable client states.
         OpenGlHelper.setClientActiveTexture(OpenGlHelper.lightmapTexUnit)
         GL11.glDisableClientState(GL11.GL_TEXTURE_COORD_ARRAY)
@@ -603,13 +852,6 @@ internal class StructurePreview3DWidget(
 
         GL11.glDisableClientState(GL11.GL_VERTEX_ARRAY)
         GL11.glDisableClientState(GL11.GL_COLOR_ARRAY)
-
-        GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL)
-        GlStateManager.depthMask(true)
-        GlStateManager.disableBlend()
-        GlStateManager.disableAlpha()
-        GlStateManager.enableCull()
-        GlStateManager.popMatrix()
     }
 
     private fun buildSomeBlockModelMeshesPerFrame() {
@@ -634,36 +876,15 @@ internal class StructurePreview3DWidget(
             val (ck, entries) = blockModelGroups[blockModelBuildCursor]
             blockModelBuildCursor++
 
-            // Compute bounds in structure-local space.
-            var minX = Int.MAX_VALUE
-            var minY = Int.MAX_VALUE
-            var minZ = Int.MAX_VALUE
-            var maxX = Int.MIN_VALUE
-            var maxY = Int.MIN_VALUE
-            var maxZ = Int.MIN_VALUE
-            for (e in entries) {
-                if (e.relX < minX) minX = e.relX
-                if (e.relY < minY) minY = e.relY
-                if (e.relZ < minZ) minZ = e.relZ
-                if (e.relX > maxX) maxX = e.relX
-                if (e.relY > maxY) maxY = e.relY
-                if (e.relZ > maxZ) maxZ = e.relZ
-            }
-
-            val centerX = (minX.toDouble() + (maxX + 1).toDouble()) * 0.5
-            val centerY = (minY.toDouble() + (maxY + 1).toDouble()) * 0.5
-            val centerZ = (minZ.toDouble() + (maxZ + 1).toDouble()) * 0.5
-
-            val rx = (maxX + 1 - minX) * 0.5
-            val ry = (maxY + 1 - minY) * 0.5
-            val rz = (maxZ + 1 - minZ) * 0.5
-            val radiusSq = rx * rx + ry * ry + rz * rz
+            val bounds = computeAabb(entries)
 
             // Build one VBO per render layer.
             val layerBuffers = EnumMap<BlockRenderLayer, BufferBuilder>(BlockRenderLayer::class.java)
             fun bufferFor(layer: BlockRenderLayer): BufferBuilder {
                 return layerBuffers.getOrPut(layer) {
-                    BufferBuilder(1 shl 19).also { it.begin(GL11.GL_QUADS, DefaultVertexFormats.BLOCK) }
+                    BufferBuilderPool.borrow(1 shl 19, tag = "StructurePreview3D.blockModel.$layer").also {
+                        it.begin(GL11.GL_QUADS, DefaultVertexFormats.BLOCK)
+                    }
                 }
             }
 
@@ -691,31 +912,18 @@ internal class StructurePreview3DWidget(
                 ForgeHooksClient.setRenderLayer(null)
             }
 
-            fun uploadLayer(layer: BlockRenderLayer): VertexBuffer? {
-                val buf = layerBuffers[layer] ?: return null
-                if (buf.vertexCount <= 0) {
-                    buf.reset()
-                    return null
-                }
-                buf.finishDrawing()
-                val vbo = VertexBuffer(DefaultVertexFormats.BLOCK)
-                vbo.bufferData(buf.byteBuffer)
-                buf.reset()
-                return vbo
-            }
-
-            val solid = uploadLayer(BlockRenderLayer.SOLID)
-            val cutoutMipped = uploadLayer(BlockRenderLayer.CUTOUT_MIPPED)
-            val cutout = uploadLayer(BlockRenderLayer.CUTOUT)
-            val translucent = uploadLayer(BlockRenderLayer.TRANSLUCENT)
+            val solid = uploadBuiltLayer(layerBuffers, BlockRenderLayer.SOLID)
+            val cutoutMipped = uploadBuiltLayer(layerBuffers, BlockRenderLayer.CUTOUT_MIPPED)
+            val cutout = uploadBuiltLayer(layerBuffers, BlockRenderLayer.CUTOUT)
+            val translucent = uploadBuiltLayer(layerBuffers, BlockRenderLayer.TRANSLUCENT)
 
             builtBlockModelMeshes.add(
                 BlockModelChunkMesh(
                     key = ck,
-                    centerX = centerX,
-                    centerY = centerY,
-                    centerZ = centerZ,
-                    radiusSq = radiusSq,
+                    centerX = bounds.centerX,
+                    centerY = bounds.centerY,
+                    centerZ = bounds.centerZ,
+                    radiusSq = bounds.radiusSq,
                     solid = solid,
                     cutoutMipped = cutoutMipped,
                     cutout = cutout,
@@ -726,6 +934,40 @@ internal class StructurePreview3DWidget(
 
             built++
         }
+    }
+
+    private fun computeAabb(entries: List<BlockEntry>): IntAabb {
+        var minX = Int.MAX_VALUE
+        var minY = Int.MAX_VALUE
+        var minZ = Int.MAX_VALUE
+        var maxX = Int.MIN_VALUE
+        var maxY = Int.MIN_VALUE
+        var maxZ = Int.MIN_VALUE
+        for (e in entries) {
+            if (e.relX < minX) minX = e.relX
+            if (e.relY < minY) minY = e.relY
+            if (e.relZ < minZ) minZ = e.relZ
+            if (e.relX > maxX) maxX = e.relX
+            if (e.relY > maxY) maxY = e.relY
+            if (e.relZ > maxZ) maxZ = e.relZ
+        }
+        return IntAabb(minX, minY, minZ, maxX, maxY, maxZ)
+    }
+
+    private fun uploadBuiltLayer(
+        layerBuffers: Map<BlockRenderLayer, BufferBuilder>,
+        layer: BlockRenderLayer
+    ): VertexBuffer? {
+        val buf = layerBuffers[layer] ?: return null
+        if (buf.vertexCount <= 0) {
+            BufferBuilderPool.recycle(buf)
+            return null
+        }
+        buf.finishDrawing()
+        val vbo = VertexBuffer(DefaultVertexFormats.BLOCK)
+        vbo.bufferData(buf.byteBuffer)
+        BufferBuilderPool.recycle(buf)
+        return vbo
     }
 
     private fun emitBakedQuads(
@@ -923,6 +1165,8 @@ internal class StructurePreview3DWidget(
     private fun drawCubes(context: ModularGuiContext) {
         val statuses = statusProvider?.invoke() ?: emptyMap()
 
+        val selected = selectedPositionsProvider?.invoke()
+
         val issuesOnly = issuesOnlyProvider?.invoke() == true
         val sliceMode = sliceModeProvider?.invoke() == true
         val sizeY = (maxB.y - min.y + 1).coerceAtLeast(1)
@@ -936,8 +1180,20 @@ internal class StructurePreview3DWidget(
             if (sliceMode && c.y != sliceY) continue
             val rel = BlockPos(c.x + min.x, c.y + min.y, c.z + min.z)
             val status = statuses[rel]
-            if (issuesOnly && status == StructurePreviewEntryStatus.MATCH) continue
-            val rgba = colorFor(status, c.keyHash)
+
+            val isSelected = selected?.contains(rel) == true
+
+            // If user is focusing a selection, don't hide selected blocks even in issues-only mode.
+            if (!isSelected && issuesOnly && status == StructurePreviewEntryStatus.MATCH) continue
+
+            var rgba = if (isSelected) 0xFF2E6BFF.toInt() else colorFor(status, c.keyHash)
+
+            // When a selection exists, de-emphasize non-selected cubes.
+            if (selected != null && !isSelected) {
+                val dimA = 0x55
+                rgba = (dimA shl 24) or (rgba and 0x00FFFFFF)
+            }
+
             val r = (rgba shr 16) and 0xFF
             val g = (rgba shr 8) and 0xFF
             val bl = (rgba) and 0xFF

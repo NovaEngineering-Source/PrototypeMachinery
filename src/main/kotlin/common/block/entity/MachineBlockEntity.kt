@@ -253,6 +253,9 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
             } else {
                 PrototypeMachinery.logger.warnWithBlockEntity("MachineBlockEntity invalidated but machine instance is not initialized.", this)
             }
+        } else {
+            // Client side: clear render task caches for this TE to avoid memory leaks.
+            github.kasuminova.prototypemachinery.client.impl.render.task.RenderTaskCache.removeByTe(this)
         }
     }
 

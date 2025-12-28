@@ -1,5 +1,6 @@
 {
   "id": "example_parent_with_child",
+  "name": "Parent With Child",
   "type": "template",
   "offset": {
     "x": 0,

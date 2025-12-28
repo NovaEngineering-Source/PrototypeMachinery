@@ -11,8 +11,15 @@ public data class RenderKey(
     val modelId: ResourceLocation,
     val textureId: ResourceLocation,
     val variant: Int = 0,
-    /** Hash of animation state sampled at tick-rate (not per-frame). */
+    /** Hash of animation state sampled at tick-rate (legacy / low-cost mode). */
     val animationStateHash: Int = 0,
+    /**
+     * Quantized animation time key sampled at render-frame rate.
+     *
+     * When non-zero, backends may prefer this over [animationStateHash] to drive smoother animations.
+     * The key itself is quantized; see pm.render.anim.stepTicks.
+     */
+    val animationTimeKey: Int = 0,
     /** Version stamp that invalidates cached decrypted assets. */
     val secureVersion: Long = 0L,
     /** Bit flags for backend-specific toggles (e.g. renderStaticOnly). */

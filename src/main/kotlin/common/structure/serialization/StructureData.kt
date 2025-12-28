@@ -22,7 +22,17 @@ public data class StructurePatternElementData(
     val pos: BlockPosData,
     val blockId: String,           // e.g., "minecraft:stone"
     val meta: Int = 0,
-    val nbt: Map<String, String>? = null  // Simplified NBT as string map
+    val nbt: Map<String, String>? = null,  // Simplified NBT as string map
+    /** Optional alternatives for this position. When present, build/preview may choose any one. */
+    val alternatives: List<StructurePatternAlternativeData> = emptyList()
+)
+
+/** A single alternative option for [StructurePatternElementData]. */
+@Serializable
+public data class StructurePatternAlternativeData(
+    val blockId: String,
+    val meta: Int = 0,
+    val nbt: Map<String, String>? = null
 )
 
 /**
@@ -32,6 +42,8 @@ public data class StructurePatternElementData(
 @Serializable
 public data class StructureData(
     val id: String,
+    /** Optional human-friendly name for UI display. If omitted, UIs should fall back to [id]. */
+    val name: String? = null,
     val type: String,              // e.g., "template", "slice"
     val offset: BlockPosData = BlockPosData(0, 0, 0),
     val hideWorldBlocks: Boolean = false,

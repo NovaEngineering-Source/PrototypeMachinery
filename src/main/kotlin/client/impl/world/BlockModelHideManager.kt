@@ -19,13 +19,16 @@ import net.minecraftforge.fml.common.gameevent.TickEvent
 /**
  * Client-side integration for hiding world block models when a structure is formed.
  *
- * Backed by the `component-model-hider` / `multiblocked` saved-data API (same class name in both),
- * invoked via reflection to keep this optional.
+ * Client-side integration for hiding world block models when a structure is formed.
+ *
+ * Backed by the `component-model-hider` / `multiblocked` saved-data API.
+ *
+ * 说明：这里使用“直接引用类”的方式调用 API（无反射）。
  */
 internal object BlockModelHideManager {
 
-    private const val MODID_COMPONENT_MODEL_HIDER = "component_model_hider"
-    private const val MODID_MULTIBLOCKED = "multiblocked"
+     private const val MODID_COMPONENT_MODEL_HIDER = "component_model_hider"
+     private const val MODID_MULTIBLOCKED = "multiblocked"
 
     /**
      * How often we scan loaded controllers (ticks).
@@ -233,20 +236,11 @@ internal object BlockModelHideManager {
     }
 
     private fun isHiderAvailable(): Boolean {
-        // Both mods expose the same API class name in MMCE integration.
-        if (Loader.isModLoaded(MODID_COMPONENT_MODEL_HIDER) || Loader.isModLoaded(MODID_MULTIBLOCKED)) {
-            return ComponentModelHiderBridge.isAvailable
-        }
-        return false
+        // Only attempt to call into the API when the providing mod is loaded.
+        return Loader.isModLoaded(MODID_COMPONENT_MODEL_HIDER) || Loader.isModLoaded(MODID_MULTIBLOCKED)
     }
 
     private object ComponentModelHiderBridge {
-        private const val CLASS_NAME = "com.cleanroommc.multiblocked.persistence.MultiblockWorldSavedData"
-
-        val isAvailable: Boolean by lazy {
-            runCatching { Class.forName(CLASS_NAME) }.isSuccess
-        }
-
         fun addDisableModel(controllerPos: BlockPos, positions: List<BlockPos>): Boolean {
             return runCatching {
                 MultiblockWorldSavedData.addDisableModel(controllerPos, positions)
@@ -266,7 +260,8 @@ internal object BlockModelHideManager {
 
         fun clearDisabled() {
             runCatching {
-                MultiblockWorldSavedData.clearDisabled() // TODO May effect other mods data.
+                // Note: global state. This may affect other mods using the same API.
+                MultiblockWorldSavedData.clearDisabled()
             }.onFailure {
                 PrototypeMachinery.logger.warn("Failed to call component-model-hider clearDisabled.", it)
             }

@@ -1,5 +1,6 @@
 {
   "id": "example_complex_machine",
+  "name": "Complex Machine",
   "type": "template",
   "offset": {
     "x": -1,

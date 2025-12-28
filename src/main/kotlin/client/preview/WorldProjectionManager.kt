@@ -4,6 +4,7 @@ import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.StructurePreviewModel
+import github.kasuminova.prototypemachinery.client.util.BufferBuilderPool
 import github.kasuminova.prototypemachinery.impl.machine.structure.preview.StructurePreviewBuilder
 import net.minecraft.block.Block
 import net.minecraft.block.properties.IProperty
@@ -624,7 +625,9 @@ internal object WorldProjectionManager {
             val layerBuffers = EnumMap<BlockRenderLayer, BufferBuilder>(BlockRenderLayer::class.java)
             fun bufferFor(layer: BlockRenderLayer): BufferBuilder {
                 return layerBuffers.getOrPut(layer) {
-                    BufferBuilder(1 shl 19).also { it.begin(GL11.GL_QUADS, DefaultVertexFormats.BLOCK) }
+                    BufferBuilderPool.borrow(1 shl 19, tag = "WorldProjection.blockModel.$layer").also {
+                        it.begin(GL11.GL_QUADS, DefaultVertexFormats.BLOCK)
+                    }
                 }
             }
 
@@ -657,14 +660,14 @@ internal object WorldProjectionManager {
             fun uploadLayer(layer: BlockRenderLayer): VertexBuffer? {
                 val buf = layerBuffers[layer] ?: return null
                 if (buf.vertexCount <= 0) {
-                    buf.reset()
+                    BufferBuilderPool.recycle(buf)
                     return null
                 }
                 buf.finishDrawing()
                 multiplyVertexAlpha(buf, overlayAlphaMul)
                 val vbo = VertexBuffer(DefaultVertexFormats.BLOCK)
                 vbo.bufferData(buf.byteBuffer)
-                buf.reset()
+                BufferBuilderPool.recycle(buf)
                 return vbo
             }
 
@@ -1016,7 +1019,7 @@ internal object WorldProjectionManager {
             val radiusSq = rx * rx + ry * ry + rz * rz
 
             // Build VBO geometry.
-            val buf = BufferBuilder(1 shl 18)
+            val buf = BufferBuilderPool.borrow(1 shl 18, tag = "WorldProjection.ghostChunk")
             buf.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR)
             for (e in entries) {
                 val base = when (e.requirement) {
@@ -1033,7 +1036,7 @@ internal object WorldProjectionManager {
 
             val vbo = VertexBuffer(DefaultVertexFormats.POSITION_COLOR)
             vbo.bufferData(buf.byteBuffer)
-            buf.reset()
+            BufferBuilderPool.recycle(buf)
 
             meshes.add(
                 ChunkMesh(

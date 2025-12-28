@@ -1,11 +1,17 @@
 package github.kasuminova.prototypemachinery.client.impl.render.binding
 
+import github.kasuminova.prototypemachinery.api.machine.component.type.GeckoModelStateComponent
+import github.kasuminova.prototypemachinery.api.machine.component.type.GeckoModelStateComponentType
+import github.kasuminova.prototypemachinery.api.machine.component.type.ZSDataComponent
+import github.kasuminova.prototypemachinery.api.machine.component.type.ZSDataComponentType
 import github.kasuminova.prototypemachinery.client.api.render.RenderKey
 import github.kasuminova.prototypemachinery.client.api.render.Renderable
 import github.kasuminova.prototypemachinery.client.api.render.binding.GeckoModelBinding
 import github.kasuminova.prototypemachinery.client.api.render.binding.GeckoStructureBinding
 import github.kasuminova.prototypemachinery.client.api.render.binding.SliceRenderMode
 import github.kasuminova.prototypemachinery.client.impl.render.MachineRenderDispatcher
+import github.kasuminova.prototypemachinery.client.impl.render.RenderFrameClock
+import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelBaker
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelRenderBuildTask
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoRenderSnapshot
 import github.kasuminova.prototypemachinery.client.impl.render.task.BuiltBuffers
@@ -120,8 +126,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                 // The dispatcher will render all machines' opaque content first, then all transparent.
                 for (anchor in anchors) {
                     val binding = structureBindings[anchor.structure.id] ?: continue
-                    collectStructureBound(te, binding, anchor, resourcesRoot)?.let { data ->
-                        MachineRenderDispatcher.submit(data.toPendingRenderData())
+                    val list = collectStructureBound(te, binding, anchor, resourcesRoot)
+                    if (list.isNotEmpty()) {
+                        MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData() })
                     }
                 }
                 return
@@ -134,8 +141,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         // 1) machine-type binding
         val machineBinding = ClientRenderBindingRegistryImpl.getMachineBinding(te.machine.type.id)
         if (machineBinding != null) {
-            collectLegacy(te, machineBinding, resourcesRoot, bindingKey = te.machine.type.id)?.let { data ->
-                MachineRenderDispatcher.submit(data.toPendingRenderData())
+            val list = collectLegacy(te, machineBinding, resourcesRoot, bindingKey = te.machine.type.id)
+            if (list.isNotEmpty()) {
+                MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData() })
             }
         }
 
@@ -143,8 +151,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         if (componentBindings.isNotEmpty()) {
             for ((componentTypeId, binding) in componentBindings) {
                 if (!te.machine.componentMap.containsComponentTypeId(componentTypeId)) continue
-                collectLegacy(te, binding, resourcesRoot, bindingKey = componentTypeId)?.let { data ->
-                    MachineRenderDispatcher.submit(data.toPendingRenderData())
+                val list = collectLegacy(te, binding, resourcesRoot, bindingKey = componentTypeId)
+                if (list.isNotEmpty()) {
+                    MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData() })
                 }
             }
         }
@@ -172,63 +181,169 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         binding: GeckoModelBinding,
         resourcesRoot: java.nio.file.Path,
         bindingKey: ResourceLocation,
-    ): CollectedRenderData? {
+    ): List<CollectedRenderData> {
         val state = te.world.getBlockState(te.pos)
         val front = runCatching { state.getValue(MachineBlock.FACING) }.getOrDefault(EnumFacing.NORTH)
         val top = te.getTopFacing(front)
 
-        val ownerKey = RenderOwnerKey(te, bindingKey)
+        val geckoState = te.machine.componentMap[GeckoModelStateComponentType] as? GeckoModelStateComponent
+        val animationNames = resolveAnimationNames(te, binding, geckoState)
 
-        val renderKey = RenderKey(
+        val animTick = binding.animation?.let {
+            // Use tick-rate sampling for caching (avoid per-frame churn).
+            (te.world.totalWorldTime % Int.MAX_VALUE).toInt()
+        } ?: 0
+
+        // Optional render-synced time key for smoother animation.
+        // Uses a per-frame snapshot to avoid pass-to-pass time skew.
+        val animTimeKey = if (binding.animation != null) RenderFrameClock.currentAnimationTimeKey() else 0
+
+        val variantBase = run {
+            var v = bindingKey.hashCode()
+            v = 31 * v + (binding.animation?.hashCode() ?: 0)
+            v
+        }
+
+        val variantForAnim = run {
+            var v = variantBase
+            v = 31 * v + animationNames.joinToString("\u0000").hashCode()
+            v = 31 * v + (geckoState?.stateVersion ?: 0)
+            v
+        }
+
+        fun baseKey(animationStateHash: Int, animationTimeKey: Int, variant: Int): RenderKey = RenderKey(
             modelId = binding.geo,
             textureId = binding.texture,
-            variant = bindingKey.hashCode(),
-            animationStateHash = 0,
+            variant = variant,
+            animationStateHash = animationStateHash,
+            animationTimeKey = animationTimeKey,
             secureVersion = 0,
             flags = 0,
             orientationHash = front.ordinal * 24 + top.ordinal * 4 + te.twist,
         )
 
-        val renderable = object : Renderable {
-            override val ownerKey: Any = ownerKey
-            override val renderKey: RenderKey = renderKey
-            override val x: Double = te.pos.x.toDouble()
-            override val y: Double = te.pos.y.toDouble()
-            override val z: Double = te.pos.z.toDouble()
-            override val facing = front
-            override val combinedLight: Int = te.world.getCombinedLight(te.pos, 0)
+        fun baseRenderable(ownerKey: Any, renderKey: RenderKey): Renderable {
+            return object : Renderable {
+                override val ownerKey: Any = ownerKey
+                override val renderKey: RenderKey = renderKey
+                override val x: Double = te.pos.x.toDouble()
+                override val y: Double = te.pos.y.toDouble()
+                override val z: Double = te.pos.z.toDouble()
+                override val facing = front
+                override val combinedLight: Int = te.world.getCombinedLight(te.pos, 0)
+            }
         }
 
-        val snapshot = GeckoRenderSnapshot(
-            ownerKey = ownerKey,
-            renderKey = renderKey,
-            pass = binding.pass,
-            geoLocation = binding.geo,
-            textureLocation = binding.texture,
-            x = renderable.x,
-            y = renderable.y,
-            z = renderable.z,
-            modelOffsetX = binding.modelOffsetX,
-            modelOffsetY = binding.modelOffsetY,
-            modelOffsetZ = binding.modelOffsetZ,
-            front = front,
-            top = top,
-            resourcesRoot = resourcesRoot,
-            yOffset = binding.yOffset,
-        )
-
-        val task = RenderTaskCache.getOrSubmit(renderable) {
-            GeckoModelRenderBuildTask(snapshot)
+        fun baseSnapshot(ownerKey: Any, renderKey: RenderKey, bakeMode: GeckoModelBaker.BakeMode): GeckoRenderSnapshot {
+            return GeckoRenderSnapshot(
+                ownerKey = ownerKey,
+                renderKey = renderKey,
+                pass = binding.pass,
+                geoLocation = binding.geo,
+                textureLocation = binding.texture,
+                animationLocation = binding.animation,
+                animationNames = animationNames,
+                bakeMode = bakeMode,
+                x = te.pos.x.toDouble(),
+                y = te.pos.y.toDouble(),
+                z = te.pos.z.toDouble(),
+                modelOffsetX = binding.modelOffsetX,
+                modelOffsetY = binding.modelOffsetY,
+                modelOffsetZ = binding.modelOffsetZ,
+                front = front,
+                top = top,
+                resourcesRoot = resourcesRoot,
+                yOffset = binding.yOffset,
+            )
         }
 
-        val built = task.takeBuilt() ?: return null
-        if (built.isEmpty()) return null
+        val out = ArrayList<CollectedRenderData>(2)
 
-        return CollectedRenderData(
-            texture = renderable.renderKey.textureId,
-            combinedLight = renderable.combinedLight,
-            built = built,
-        )
+        if (binding.animation == null) {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.ALL)
+            val rk = baseKey(animationStateHash = animTick, animationTimeKey = 0, variant = variantBase)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ALL)
+
+            val task = RenderTaskCache.getOrSubmit(renderable) { GeckoModelRenderBuildTask(snapshot) }
+            val built = task.takeBuilt()
+            if (built == null) {
+                // Task still building, skip this frame but don't abort.
+                return emptyList()
+            }
+            if (!built.isEmpty()) {
+                out.add(
+                    CollectedRenderData(
+                        texture = rk.textureId,
+                        combinedLight = renderable.combinedLight,
+                        built = built,
+                    )
+                )
+            }
+            return out
+        }
+
+        // Permanent static task: cache across animation switches.
+        run {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.PERMANENT_STATIC)
+            val rk = baseKey(animationStateHash = 0, animationTimeKey = 0, variant = variantBase)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.PERMANENT_STATIC_ONLY)
+
+            val task = RenderTaskCache.getOrSubmit(renderable) { GeckoModelRenderBuildTask(snapshot) }
+            val built = task.takeBuilt() ?: return@run
+            if (!built.isEmpty()) {
+                out.add(
+                    CollectedRenderData(
+                        texture = rk.textureId,
+                        combinedLight = renderable.combinedLight,
+                        built = built,
+                    )
+                )
+            }
+        }
+
+        // Temporary static task: cache until animation selection changes.
+        run {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.TEMP_STATIC)
+            val rk = baseKey(animationStateHash = 0, animationTimeKey = 0, variant = variantForAnim)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.TEMP_STATIC_ONLY)
+
+            val task = RenderTaskCache.getOrSubmit(renderable) { GeckoModelRenderBuildTask(snapshot) }
+            val built = task.takeBuilt() ?: return@run
+            if (!built.isEmpty()) {
+                out.add(
+                    CollectedRenderData(
+                        texture = rk.textureId,
+                        combinedLight = renderable.combinedLight,
+                        built = built,
+                    )
+                )
+            }
+        }
+
+        // Dynamic task: rebuild at tick-rate.
+        run {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.DYNAMIC)
+            val rk = baseKey(animationStateHash = animTick, animationTimeKey = animTimeKey, variant = variantForAnim)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ANIMATED_ONLY)
+
+            val task = RenderTaskCache.getOrSubmit(renderable) { GeckoModelRenderBuildTask(snapshot) }
+            val built = task.takeBuilt() ?: return@run
+            if (!built.isEmpty()) {
+                out.add(
+                    CollectedRenderData(
+                        texture = rk.textureId,
+                        combinedLight = renderable.combinedLight,
+                        built = built,
+                    )
+                )
+            }
+        }
+
+        return out
     }
 
     private fun collectStructureBound(
@@ -236,7 +351,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         binding: GeckoStructureBinding,
         anchor: ClientStructureRenderAnchors.Anchor,
         resourcesRoot: java.nio.file.Path,
-    ): CollectedRenderData? {
+    ): List<CollectedRenderData> {
         val model = binding.model
 
         val state = te.world.getBlockState(te.pos)
@@ -249,27 +364,53 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
             sliceIndex = anchor.sliceIndex,
         )
 
-        val ownerKey = RenderOwnerKey(te, bindingKey)
+        val geckoState = te.machine.componentMap[GeckoModelStateComponentType] as? GeckoModelStateComponent
+        val animationNames = resolveAnimationNames(te, model, geckoState)
 
-        val renderKey = RenderKey(
+        val animTick = model.animation?.let {
+            (te.world.totalWorldTime % Int.MAX_VALUE).toInt()
+        } ?: 0
+
+        val animTimeKey = if (model.animation != null) RenderFrameClock.currentAnimationTimeKey() else 0
+
+        val variantBase = run {
+            var v = bindingKey.hashCode()
+            v = 31 * v + (model.animation?.hashCode() ?: 0)
+            v
+        }
+
+        val variantForAnim = run {
+            var v = variantBase
+            v = 31 * v + animationNames.joinToString("\u0000").hashCode()
+            v = 31 * v + (geckoState?.stateVersion ?: 0)
+            v
+        }
+
+        fun baseKey(animationStateHash: Int, animationTimeKey: Int, variant: Int): RenderKey = RenderKey(
             modelId = model.geo,
             textureId = model.texture,
-            variant = bindingKey.hashCode(),
-            animationStateHash = 0,
+            variant = variant,
+            animationStateHash = animationStateHash,
+            animationTimeKey = animationTimeKey,
             secureVersion = 0,
             flags = 0,
             orientationHash = front.ordinal * 24 + top.ordinal * 4 + te.twist,
         )
 
-        val renderable = object : Renderable {
-            override val ownerKey: Any = ownerKey
-            override val renderKey: RenderKey = renderKey
-            // Keep renderable positioned at the controller for stable semantics; actual placement uses snapshot.modelOffset.
-            override val x: Double = te.pos.x.toDouble()
-            override val y: Double = te.pos.y.toDouble()
-            override val z: Double = te.pos.z.toDouble()
-            override val facing = front
-            override val combinedLight: Int = te.world.getCombinedLight(anchor.worldOrigin, te.world.getLight(te.pos))
+        fun baseRenderable(ownerKey: Any, renderKey: RenderKey): Renderable {
+            return object : Renderable {
+                override val ownerKey: Any = ownerKey
+                override val renderKey: RenderKey = renderKey
+                // Keep renderable positioned at the controller for stable semantics; actual placement uses snapshot.modelOffset.
+                override val x: Double = te.pos.x.toDouble()
+                override val y: Double = te.pos.y.toDouble()
+                override val z: Double = te.pos.z.toDouble()
+                override val facing = front
+                // MMCE uses getCombinedLight(controllerPos, 0). Using anchor.worldOrigin can land in an unlit interior block
+                // (e.g. air inside structure), making the whole buffer sample as black.
+                // We intentionally sample lighting at the controller position for stable, MMCE-consistent results.
+                override val combinedLight: Int = te.world.getCombinedLight(te.pos, 0)
+            }
         }
 
         val deltaX = (anchor.worldOrigin.x - te.pos.x).toDouble()
@@ -311,43 +452,172 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
             inverseRotation
         )
 
-        val snapshot = GeckoRenderSnapshot(
-            ownerKey = ownerKey,
-            renderKey = renderKey,
-            pass = model.pass,
-            geoLocation = model.geo,
-            textureLocation = model.texture,
-            x = renderable.x,
-            y = renderable.y,
-            z = renderable.z,
-            // Structure anchor delta + user modelOffset, both expressed in base/local structure coordinates.
-            // They will be rotated by (front/top) in GeckoModelRenderBuildTask.
-            modelOffsetX = localDelta.x.toDouble() + model.modelOffsetX,
-            modelOffsetY = localDelta.y.toDouble() + model.modelOffsetY,
-            modelOffsetZ = localDelta.z.toDouble() + model.modelOffsetZ,
-            front = front,
-            top = top,
-            resourcesRoot = resourcesRoot,
-            yOffset = model.yOffset,
-        )
 
-        val task = RenderTaskCache.getOrSubmit(renderable) {
-            GeckoModelRenderBuildTask(snapshot)
+        fun baseSnapshot(ownerKey: Any, renderKey: RenderKey, bakeMode: GeckoModelBaker.BakeMode): GeckoRenderSnapshot {
+            return GeckoRenderSnapshot(
+                ownerKey = ownerKey,
+                renderKey = renderKey,
+                pass = model.pass,
+                geoLocation = model.geo,
+                textureLocation = model.texture,
+                animationLocation = model.animation,
+                animationNames = animationNames,
+                bakeMode = bakeMode,
+                x = te.pos.x.toDouble(),
+                y = te.pos.y.toDouble(),
+                z = te.pos.z.toDouble(),
+                // Structure anchor delta + user modelOffset, both expressed in base/local structure coordinates.
+                // They will be rotated by (front/top) in GeckoModelRenderBuildTask.
+                modelOffsetX = localDelta.x.toDouble() + model.modelOffsetX,
+                modelOffsetY = localDelta.y.toDouble() + model.modelOffsetY,
+                modelOffsetZ = localDelta.z.toDouble() + model.modelOffsetZ,
+                front = front,
+                top = top,
+                resourcesRoot = resourcesRoot,
+                yOffset = model.yOffset,
+            )
         }
 
-        val built = task.takeBuilt() ?: return null
-        if (built.isEmpty()) return null
+        val out = ArrayList<CollectedRenderData>(2)
 
-        return CollectedRenderData(
-            texture = renderable.renderKey.textureId,
-            combinedLight = renderable.combinedLight,
-            built = built,
-        )
+        if (model.animation == null) {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.ALL)
+            val rk = baseKey(animationStateHash = animTick, animationTimeKey = 0, variant = variantBase)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ALL)
+
+            val task = RenderTaskCache.getOrSubmit(renderable) { GeckoModelRenderBuildTask(snapshot) }
+            val built = task.takeBuilt() ?: return emptyList()
+            if (!built.isEmpty()) {
+                out.add(
+                    CollectedRenderData(
+                        texture = rk.textureId,
+                        combinedLight = renderable.combinedLight,
+                        built = built,
+                    )
+                )
+            }
+            return out
+        }
+
+        run {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.PERMANENT_STATIC)
+            val rk = baseKey(animationStateHash = 0, animationTimeKey = 0, variant = variantBase)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.PERMANENT_STATIC_ONLY)
+
+            val task = RenderTaskCache.getOrSubmit(renderable) { GeckoModelRenderBuildTask(snapshot) }
+            val built = task.takeBuilt() ?: return@run
+            if (!built.isEmpty()) {
+                out.add(
+                    CollectedRenderData(
+                        texture = rk.textureId,
+                        combinedLight = renderable.combinedLight,
+                        built = built,
+                    )
+                )
+            }
+        }
+
+        run {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.TEMP_STATIC)
+            val rk = baseKey(animationStateHash = 0, animationTimeKey = 0, variant = variantForAnim)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.TEMP_STATIC_ONLY)
+
+            val task = RenderTaskCache.getOrSubmit(renderable) { GeckoModelRenderBuildTask(snapshot) }
+            val built = task.takeBuilt() ?: return@run
+            if (!built.isEmpty()) {
+                out.add(
+                    CollectedRenderData(
+                        texture = rk.textureId,
+                        combinedLight = renderable.combinedLight,
+                        built = built,
+                    )
+                )
+            }
+        }
+
+        run {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.DYNAMIC)
+            val rk = baseKey(animationStateHash = animTick, animationTimeKey = animTimeKey, variant = variantForAnim)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ANIMATED_ONLY)
+
+            val task = RenderTaskCache.getOrSubmit(renderable) { GeckoModelRenderBuildTask(snapshot) }
+            val built = task.takeBuilt() ?: return@run
+            if (!built.isEmpty()) {
+                out.add(
+                    CollectedRenderData(
+                        texture = rk.textureId,
+                        combinedLight = renderable.combinedLight,
+                        built = built,
+                    )
+                )
+            }
+        }
+
+        return out
+    }
+
+    private fun resolveAnimationNames(
+        te: MachineBlockEntity,
+        binding: GeckoModelBinding,
+        geckoState: GeckoModelStateComponent?,
+    ): List<String> {
+        // No animation file -> no names.
+        if (binding.animation == null) return emptyList()
+
+        // Dedicated typed state component has highest priority.
+        // 专用模型状态组件优先级最高。
+        if (geckoState != null) {
+            val fromComp = geckoState.animationLayers
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+            if (fromComp.isNotEmpty()) return fromComp
+        }
+
+        val zsData = (te.machine.componentMap[ZSDataComponentType] as? ZSDataComponent)?.data
+
+        binding.animationLayersStateKey?.let { key ->
+            val raw = zsData?.getString(key, "")?.trim().orEmpty()
+            if (raw.isNotEmpty()) {
+                val parsed = splitCommaList(raw)
+                if (parsed.isNotEmpty()) return parsed
+            }
+        }
+
+        binding.animationStateKey?.let { key ->
+            val raw = zsData?.getString(key, "")?.trim().orEmpty()
+            if (raw.isNotEmpty()) return listOf(raw)
+        }
+
+        if (binding.animationLayers.isNotEmpty()) {
+            return binding.animationLayers
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+        }
+
+        return listOfNotNull(binding.defaultAnimationName?.trim()?.takeIf { it.isNotEmpty() })
+    }
+
+    private fun splitCommaList(raw: String): List<String> {
+        return raw.split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
+
+    private enum class RenderPart {
+        ALL,
+        PERMANENT_STATIC,
+        TEMP_STATIC,
+        DYNAMIC,
     }
 
     private data class RenderOwnerKey(
         private val te: MachineBlockEntity,
         private val bindingKey: Any,
+        private val part: RenderPart,
     )
 
     private data class StructureBindingKey(

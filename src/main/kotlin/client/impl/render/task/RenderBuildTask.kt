@@ -32,6 +32,7 @@ internal abstract class RenderBuildTask(
     internal fun takeBuilt(): BuiltBuffers? = built
 
     internal fun clearBuilt() {
+        built?.disposeToPool()
         built = null
         builtForKey = null
         lastError = null
@@ -44,6 +45,7 @@ internal abstract class RenderBuildTask(
             builtForKey = key
             built = result
         } catch (t: Throwable) {
+            t.printStackTrace()
             lastError = t
             built = null
             builtForKey = null

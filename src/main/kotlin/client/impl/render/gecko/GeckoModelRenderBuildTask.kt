@@ -2,11 +2,16 @@ package github.kasuminova.prototypemachinery.client.impl.render.gecko
 
 import github.kasuminova.prototypemachinery.client.api.render.RenderKey
 import github.kasuminova.prototypemachinery.client.api.render.RenderPass
+import github.kasuminova.prototypemachinery.client.impl.render.RenderFrameClock
+import github.kasuminova.prototypemachinery.client.impl.render.assets.CachingAssetResolver
+import github.kasuminova.prototypemachinery.client.impl.render.assets.ExternalDiskTextureBinder
 import github.kasuminova.prototypemachinery.client.impl.render.assets.MinecraftAssetResolver
 import github.kasuminova.prototypemachinery.client.impl.render.assets.MountedDirectoryAssetResolver
 import github.kasuminova.prototypemachinery.client.impl.render.assets.ResolverBackedResourceManager
 import github.kasuminova.prototypemachinery.client.impl.render.task.BuiltBuffers
 import github.kasuminova.prototypemachinery.client.impl.render.task.RenderBuildTask
+import github.kasuminova.prototypemachinery.client.util.BufferBuilderPool
+import github.kasuminova.prototypemachinery.client.util.MmceMatrixStack
 import github.kasuminova.prototypemachinery.common.util.OrientationMath
 import net.minecraft.client.renderer.BufferBuilder
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats
@@ -14,7 +19,6 @@ import net.minecraft.util.EnumFacing
 import net.minecraft.util.ResourceLocation
 import org.lwjgl.opengl.GL11
 import software.bernie.geckolib3.file.GeoModelLoader
-import software.bernie.geckolib3.util.MatrixStack
 import java.nio.file.Path
 
 internal data class GeckoRenderSnapshot(
@@ -24,6 +28,11 @@ internal data class GeckoRenderSnapshot(
 
     internal val geoLocation: ResourceLocation,
     internal val textureLocation: ResourceLocation,
+
+    internal val animationLocation: ResourceLocation?,
+    internal val animationNames: List<String> = emptyList(),
+
+    internal val bakeMode: GeckoModelBaker.BakeMode = GeckoModelBaker.BakeMode.ALL,
 
     internal val x: Double,
     internal val y: Double,
@@ -53,8 +62,6 @@ internal data class GeckoRenderSnapshot(
 
 /**
  * Background task that bakes a GeckoLib geo model into a BufferBuilder.
- *
- * MVP: static pose only (no animation evaluation yet).
  */
 internal class GeckoModelRenderBuildTask(
     private val snapshot: GeckoRenderSnapshot,
@@ -63,14 +70,46 @@ internal class GeckoModelRenderBuildTask(
     override fun currentKey(): RenderKey = snapshot.renderKey
 
     override fun build(key: RenderKey): BuiltBuffers {
-        val resolver = MountedDirectoryAssetResolver(
-            delegate = MinecraftAssetResolver,
-            rootDir = snapshot.resourcesRoot,
-            namespaces = setOf(snapshot.geoLocation.namespace),
+        // Kick off external texture prefetch early (non-blocking). This avoids any disk I/O on the render thread.
+        ExternalDiskTextureBinder.prefetch(snapshot.textureLocation)
+
+        val resolver = CachingAssetResolver(
+            MountedDirectoryAssetResolver(
+                delegate = MinecraftAssetResolver,
+                rootDir = snapshot.resourcesRoot,
+                namespaces = setOf(snapshot.geoLocation.namespace),
+            )
         )
         val manager = ResolverBackedResourceManager(resolver, domains = setOf(snapshot.geoLocation.namespace))
 
-        val model = GeoModelLoader().loadModel(manager, snapshot.geoLocation)
+        val stamp = resolver.versionStamp()
+
+        // IMPORTANT:
+        // GeoModel (bones) is mutable: do NOT share one instance across different ownerKey.
+        // For dynamic tasks (ANIMATED_ONLY) we can safely reuse per-owner to avoid re-loading/parsing JSON every tick.
+        val model = if (snapshot.bakeMode == GeckoModelBaker.BakeMode.ANIMATED_ONLY) {
+            GeckoGeoModelInstanceCache.getOrLoad(snapshot.ownerKey, snapshot.geoLocation, stamp, manager)
+        } else {
+            GeoModelLoader().loadModel(manager, snapshot.geoLocation)
+        }
+
+        // Tick-rate animation evaluation (do NOT do per-frame to avoid cache churn).
+        val animationLocation = snapshot.animationLocation
+        val animationKey = if (key.animationTimeKey != 0) key.animationTimeKey else key.animationStateHash
+        if (animationLocation != null && animationKey != 0 && snapshot.bakeMode == GeckoModelBaker.BakeMode.ANIMATED_ONLY) {
+            GeckoAnimationDriver.apply(
+                ownerKey = snapshot.ownerKey,
+                geoModel = model,
+                animationLocation = animationLocation,
+                animationNames = snapshot.animationNames,
+                resourceManager = manager,
+                seekTimeTicks = if (key.animationTimeKey != 0) {
+                    RenderFrameClock.seekTimeTicksFromKey(key.animationTimeKey)
+                } else {
+                    key.animationStateHash.toDouble()
+                },
+            )
+        }
 
         // If caller forces a pass, bake everything into that single pass.
         // Otherwise, route by bone name (MMCE-style): bloom/emissive/transparent prefixes.
@@ -80,13 +119,13 @@ internal class GeckoModelRenderBuildTask(
 
         fun getOrCreate(pass: RenderPass): BufferBuilder {
             return buildersByPass.getOrPut(pass) {
-                BufferBuilder(32 * 1024).also {
+                BufferBuilderPool.borrow(32 * 1024, tag = "GeckoModelRenderBuildTask.$pass").also {
                     it.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX_COLOR_NORMAL)
                 }
             }
         }
 
-        val ms = MatrixStack()
+        val ms = MmceMatrixStack()
         ms.push()
 
         // World-space placement (RenderManager already translates to camera origin).
@@ -108,24 +147,44 @@ internal class GeckoModelRenderBuildTask(
             snapshot.modelOffsetZ.toFloat()
         )
 
-        if (forcedPass != null) {
-            val builder = getOrCreate(forcedPass)
-            GeckoModelBaker.bake(model, builder, ms)
-        } else {
-            GeckoModelBaker.bakeRouted(
-                model = model,
-                matrixStack = ms,
-                bufferSelector = { bloom, transparent ->
-                    val pass = when {
-                        bloom && transparent -> RenderPass.BLOOM_TRANSPARENT
-                        bloom -> RenderPass.BLOOM
-                        transparent -> RenderPass.TRANSPARENT
-                        else -> RenderPass.DEFAULT
-                    }
-                    getOrCreate(pass)
-                }
+        val boneIndex = if (animationLocation != null) {
+            GeckoAnimatedBoneIndex.getIndex(
+                resourceManager = manager,
+                resourcesRoot = snapshot.resourcesRoot.toString(),
+                animationLocation = animationLocation,
             )
+        } else {
+            null
         }
+
+        val activeAnimatedBones = if (boneIndex != null) {
+            // IMPORTANT:
+            // We treat a bone as "animated" only if it is referenced by the *currently selected* animations.
+            // This enables a "temporary static" layer: bones not touched by the active animation(s) will be
+            // baked into the static task and no longer rebuilt every tick.
+            boneIndex.animatedBonesFor(snapshot.animationNames)
+        } else {
+            emptySet()
+        }
+
+        val potentialAnimatedBones = boneIndex?.allAnimatedBones ?: emptySet()
+
+        GeckoModelBaker.bakeRoutedFiltered(
+            model = model,
+            matrixStack = ms,
+            activeAnimatedBones = activeAnimatedBones,
+            mode = snapshot.bakeMode,
+            potentialAnimatedBones = potentialAnimatedBones,
+            bufferSelector = { bloom, transparent ->
+                val pass = forcedPass ?: when {
+                    bloom && transparent -> RenderPass.BLOOM_TRANSPARENT
+                    bloom -> RenderPass.BLOOM
+                    transparent -> RenderPass.TRANSPARENT
+                    else -> RenderPass.DEFAULT
+                }
+                getOrCreate(pass)
+            },
+        )
 
         ms.pop()
 
@@ -136,7 +195,7 @@ internal class GeckoModelRenderBuildTask(
     }
 
 
-    private fun rotateOrientation(ms: MatrixStack, front: EnumFacing, top: EnumFacing) {
+    private fun rotateOrientation(ms: MmceMatrixStack, front: EnumFacing, top: EnumFacing) {
         val steps = OrientationMath.stepsFromBase(front, top)
         for (step in steps) {
             when (step) {
@@ -148,7 +207,7 @@ internal class GeckoModelRenderBuildTask(
         }
     }
 
-    private fun rotateXCentered(ms: MatrixStack, degrees: Double) {
+    private fun rotateXCentered(ms: MmceMatrixStack, degrees: Double) {
         // Rotate around the block center (y=0.5) instead of the block bottom.
         // This avoids pivot-related offsets for UP/DOWN and mixed 24-orientation sequences.
         ms.translate(0.0f, 0.5f, 0.0f)

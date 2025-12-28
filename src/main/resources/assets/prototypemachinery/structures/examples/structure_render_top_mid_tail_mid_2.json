@@ -1,7 +1,9 @@
 {
   "id": "example_structure_render_top_mid_tail_mid_2",
+  "name": "Render Demo: Mid 2",
   "type": "template",
-  "offset": { "x": -1, "y": 0, "z": 0 },
+  "hideWorldBlocks": true,
+  "offset": { "x": -2, "y": 0, "z": 0 },
   "pattern": [
     {"pos":{"x":0,"y":0,"z":0},"blockId":"minecraft:gold_block","meta":0},
     {"pos":{"x":0,"y":0,"z":1},"blockId":"minecraft:gold_block","meta":0},
@@ -10,21 +12,12 @@
     {"pos":{"x":0,"y":0,"z":4},"blockId":"minecraft:gold_block","meta":0},
 
     {"pos":{"x":0,"y":1,"z":0},"blockId":"minecraft:gold_block","meta":0},
-    {"pos":{"x":0,"y":1,"z":1},"blockId":"minecraft:air","meta":0},
-    {"pos":{"x":0,"y":1,"z":2},"blockId":"minecraft:air","meta":0},
-    {"pos":{"x":0,"y":1,"z":3},"blockId":"minecraft:air","meta":0},
     {"pos":{"x":0,"y":1,"z":4},"blockId":"minecraft:gold_block","meta":0},
 
     {"pos":{"x":0,"y":2,"z":0},"blockId":"minecraft:gold_block","meta":0},
-    {"pos":{"x":0,"y":2,"z":1},"blockId":"minecraft:air","meta":0},
-    {"pos":{"x":0,"y":2,"z":2},"blockId":"minecraft:air","meta":0},
-    {"pos":{"x":0,"y":2,"z":3},"blockId":"minecraft:air","meta":0},
     {"pos":{"x":0,"y":2,"z":4},"blockId":"minecraft:gold_block","meta":0},
 
     {"pos":{"x":0,"y":3,"z":0},"blockId":"minecraft:gold_block","meta":0},
-    {"pos":{"x":0,"y":3,"z":1},"blockId":"minecraft:air","meta":0},
-    {"pos":{"x":0,"y":3,"z":2},"blockId":"minecraft:air","meta":0},
-    {"pos":{"x":0,"y":3,"z":3},"blockId":"minecraft:air","meta":0},
     {"pos":{"x":0,"y":3,"z":4},"blockId":"minecraft:gold_block","meta":0},
 
     {"pos":{"x":0,"y":4,"z":0},"blockId":"minecraft:gold_block","meta":0},
@@ -34,7 +27,5 @@
     {"pos":{"x":0,"y":4,"z":4},"blockId":"minecraft:gold_block","meta":0}
   ],
   "validators": [],
-  "children": [
-    "example_structure_render_top_mid_tail_mid_3"
-  ]
+  "children": []
 }

@@ -5,7 +5,7 @@ import github.kasuminova.prototypemachinery.client.api.render.RenderPass
 import github.kasuminova.prototypemachinery.client.api.render.Renderable
 import github.kasuminova.prototypemachinery.client.impl.render.task.BuiltBuffers
 import github.kasuminova.prototypemachinery.client.impl.render.task.RenderBuildTask
-import net.minecraft.client.renderer.BufferBuilder
+import github.kasuminova.prototypemachinery.client.util.NativeBuffers
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats
 import org.lwjgl.opengl.GL11
 
@@ -24,7 +24,7 @@ internal class DebugQuadBuildTask(
     override fun currentKey(): RenderKey = renderable.renderKey
 
     override fun build(key: RenderKey): BuiltBuffers {
-        val builder = BufferBuilder(256)
+        val builder = NativeBuffers.newBufferBuilder(256, tag = "DebugQuad")
 
         // Slightly above the block top to avoid z-fighting.
         val x = renderable.x

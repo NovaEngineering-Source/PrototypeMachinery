@@ -1,5 +1,6 @@
 {
   "id": "example_slice_machine",
+  "name": "Slice Machine",
   "type": "slice",
   "offset": {
     "x": 0,

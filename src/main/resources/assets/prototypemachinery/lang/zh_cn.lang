@@ -14,6 +14,57 @@ pm.preview.started=结构预览已启动：%s，锚点 (%s, %s, %s)
 pm.preview.stopped=结构预览已停止。
 pm.preview.unknown_structure=未知结构 ID：%s
 
+# 结构预览 UI
+pm.preview.ui.state.on=开
+pm.preview.ui.state.off=关
+pm.preview.ui.mode.3d=3D
+pm.preview.ui.mode.slice=切片
+
+pm.preview.ui.struct_info.structure=结构：%s
+pm.preview.ui.struct_info.scan=扫描：%s
+pm.preview.ui.struct_info.mode=模式：%s
+pm.preview.ui.struct_info.slice_y=切片 Y：%s
+pm.preview.ui.struct_info.forming=成型：%s
+
+pm.preview.ui.tooltip.reset_view=重置视角
+pm.preview.ui.tooltip.structural_forming=切换成型（仅预览）
+pm.preview.ui.tooltip.component_switch=折叠/展开面板
+pm.preview.ui.tooltip.place_projection=在世界中放置投影预览
+pm.preview.ui.tooltip.material_panel=固定材料面板
+pm.preview.ui.tooltip.wireframe=切换线框叠加
+pm.preview.ui.tooltip.layer_preview=切换层预览
+pm.preview.ui.tooltip.slice_y=切片 Y：%s
+
+pm.preview.ui.empty=<空>
+pm.preview.ui.requirement=需求：%s
+pm.preview.ui.status=状态：%s
+pm.preview.ui.count=数量：%s
+pm.preview.ui.remaining=剩余：%s
+pm.preview.ui.required=需要：%s
+pm.preview.ui.key=Key：%s
+pm.preview.ui.replaceable_hint=可替换：%s 选 1（点击左侧列表切换）
+
+pm.preview.ui.no_selection.title=未选择方块
+pm.preview.ui.no_selection.hint=点击任意方块以查看需求
+
+pm.preview.ui.current_selection=当前选择：%s
+pm.preview.ui.anyof_choose_one=AnyOf：%s 选 1
+pm.preview.ui.candidate=候选：%s
+pm.preview.ui.click_to_select=点击以选择
+pm.preview.ui.read_only=（只读）
+
+pm.preview.ui.unknown_requirement=<未知:%s>
+
+pm.preview.ui.entry_status.match=匹配
+pm.preview.ui.entry_status.missing=缺失
+pm.preview.ui.entry_status.wrong=错误
+pm.preview.ui.entry_status.unloaded=未加载
+pm.preview.ui.entry_status.unknown=未知
+
+pm.preview.ui.bom.mismatch=  不匹配=%s
+pm.preview.ui.bom.unloaded=  未加载=%s
+pm.preview.ui.bom.unknown=  未知=%s
+
 # 按键绑定：结构投影预览
 key.pm.preview.lock_orientation=锁定/解锁投影朝向
 key.pm.preview.rotate_positive=旋转投影（+）

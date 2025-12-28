@@ -41,7 +41,6 @@ internal class MountedDirectoryAssetResolver(
     override fun exists(location: ResourceLocation): Boolean {
         val mounted = toMountedPathOrNull(location)
         if (mounted != null && Files.isRegularFile(mounted)) {
-            observe(mounted)
             return true
         }
         return delegate.exists(location)

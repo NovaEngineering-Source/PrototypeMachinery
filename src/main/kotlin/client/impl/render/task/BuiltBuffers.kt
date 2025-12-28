@@ -1,6 +1,7 @@
 package github.kasuminova.prototypemachinery.client.impl.render.task
 
 import github.kasuminova.prototypemachinery.client.api.render.RenderPass
+import github.kasuminova.prototypemachinery.client.util.BufferBuilderPool
 import net.minecraft.client.renderer.BufferBuilder
 
 /**
@@ -12,4 +13,16 @@ internal data class BuiltBuffers(
     internal val byPass: Map<RenderPass, BufferBuilder> = emptyMap(),
 ) {
     internal fun isEmpty(): Boolean = byPass.isEmpty()
+
+    /**
+     * Recycle all contained [BufferBuilder] instances back to the global pool.
+     *
+     * IMPORTANT: Only call this when these buffers will no longer be drawn.
+     */
+    internal fun disposeToPool() {
+        if (byPass.isEmpty()) return
+        for (b in byPass.values) {
+            BufferBuilderPool.recycle(b)
+        }
+    }
 }

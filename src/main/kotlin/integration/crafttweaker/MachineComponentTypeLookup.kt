@@ -1,6 +1,7 @@
 package github.kasuminova.prototypemachinery.integration.crafttweaker
 
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentType
+import github.kasuminova.prototypemachinery.api.machine.component.type.GeckoModelStateComponentType
 import github.kasuminova.prototypemachinery.api.machine.component.type.ZSDataComponentType
 import github.kasuminova.prototypemachinery.impl.machine.component.type.FactoryRecipeProcessorComponentType
 import net.minecraft.util.ResourceLocation
@@ -16,6 +17,7 @@ public object MachineComponentTypeLookup {
 
     private val byId: Map<ResourceLocation, MachineComponentType<*>> = linkedMapOf(
         ZSDataComponentType.id to ZSDataComponentType,
+        GeckoModelStateComponentType.id to GeckoModelStateComponentType,
         FactoryRecipeProcessorComponentType.id to FactoryRecipeProcessorComponentType,
     )
 

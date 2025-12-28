@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery
 
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.common.CommonProxy
+import github.kasuminova.prototypemachinery.common.buildinstrument.BuildInstrumentTaskManager
 import github.kasuminova.prototypemachinery.common.command.SchedulerServerCommand
 import github.kasuminova.prototypemachinery.common.config.PrototypeMachineryCommonConfig
 import github.kasuminova.prototypemachinery.common.handler.CraftTweakerReloadHandler
@@ -66,6 +67,9 @@ public object PrototypeMachinery {
         // Register scheduler to event bus
         // 注册调度器到事件总线
         MinecraftForge.EVENT_BUS.register(TaskSchedulerImpl)
+
+        // Build Instrument task executor (server-side)
+        MinecraftForge.EVENT_BUS.register(BuildInstrumentTaskManager)
 
         // CraftTweaker script reload hook (ZenUtils)
         // CraftTweaker 脚本热重载钩子（ZenUtils）

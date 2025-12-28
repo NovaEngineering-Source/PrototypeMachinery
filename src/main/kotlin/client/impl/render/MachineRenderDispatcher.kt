@@ -5,7 +5,11 @@ import github.kasuminova.prototypemachinery.client.impl.render.assets.ExternalDi
 import github.kasuminova.prototypemachinery.client.impl.render.bloom.GregTechBloomBridge
 import github.kasuminova.prototypemachinery.client.impl.render.task.BuiltBuffers
 import github.kasuminova.prototypemachinery.client.util.ReusableVboUploader
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap
+import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap
+import it.unimi.dsi.fastutil.objects.ObjectArrayList
 import net.minecraft.client.Minecraft
+import net.minecraft.client.renderer.BufferBuilder
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.client.renderer.OpenGlHelper
 import net.minecraft.client.renderer.texture.TextureMap
@@ -63,20 +67,39 @@ internal object MachineRenderDispatcher {
     fun hasPendingWork(): Boolean = pendingRenders.isNotEmpty()
 
     /**
+     * Clear all pending render data and release any reusable GL resources.
+     *
+     * Intended for world unload / resource reload.
+     */
+    fun clearAll() {
+        pendingRenders.clear()
+        uploader.dispose()
+    }
+
+    /**
      * Flush all pending renders in correct pass order.
      *
      * Called by Mixin after TileEntityRendererDispatcher.drawBatch() completes.
      * This ensures all machine DEFAULT passes render first, then all TRANSPARENT.
      */
     fun flush() {
-        if (pendingRenders.isEmpty()) return
+        if (pendingRenders.isEmpty()) {
+            return
+        }
 
         val dataList = pendingRenders.toList()
         pendingRenders.clear()
 
+        RenderStats.noteDispatcherPending(dataList.size)
+
         val deferBloomToPost = GregTechBloomBridge.isEnabled
 
         GlStateManager.pushMatrix()
+        // IMPORTANT:
+        // Our VBOs are baked in absolute world coordinates (we use te.pos.x/y/z in the bake task).
+        // When drawing here (after TESR batch), the current modelview may NOT have the camera-origin
+        // translation applied. RenderManager (used by the GT bloom callback) always applies -camera.
+        // If we don't do the same here, DEFAULT/TRANSPARENT will appear offset while BLOOM looks correct.
         GlStateManager.translate(
             -TileEntityRendererDispatcher.staticPlayerX,
             -TileEntityRendererDispatcher.staticPlayerY,
@@ -86,7 +109,7 @@ internal object MachineRenderDispatcher {
         try {
             withLightmapEnabled {
                 // Phase 1: Render all DEFAULT (opaque) passes
-                renderPass(dataList, RenderPass.DEFAULT)
+                renderPassBatched(dataList, RenderPass.DEFAULT, applyLightmap = true)
 
                 // Phase 2: Render all TRANSPARENT passes
                 RenderTypeState.pre(RenderPass.TRANSPARENT)
@@ -107,11 +130,11 @@ internal object MachineRenderDispatcher {
                 } else {
                     // No GT bloom: render directly
                     RenderTypeState.pre(RenderPass.BLOOM)
-                    renderPassWithoutState(dataList, RenderPass.BLOOM)
+                    renderPassBatched(dataList, RenderPass.BLOOM, applyLightmap = false)
                     RenderTypeState.post(RenderPass.BLOOM)
 
                     RenderTypeState.pre(RenderPass.BLOOM_TRANSPARENT)
-                    renderPassWithoutState(dataList, RenderPass.BLOOM_TRANSPARENT)
+                    renderPassBatched(dataList, RenderPass.BLOOM_TRANSPARENT, applyLightmap = false)
                     RenderTypeState.post(RenderPass.BLOOM_TRANSPARENT)
                 }
             }
@@ -121,12 +144,39 @@ internal object MachineRenderDispatcher {
         }
     }
 
-    private fun renderPass(dataList: List<PendingRenderData>, pass: RenderPass) {
+    /**
+     * Batched renderer for passes where draw order does NOT affect correctness.
+     *
+     * We bucket by texture + combinedLight so we can reduce state changes and glDrawArrays calls
+     * (via [ReusableVboUploader.drawMultiple]).
+     */
+    private fun renderPassBatched(dataList: List<PendingRenderData>, pass: RenderPass, applyLightmap: Boolean) {
+        if (dataList.isEmpty()) return
+
+        // Texture -> Light -> Buffers
+        val buckets: MutableMap<ResourceLocation, Int2ObjectOpenHashMap<MutableList<BufferBuilder>>> =
+            Object2ObjectOpenHashMap()
+
         for (data in dataList) {
-            data.built.byPass[pass]?.let { buffer ->
-                ExternalDiskTextureBinder.bind(data.texture)
-                setLightmapCoords(data.combinedLight)
-                uploader.draw(buffer)
+            val buffer = data.built.byPass[pass] ?: continue
+            val light = if (applyLightmap) data.combinedLight else -1
+            buckets
+                .computeIfAbsent(data.texture) { Int2ObjectOpenHashMap() }
+                .computeIfAbsent(light) { ObjectArrayList() }
+                .add(buffer)
+        }
+
+        if (buckets.isEmpty()) return
+
+        buckets.forEach { (texture, lightMap) ->
+            RenderStats.addTextureBind()
+            ExternalDiskTextureBinder.bind(texture)
+            lightMap.forEach { (light, bufferList) ->
+                if (applyLightmap) {
+                    setLightmapCoords(light)
+                }
+                RenderStats.noteMergeBucket(bufferList.size)
+                uploader.drawMultiple(bufferList)
             }
         }
     }
@@ -134,6 +184,7 @@ internal object MachineRenderDispatcher {
     private fun renderPassWithoutState(dataList: List<PendingRenderData>, pass: RenderPass) {
         for (data in dataList) {
             data.built.byPass[pass]?.let { buffer ->
+                RenderStats.addTextureBind()
                 ExternalDiskTextureBinder.bind(data.texture)
                 if (pass != RenderPass.BLOOM && pass != RenderPass.BLOOM_TRANSPARENT) {
                     setLightmapCoords(data.combinedLight)

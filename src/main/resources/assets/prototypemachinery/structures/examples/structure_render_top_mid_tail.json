@@ -1,8 +1,13 @@
 {
   "id": "example_structure_render_top_mid_tail_root",
+  "name": "Render Demo: Top/Mid/Tail",
   "type": "template",
   "hideWorldBlocks": true,
-  "offset": { "x": 0, "y": 0, "z": 0 },
+  "offset": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
   "pattern": [],
   "validators": [],
   "children": [

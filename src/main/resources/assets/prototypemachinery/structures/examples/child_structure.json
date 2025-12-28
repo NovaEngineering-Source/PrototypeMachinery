@@ -1,5 +1,6 @@
 {
   "id": "example_child_structure",
+  "name": "Child Structure",
   "type": "template",
   "offset": {
     "x": 0,

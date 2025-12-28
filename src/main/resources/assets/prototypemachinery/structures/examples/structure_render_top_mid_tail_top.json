@@ -1,6 +1,8 @@
 {
   "id": "example_structure_render_top_mid_tail_top",
+  "name": "Render Demo: Top",
   "type": "slice",
+  "hideWorldBlocks": true,
   "offset": { "x": -1, "y": -2, "z": -2 },
   "pattern": [
     {"pos":{"x":0,"y":0,"z":0},"blockId":"minecraft:iron_block","meta":0},
@@ -38,6 +40,9 @@
   "sliceOffset": { "x": -1, "y": 0, "z": 0 },
   "validators": [],
   "children": [
-    "example_structure_render_top_mid_tail_mid"
+    "example_structure_render_top_mid_tail_mid",
+    "example_structure_render_top_mid_tail_mid_2",
+    "example_structure_render_top_mid_tail_mid_3",
+    "example_structure_render_top_mid_tail_tail"
   ]
 }

@@ -1,8 +1,13 @@
 package github.kasuminova.prototypemachinery.client.impl.render.binding
 
+import github.kasuminova.prototypemachinery.api.machine.component.type.GeckoModelStateComponent
+import github.kasuminova.prototypemachinery.api.machine.component.type.GeckoModelStateComponentType
+import github.kasuminova.prototypemachinery.api.machine.component.type.ZSDataComponent
+import github.kasuminova.prototypemachinery.api.machine.component.type.ZSDataComponentType
 import github.kasuminova.prototypemachinery.client.api.render.RenderKey
 import github.kasuminova.prototypemachinery.client.api.render.Renderable
 import github.kasuminova.prototypemachinery.client.impl.render.BatchedRenderer
+import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelBaker
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelRenderBuildTask
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoRenderSnapshot
 import github.kasuminova.prototypemachinery.common.block.MachineBlock
@@ -73,21 +78,39 @@ internal object WorldBoundMachineRenderSubmitter {
         val front = runCatching { state.getValue(MachineBlock.FACING) }.getOrDefault(EnumFacing.NORTH)
         val top = te.getTopFacing(front)
 
-        val ownerKey = RenderOwnerKey(te, bindingKey)
+        val geckoState = te.machine.componentMap[GeckoModelStateComponentType] as? GeckoModelStateComponent
+        val animationNames = resolveAnimationNames(te, binding, geckoState)
 
-        val renderKey = RenderKey(
+        val animTick = binding.animation?.let {
+            (te.world.totalWorldTime % Int.MAX_VALUE).toInt()
+        } ?: 0
+
+        val variantBase = run {
+            var v = bindingKey.hashCode()
+            v = 31 * v + (binding.animation?.hashCode() ?: 0)
+            v
+        }
+
+        val variantForAnim = run {
+            var v = variantBase
+            v = 31 * v + animationNames.joinToString("\u0000").hashCode()
+            v = 31 * v + (geckoState?.stateVersion ?: 0)
+            v
+        }
+
+        fun baseKey(animationStateHash: Int, variant: Int): RenderKey = RenderKey(
             modelId = binding.geo,
             textureId = binding.texture,
-            variant = bindingKey.hashCode(),
-            animationStateHash = 0,
+            variant = variant,
+            animationStateHash = animationStateHash,
             secureVersion = 0,
             flags = 0,
             orientationHash = front.ordinal * 24 + top.ordinal * 4 + te.twist,
         )
 
-        val renderable = object : Renderable {
+        fun baseRenderable(ownerKey: Any, rk: RenderKey): Renderable = object : Renderable {
             override val ownerKey: Any = ownerKey
-            override val renderKey: RenderKey = renderKey
+            override val renderKey: RenderKey = rk
             override val x: Double = te.pos.x.toDouble()
             override val y: Double = te.pos.y.toDouble()
             override val z: Double = te.pos.z.toDouble()
@@ -95,15 +118,18 @@ internal object WorldBoundMachineRenderSubmitter {
             override val combinedLight: Int = te.world.getCombinedLight(te.pos, 0)
         }
 
-        val snapshot = GeckoRenderSnapshot(
+        fun baseSnapshot(ownerKey: Any, rk: RenderKey, bakeMode: GeckoModelBaker.BakeMode): GeckoRenderSnapshot = GeckoRenderSnapshot(
             ownerKey = ownerKey,
-            renderKey = renderKey,
+            renderKey = rk,
             pass = binding.pass,
             geoLocation = binding.geo,
             textureLocation = binding.texture,
-            x = renderable.x,
-            y = renderable.y,
-            z = renderable.z,
+            animationLocation = binding.animation,
+            animationNames = animationNames,
+            bakeMode = bakeMode,
+            x = te.pos.x.toDouble(),
+            y = te.pos.y.toDouble(),
+            z = te.pos.z.toDouble(),
             modelOffsetX = binding.modelOffsetX,
             modelOffsetY = binding.modelOffsetY,
             modelOffsetZ = binding.modelOffsetZ,
@@ -113,8 +139,37 @@ internal object WorldBoundMachineRenderSubmitter {
             yOffset = binding.yOffset,
         )
 
-        BatchedRenderer.render(renderable) {
-            GeckoModelRenderBuildTask(snapshot)
+        if (binding.animation == null) {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.ALL)
+            val rk = baseKey(animationStateHash = animTick, variant = variantBase)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ALL)
+            BatchedRenderer.render(renderable) { GeckoModelRenderBuildTask(snapshot) }
+            return 1
+        }
+
+        run {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.PERMANENT_STATIC)
+            val rk = baseKey(animationStateHash = 0, variant = variantBase)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.PERMANENT_STATIC_ONLY)
+            BatchedRenderer.render(renderable) { GeckoModelRenderBuildTask(snapshot) }
+        }
+
+        run {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.TEMP_STATIC)
+            val rk = baseKey(animationStateHash = 0, variant = variantForAnim)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.TEMP_STATIC_ONLY)
+            BatchedRenderer.render(renderable) { GeckoModelRenderBuildTask(snapshot) }
+        }
+
+        run {
+            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.DYNAMIC)
+            val rk = baseKey(animationStateHash = animTick, variant = variantForAnim)
+            val renderable = baseRenderable(ownerKey, rk)
+            val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ANIMATED_ONLY)
+            BatchedRenderer.render(renderable) { GeckoModelRenderBuildTask(snapshot) }
         }
 
         return 1
@@ -123,7 +178,59 @@ internal object WorldBoundMachineRenderSubmitter {
     private data class RenderOwnerKey(
         private val te: MachineBlockEntity,
         private val bindingKey: ResourceLocation,
+        private val part: RenderPart,
     )
+
+    private enum class RenderPart {
+        ALL,
+        PERMANENT_STATIC,
+        TEMP_STATIC,
+        DYNAMIC,
+    }
+
+    private fun resolveAnimationNames(
+        te: MachineBlockEntity,
+        binding: github.kasuminova.prototypemachinery.client.api.render.binding.GeckoModelBinding,
+        geckoState: GeckoModelStateComponent?,
+    ): List<String> {
+        if (binding.animation == null) return emptyList()
+
+        if (geckoState != null) {
+            val fromComp = geckoState.animationLayers
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+            if (fromComp.isNotEmpty()) return fromComp
+        }
+
+        val zsData = (te.machine.componentMap[ZSDataComponentType] as? ZSDataComponent)?.data
+
+        binding.animationLayersStateKey?.let { key ->
+            val raw = zsData?.getString(key, "")?.trim().orEmpty()
+            if (raw.isNotEmpty()) {
+                val parsed = splitCommaList(raw)
+                if (parsed.isNotEmpty()) return parsed
+            }
+        }
+
+        binding.animationStateKey?.let { key ->
+            val raw = zsData?.getString(key, "")?.trim().orEmpty()
+            if (raw.isNotEmpty()) return listOf(raw)
+        }
+
+        if (binding.animationLayers.isNotEmpty()) {
+            return binding.animationLayers
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+        }
+
+        return listOfNotNull(binding.defaultAnimationName?.trim()?.takeIf { it.isNotEmpty() })
+    }
+
+    private fun splitCommaList(raw: String): List<String> {
+        return raw.split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
 
     private fun github.kasuminova.prototypemachinery.api.machine.component.MachineComponentMap.containsComponentTypeId(id: ResourceLocation): Boolean {
         // MVP: linear scan. Can be optimized later by keeping an id->type index.

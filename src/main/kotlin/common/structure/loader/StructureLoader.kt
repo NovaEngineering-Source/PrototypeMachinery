@@ -14,6 +14,7 @@ import github.kasuminova.prototypemachinery.impl.machine.structure.SliceStructur
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
 import github.kasuminova.prototypemachinery.impl.machine.structure.TemplateStructure
 import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.SimpleStructurePattern
+import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.AnyOfBlockPredicate
 import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.StatedBlockNbtPredicate
 import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.StatedBlockPredicate
 import kotlinx.serialization.json.Json
@@ -253,9 +254,11 @@ public object StructureLoader {
 
         // Create structure instance
         // 创建结构实例
+        val displayName = data.name?.takeIf { it.isNotBlank() } ?: data.id
         val structure = when (data.type.lowercase()) {
             "template" -> TemplateStructure(
                 id = data.id,
+                name = displayName,
                 orientation = DEFAULT_ORIENTATION,
                 offset = offset,
                 hideWorldBlocks = data.hideWorldBlocks,
@@ -276,6 +279,7 @@ public object StructureLoader {
 
                 SliceStructure(
                     id = data.id,
+                    name = displayName,
                     orientation = DEFAULT_ORIENTATION,
                     offset = offset,
                     hideWorldBlocks = data.hideWorldBlocks,
@@ -318,19 +322,49 @@ public object StructureLoader {
                 continue
             }
 
-            val blockId = ResourceLocation(element.blockId)
-            val block = Block.REGISTRY.getObject(blockId)
-
+            // Base option (backward compatible)
+            val baseId = ResourceLocation(element.blockId)
+            val baseBlock = Block.REGISTRY.getObject(baseId)
             @Suppress("DEPRECATION")
-            val blockState = block.getStateFromMeta(element.meta)
+            val baseState = baseBlock.getStateFromMeta(element.meta)
 
-            val predicate = if (!element.nbt.isNullOrEmpty()) {
-                StatedBlockNbtPredicate(blockState, element.nbt)
+            // When alternatives are present, build a multi-choice predicate.
+            if (element.alternatives.isNotEmpty()) {
+                val states = ArrayList<net.minecraft.block.state.IBlockState>(1 + element.alternatives.size)
+                states.add(baseState)
+                for (alt in element.alternatives) {
+                    val altId = ResourceLocation(alt.blockId)
+                    val altBlock = Block.REGISTRY.getObject(altId)
+                    @Suppress("DEPRECATION")
+                    val altState = altBlock.getStateFromMeta(alt.meta)
+                    states.add(altState)
+                }
+
+                // NOTE: For now, NBT constraints are supported only if there is exactly one option.
+                // If any option has NBT constraints, fall back to a simple predicate (first option) and warn.
+                val hasAltNbt = element.nbt?.isNotEmpty() == true || element.alternatives.any { !it.nbt.isNullOrEmpty() }
+                if (hasAltNbt) {
+                    PrototypeMachinery.logger.warn(
+                        "Structure '$structureId' pattern element at ${pos.x},${pos.y},${pos.z} uses alternatives with NBT. " +
+                            "This is not supported yet; using the base option only."
+                    )
+                    val predicate = if (!element.nbt.isNullOrEmpty()) {
+                        StatedBlockNbtPredicate(baseState, element.nbt)
+                    } else {
+                        StatedBlockPredicate(baseState)
+                    }
+                    blocks[pos] = predicate
+                } else {
+                    blocks[pos] = AnyOfBlockPredicate(states)
+                }
             } else {
-                StatedBlockPredicate(blockState)
+                val predicate = if (!element.nbt.isNullOrEmpty()) {
+                    StatedBlockNbtPredicate(baseState, element.nbt)
+                } else {
+                    StatedBlockPredicate(baseState)
+                }
+                blocks[pos] = predicate
             }
-
-            blocks[pos] = predicate
         }
 
         return SimpleStructurePattern(blocks)

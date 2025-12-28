@@ -1,5 +1,6 @@
 {
   "id": "example_recipe_processor_machine",
+  "name": "Recipe Processor",
   "type": "template",
   "offset": {
     "x": 0,

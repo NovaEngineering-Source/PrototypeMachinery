@@ -26,8 +26,23 @@ internal data class StructurePreviewUiHostConfig(
     /** Whether the host supports editing/operating child instances (future). */
     val allowOperateChildren: Boolean = false,
     /** Provides a default scan anchor; null disables scan initialization. */
-    val anchorProvider: (Minecraft) -> BlockPos? = { mc -> mc.player?.position }
+    val anchorProvider: (Minecraft) -> BlockPos? = { mc -> mc.player?.position },
+    /** Whether scan should be enabled by default (useful when host hides scan controls). */
+    val defaultEnableScan: Boolean = false,
+    /** Which BOM the materials panel should show. */
+    val materialsMode: MaterialsMode = MaterialsMode.FULL,
+    /** AnyOf requirement selection provider: requirementKey -> selected optionKey (stableKey). */
+    val anyOfSelectionProvider: (String) -> String? = { _ -> null },
+    /** AnyOf requirement selection setter (optional). */
+    val anyOfSelectionSetter: ((requirementKey: String, selectedOptionKey: String) -> Unit)? = null
 ) {
+    enum class MaterialsMode {
+        /** Always show the full BOM (JEI/standalone typical). */
+        FULL,
+        /** Show remaining required materials based on current scan/progress (Build Instrument typical). */
+        REMAINING
+    }
+
     companion object {
         fun standalone(): StructurePreviewUiHostConfig = StructurePreviewUiHostConfig(
             hostName = "standalone",

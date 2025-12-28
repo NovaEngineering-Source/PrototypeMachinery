@@ -14,6 +14,57 @@ pm.preview.started=Structure preview started: %s at (%s, %s, %s)
 pm.preview.stopped=Structure preview stopped.
 pm.preview.unknown_structure=Unknown structure id: %s
 
+# Structure preview UI
+pm.preview.ui.state.on=ON
+pm.preview.ui.state.off=OFF
+pm.preview.ui.mode.3d=3D
+pm.preview.ui.mode.slice=Slice
+
+pm.preview.ui.struct_info.structure=Structure: %s
+pm.preview.ui.struct_info.scan=Scan: %s
+pm.preview.ui.struct_info.mode=Mode: %s
+pm.preview.ui.struct_info.slice_y=Slice Y: %s
+pm.preview.ui.struct_info.forming=Forming: %s
+
+pm.preview.ui.tooltip.reset_view=Reset view
+pm.preview.ui.tooltip.structural_forming=Toggle forming (preview only)
+pm.preview.ui.tooltip.component_switch=Collapse/expand panels
+pm.preview.ui.tooltip.place_projection=Place projection preview in world
+pm.preview.ui.tooltip.material_panel=Pin materials panel
+pm.preview.ui.tooltip.wireframe=Toggle wireframe overlay
+pm.preview.ui.tooltip.layer_preview=Toggle layer preview
+pm.preview.ui.tooltip.slice_y=Slice Y: %s
+
+pm.preview.ui.empty=<empty>
+pm.preview.ui.requirement=Requirement: %s
+pm.preview.ui.status=Status: %s
+pm.preview.ui.count=Count: %s
+pm.preview.ui.remaining=Remaining: %s
+pm.preview.ui.required=Required: %s
+pm.preview.ui.key=Key: %s
+pm.preview.ui.replaceable_hint=Replaceable: %s choose 1 (use left list to switch)
+
+pm.preview.ui.no_selection.title=No block selected
+pm.preview.ui.no_selection.hint=Click any block to view requirements
+
+pm.preview.ui.current_selection=Selected: %s
+pm.preview.ui.anyof_choose_one=AnyOf: %s choose 1
+pm.preview.ui.candidate=Candidate: %s
+pm.preview.ui.click_to_select=Click to select
+pm.preview.ui.read_only=(read-only)
+
+pm.preview.ui.unknown_requirement=<unknown:%s>
+
+pm.preview.ui.entry_status.match=Match
+pm.preview.ui.entry_status.missing=Missing
+pm.preview.ui.entry_status.wrong=Wrong
+pm.preview.ui.entry_status.unloaded=Unloaded
+pm.preview.ui.entry_status.unknown=Unknown
+
+pm.preview.ui.bom.mismatch=  mismatch=%s
+pm.preview.ui.bom.unloaded=  unloaded=%s
+pm.preview.ui.bom.unknown=  unknown=%s
+
 # Key bindings: structure projection preview
 key.pm.preview.lock_orientation=Lock/Unlock Projection Orientation
 key.pm.preview.rotate_positive=Rotate Projection (+)

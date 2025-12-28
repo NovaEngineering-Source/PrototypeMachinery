@@ -1,0 +1,20 @@
+{
+  "id": "example_material_choice_demo",
+  "name": "Material Choice Demo",
+  "type": "template",
+  "offset": { "x": 0, "y": 0, "z": 0 },
+  "pattern": [
+    { "pos": { "x": 0, "y": 0, "z": 0 }, "blockId": "minecraft:iron_block", "meta": 0 },
+    {
+      "pos": { "x": 1, "y": 0, "z": 0 },
+      "blockId": "minecraft:diamond_block",
+      "meta": 0,
+      "alternatives": [
+        { "blockId": "minecraft:gold_block", "meta": 0 },
+        { "blockId": "minecraft:emerald_block", "meta": 0 }
+      ]
+    }
+  ],
+  "validators": [],
+  "children": []
+}

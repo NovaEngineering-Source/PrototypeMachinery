@@ -1,5 +1,6 @@
 {
   "id": "example_simple_machine",
+  "name": "Simple Machine",
   "type": "template",
   "offset": {
     "x": 0,

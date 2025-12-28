@@ -50,4 +50,29 @@ public class MixinRenderGlobal {
             MachineRenderDispatcher.INSTANCE.flush();
         }
     }
+
+    /**
+     * Global TESRs (TileEntitySpecialRenderer#isGlobalRenderer=true) are rendered *after* drawBatch.
+     *
+     * Our machine TESR is sometimes marked global (e.g. very large bound Gecko models).
+     * Those submissions would otherwise miss the after-drawBatch flush and only be drawn
+     * by the late safety flush (RenderWorldLast), causing ordering issues and one-frame delay.
+     *
+     * Flushing again at the end is cheap (no-op when empty) and makes global-rendered machines
+     * participate in the same centralized ordered pipeline.
+     */
+    @Inject(
+        method = "renderEntities",
+        at = @At("RETURN")
+    )
+    private void hookAfterGlobalTESR(
+        final Entity renderViewEntity,
+        final ICamera camera,
+        final float partialTicks,
+        final CallbackInfo ci
+    ) {
+        if (MinecraftForgeClient.getRenderPass() == 0) {
+            MachineRenderDispatcher.INSTANCE.flush();
+        }
+    }
 }

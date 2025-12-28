@@ -38,12 +38,24 @@ internal object RenderManager {
     }
 
     /**
+     * Clear all queued buffers and release reusable GL resources.
+     *
+     * Intended for world unload / resource reload.
+     */
+    fun clearAll() {
+        buckets.clear()
+        uploader.dispose()
+    }
+
+    /**
      * Draw all queued buffers and clear internal state.
      *
      * Must be called on the render thread.
      */
     fun drawAll() {
         if (buckets.isEmpty()) return
+
+        RenderStats.noteRenderManagerBuckets(buckets.size)
 
         val deferBloomToPost = GregTechBloomBridge.isEnabled
 
@@ -73,6 +85,7 @@ internal object RenderManager {
 
                 RenderTypeState.pre(pass)
                 textures.forEach { (texture, lightMap) ->
+                    RenderStats.addTextureBind()
                     ExternalDiskTextureBinder.bind(texture)
                     lightMap.forEach { (light, bufferList) ->
                         if (light != -1) {
@@ -82,6 +95,7 @@ internal object RenderManager {
                             OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, lx.toFloat(), ly.toFloat())
                             GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit)
                         }
+                        RenderStats.noteMergeBucket(bufferList.size)
                         uploader.drawMultiple(bufferList)
                     }
                 }
@@ -110,6 +124,8 @@ internal object RenderManager {
     internal fun drawBloomPasses(clearAfterDraw: Boolean) {
         if (!hasPendingBloomWork()) return
 
+        RenderStats.noteRenderManagerBuckets(buckets.size)
+
         GlStateManager.pushMatrix()
         GlStateManager.translate(
             -TileEntityRendererDispatcher.staticPlayerX,
@@ -125,6 +141,7 @@ internal object RenderManager {
 
                 RenderTypeState.pre(pass)
                 textures.forEach { (texture, lightMap) ->
+                    RenderStats.addTextureBind()
                     ExternalDiskTextureBinder.bind(texture)
                     lightMap.forEach { (light, bufferList) ->
                         if (light != -1) {
@@ -134,6 +151,7 @@ internal object RenderManager {
                             OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, lx.toFloat(), ly.toFloat())
                             GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit)
                         }
+                        RenderStats.noteMergeBucket(bufferList.size)
                         uploader.drawMultiple(bufferList)
                     }
                 }
