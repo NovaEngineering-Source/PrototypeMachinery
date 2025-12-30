@@ -2,14 +2,13 @@ package github.kasuminova.prototypemachinery.impl.scheduler.backend
 
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.scheduler.SchedulingAffinity
+import github.kasuminova.prototypemachinery.impl.platform.PMPlatformManager
 import github.kasuminova.prototypemachinery.impl.scheduler.SchedulerMetrics
 import github.kasuminova.prototypemachinery.impl.scheduler.SchedulerRuntimeSettings
 import github.kasuminova.prototypemachinery.impl.scheduler.SchedulerState
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 
 internal class JavaTaskSchedulerBackend(
     settings: SchedulerRuntimeSettings,
@@ -17,7 +16,7 @@ internal class JavaTaskSchedulerBackend(
 
     override val backendName: String = "JAVA"
 
-    private val threadCounter = AtomicInteger(0)
+    private val platform = PMPlatformManager.get()
 
     @Volatile
     private var isShutdown = false
@@ -28,23 +27,23 @@ internal class JavaTaskSchedulerBackend(
     private var executorService: ExecutorService = createExecutorService(settings)
     private var laneExecutors: Array<ExecutorService> = createLaneExecutors(settings)
 
+    init {
+        PrototypeMachinery.logger.info(
+            "Task scheduler backend '{}' initialized on platform '{}' (executor={}, lanes={})",
+            backendName,
+            platform.id(),
+            executorService.javaClass.name,
+            laneExecutors.size
+        )
+    }
+
     private fun createExecutorService(settings: SchedulerRuntimeSettings): ExecutorService =
-        Executors.newFixedThreadPool(settings.workerThreads.coerceAtLeast(1)) { runnable ->
-            Thread(runnable, "PrototypeMachinery-Scheduler-${threadCounter.incrementAndGet()}").apply {
-                isDaemon = true
-                priority = Thread.NORM_PRIORITY + 1
-            }
-        }
+        platform.createSchedulerExecutor(settings.workerThreads.coerceAtLeast(1), "PrototypeMachinery-Scheduler")
 
     private fun createLaneExecutors(settings: SchedulerRuntimeSettings): Array<ExecutorService> {
         val lanes = settings.laneCount.coerceAtLeast(1)
         return Array(lanes) { lane ->
-            Executors.newSingleThreadExecutor { runnable ->
-                Thread(runnable, "PrototypeMachinery-Scheduler-Lane-${lane + 1}").apply {
-                    isDaemon = true
-                    priority = Thread.NORM_PRIORITY + 1
-                }
-            }
+            platform.createSchedulerLaneExecutor(lane + 1, "PrototypeMachinery-Scheduler")
         }
     }
 

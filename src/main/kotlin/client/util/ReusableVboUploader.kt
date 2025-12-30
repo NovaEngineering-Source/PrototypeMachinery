@@ -35,6 +35,14 @@ public class ReusableVboUploader : WorldVertexBufferUploader() {
     private var scratchVbo: VertexBuffer? = null
     private var scratchVboFormat: VertexFormat? = null
 
+    internal data class MergeInfo(
+        val format: VertexFormat,
+        val drawMode: Int,
+        val vertexCount: Int,
+        val totalBytes: Int,
+        val data: ByteBuffer,
+    )
+
     /**
      * Explicitly release any GL/VBO resources held by this uploader.
      *
@@ -47,6 +55,91 @@ public class ReusableVboUploader : WorldVertexBufferUploader() {
         scratch = null
     }
 
+    /**
+     * Merge a list of compatible builders into the internal scratch buffer.
+     *
+     * The [block] receives a [MergeInfo] whose [MergeInfo.data] is backed by the uploader's internal scratch buffer.
+     * Do NOT escape/store that ByteBuffer reference outside the callback.
+     *
+     * Returns false if builders are incompatible or empty.
+     */
+    internal inline fun withMergedScratch(builders: List<BufferBuilder>, block: (MergeInfo) -> Unit): Boolean {
+        if (builders.isEmpty()) return false
+
+        val first = builders[0]
+        val format: VertexFormat = first.vertexFormat
+        val drawMode = first.drawMode
+
+        var totalBytes = 0
+        var totalVertexCount = 0
+
+        val vertexSize = format.size
+
+        for (b in builders) {
+            if (b.vertexCount <= 0) continue
+            if (b.drawMode != drawMode || b.vertexFormat != format) {
+                return false
+            }
+            totalBytes += b.vertexCount * vertexSize
+            totalVertexCount += b.vertexCount
+        }
+
+        if (totalVertexCount <= 0 || totalBytes <= 0) return false
+
+        ensureScratch(totalBytes)
+        val scratchBuf = scratch!!
+
+        for (b in builders) {
+            if (b.vertexCount <= 0) continue
+            val bytesUsed = b.vertexCount * vertexSize
+            val src = b.byteBuffer.duplicate()
+            src.clear()
+            src.limit(bytesUsed)
+            scratchBuf.put(src)
+        }
+
+        scratchBuf.flip()
+
+        try {
+            block(
+                MergeInfo(
+                    format = format,
+                    drawMode = drawMode,
+                    vertexCount = totalVertexCount,
+                    totalBytes = totalBytes,
+                    data = scratchBuf,
+                )
+            )
+        } finally {
+            // Caller is done; restore scratch for next use.
+            scratchBuf.clear()
+            scratchBuf.limit(totalBytes)
+        }
+
+        return true
+    }
+
+    /**
+     * Draw a VBO that uses the given vertex [format].
+     *
+     * The VBO must already contain valid data for the format.
+     */
+    internal fun drawVbo(vbo: VertexBuffer, format: VertexFormat, drawMode: Int, vertexCount: Int) {
+        if (vertexCount <= 0) return
+
+        vbo.bindBuffer()
+        setupPointersForFormat(format)
+
+        val repeats = RenderStress.drawMultiplier
+        RenderStats.addDraw(repeats, vertexCount * repeats)
+        for (i in 0 until repeats) {
+            GlStateManager.glDrawArrays(drawMode, 0, vertexCount)
+        }
+
+        teardownPointersForFormat(format)
+        vbo.unbindBuffer()
+    }
+
     override fun draw(builder: BufferBuilder) {
         if (builder.vertexCount <= 0) return
 
@@ -54,7 +147,7 @@ public class ReusableVboUploader : WorldVertexBufferUploader() {
         if (vboCacheEnabled() && !mergeForceClientArrays() && OpenGlHelper.useVbo()) {
             val entry = BufferBuilderVboCache.getOrCreate(builder)
             if (entry != null) {
-                entry.vbo.bindBuffer()
+                OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, entry.vboId)
                 setupPointersForFormat(entry.format)
 
                 val repeats = RenderStress.drawMultiplier
@@ -64,7 +157,7 @@ public class ReusableVboUploader : WorldVertexBufferUploader() {
                 }
 
                 teardownPointersForFormat(entry.format)
-                entry.vbo.unbindBuffer()
+                OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, 0)
                 return
             }
         }

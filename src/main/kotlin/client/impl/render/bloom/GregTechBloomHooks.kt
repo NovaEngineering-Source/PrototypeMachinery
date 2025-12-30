@@ -1,6 +1,7 @@
 package github.kasuminova.prototypemachinery.client.impl.render.bloom
 
 import github.kasuminova.prototypemachinery.client.impl.render.RenderManager
+import github.kasuminova.prototypemachinery.client.impl.render.bloom.GregTechBloomHooks.renderBloomEffect
 import gregtech.client.renderer.IRenderSetup
 import gregtech.client.shader.postprocessing.BloomType
 import gregtech.client.utils.BloomEffectUtil
@@ -22,6 +23,16 @@ internal object GregTechBloomHooks : IRenderSetup, IBloomEffect {
 
     @Volatile
     private var registered: Boolean = false
+
+    /**
+     * BloomEffectUtil may invoke [renderBloomEffect] twice per frame.
+     *
+     * MMCE toggles a flag to distinguish between the two phases.
+     * If we clear queued bloom buffers on the first invocation, the second phase will have
+     * nothing to process/composite, resulting in "emissive only" (no actual bloom).
+     */
+    @Volatile
+    private var postProcessingPhase: Boolean = false
 
     fun ensureRegistered() {
         if (registered) return
@@ -49,14 +60,16 @@ internal object GregTechBloomHooks : IRenderSetup, IBloomEffect {
     }
 
     override fun renderBloomEffect(bufferBuilder: BufferBuilder, ctx: EffectRenderContext) {
-        // GT may invoke this twice per frame for post-processing. RenderManager clears bloom buckets
-        // on first draw, so subsequent invocations become a cheap no-op.
         GlStateManager.pushMatrix()
         try {
-            RenderManager.drawBloomPasses(clearAfterDraw = true)
+            // Draw bloom buffers in both phases; clear only after the post-processing phase.
+            RenderManager.drawBloomPasses(clearAfterDraw = postProcessingPhase)
         } finally {
             Minecraft.getMinecraft().renderEngine.bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE)
             GlStateManager.popMatrix()
         }
+
+        // Toggle after draw so the first invocation renders without clearing.
+        postProcessingPhase = !postProcessingPhase
     }
 }

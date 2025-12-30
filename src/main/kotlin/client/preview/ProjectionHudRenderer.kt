@@ -1,11 +1,11 @@
 package github.kasuminova.prototypemachinery.client.preview
 
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateRequirement
+import github.kasuminova.prototypemachinery.client.util.ItemStackDisplayUtil
 import net.minecraft.block.Block
 import net.minecraft.client.entity.EntityPlayerSP
 import net.minecraft.client.resources.I18n
 import net.minecraft.init.Blocks
-import net.minecraft.item.ItemStack
 import net.minecraft.util.math.BlockPos
 import net.minecraft.util.text.TextComponentTranslation
 
@@ -86,10 +86,10 @@ internal object ProjectionHudRenderer {
         return when (req) {
             is ExactBlockStateRequirement -> {
                 val block = Block.REGISTRY.getObject(req.blockId)
-                if (block != Blocks.AIR) {
-                    val stack = ItemStack(block, 1, req.meta)
+                if (block != null && block != Blocks.AIR) {
+                    val stack = ItemStackDisplayUtil.stackForBlock(block, req.meta, 1)
                     val name = try {
-                        stack.displayName
+                        stack?.displayName ?: req.blockId.toString()
                     } catch (_: Throwable) {
                         req.blockId.toString()
                     }

@@ -35,8 +35,10 @@ English translation: [`docs/en/StructureJsonGuide.md`](./en/StructureJsonGuide.m
 
 #### 预留字段（现状说明）
 
-- `validators`（Array<String>）：当前 JSON loader **不会**反序列化为 `StructureValidator`（实现中为 `emptyList()`，见 `StructureLoader` 中的 TODO）。
-- `pattern[].nbt`（Object）：字段存在于 `StructurePatternElementData`，但当前 `StructureLoader.convertPattern(...)` **不会使用**该字段（目前主要依据 `blockId/meta` 生成 predicate）。
+- `validators`（Array<String>）：已支持。loader 会把字符串按 `ResourceLocation` 解析，并通过 `StructureValidatorRegistry` 创建对应的 `StructureValidator`。
+  - 无效 id / 未注册的 validator 会被跳过，并输出 warn（结构仍会继续加载）。
+- `pattern[].nbt`（Object）：已支持（见 `StatedBlockNbtPredicate`）。
+  - 限制：当 `alternatives` 中存在 NBT 约束时，目前不会对“多个候选 + NBT”做完整匹配；loader 会 warn 并回退为仅使用 base option。
 
 ### pattern 元素
 
@@ -45,7 +47,7 @@ English translation: [`docs/en/StructureJsonGuide.md`](./en/StructureJsonGuide.m
 - `pos`：`{x,y,z}`
 - `blockId`：例如 `"minecraft:iron_block"`
 - `meta`：可选，默认 0（用于 `getStateFromMeta(meta)`）
-- `nbt`：可选（当前未使用，见上）
+- `nbt`：可选（支持，见上）
 
 ### slice 专用字段
 

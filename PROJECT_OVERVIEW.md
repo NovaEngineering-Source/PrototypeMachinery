@@ -22,6 +22,16 @@ English translation (rough): [`PROJECT_OVERVIEW.en.md`](./PROJECT_OVERVIEW.en.md
 - **客户端机器渲染管线重构（集中式 flush + 透明/Bloom 顺序保证）**：机器 TESR 仅提交渲染数据，统一在 TESR batch 之后集中渲染（先不透明再半透明），Bloom 在 GT 环境下延后到 bloom 回调阶段绘制，避免错序导致的亮度异常。
    - 设计/现状说明：[`docs/RenderingSystem_SecureAssets.md`](./docs/RenderingSystem_SecureAssets.md)
    - 代码入口：`client/impl/render/MachineRenderDispatcher.kt`、`client/impl/render/binding/MachineBlockEntitySpecialRenderer.kt`、`mixin/minecraft/MixinRenderGlobal.java`
+
+- **客户端渲染性能与可观测性（HUD + RenderTuning + 多级缓存）**：围绕“减少构建抖动 / 减少 VBO 上传 / 降低 direct buffer churn / 降低 HashMap hot path”等目标，新增/强化了渲染侧缓存、BufferBuilder 复用与 HUD 指标。
+   - 关键点：`RenderDebugHud`（/pm_render_hud）、`RenderTuning`（Forge config + /pm_config）、`BufferBuilderPool`、`BufferBuilderVboCache`、（实验性）`OpaqueChunkVboCache`。
+   - 详见：[`docs/RenderingPerformance.md`](./docs/RenderingPerformance.md)
+
+- **结构渲染数据组件化 + 增量同步（避免渲染线程结构匹配）**：把“渲染/隐藏所需的结构派生数据”（bounds + sliceCounts）迁移到系统组件 `StructureRenderDataComponent`，由服务器计算并通过 FULL/INCREMENTAL NBT 同步到客户端。
+   - 详见：[`docs/StructureRenderDataSync.md`](./docs/StructureRenderDataSync.md)
+
+- **Modern Backend（Cleanroom / Java 21+）与 Vector API 探测**：新增 `PMPlatform` 抽象与 SPI Provider，用于在主模组侧以“可选依赖”的方式接入 Java21+ 的批处理/Vector API 加速实现；运行时通过反射探测并安全回退。
+   - 入口：[`docs/ModernBackend.md`](./docs/ModernBackend.md)、[`modern-backend/README.md`](./modern-backend/README.md)
 - **结构匹配 fast-fail**：`StructurePattern` 具备 bounds（minPos/maxPos）并提供 `isAreaLoaded(...)`，在匹配前先检查覆盖范围是否已加载，避免未加载区块导致的误判与卡顿。
 - **事务化 Requirement 系统**：配方需求执行采用 `RequirementTransaction` 事务模型（start / tick / end），失败/阻塞时整体回滚以保持原子性。
 - **Requirement Overlay（按进程覆写）**：支持为单个 `RecipeProcess` 挂载 overlay，在执行前解析“生效的需求组件”。
@@ -91,8 +101,7 @@ English translation (rough): [`PROJECT_OVERVIEW.en.md`](./PROJECT_OVERVIEW.en.md
 基于当前实现，未来可以在以下方向继续扩展：
 
 1. **结构 JSON 表达能力增强**
-   - validators：目前 schema 有 `validators` 字段，但 loader 仍为 TODO（见 `StructureLoader` 中的注释）。
-   - pattern nbt：schema 有 `pattern[].nbt` 字段，但目前未参与 predicate 生成。
+   - pattern nbt：`pattern[].nbt` 已支持（`StatedBlockNbtPredicate`），但 `alternatives` 中携带 NBT 的完整匹配仍有已知限制（当前会 warn 并回退到 base option）。
 
 2. **StructureValidator 实现集**
    - 比如：

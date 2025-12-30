@@ -73,13 +73,20 @@ This is enforced in `loadStructureDataFile(...)` by checking `structureDataCache
 
 ## Current limitations / caveats
 
-### Validators are not deserialized
+### Validators
 
-The loader currently passes `validators = emptyList()` and contains a TODO to support validator deserialization.
+Validators are supported. The loader parses validator ids as `ResourceLocation` and resolves them via `StructureValidatorRegistry`.
 
-### NBT is not matched
+- invalid ids are skipped with a warning
+- unknown (unregistered) validators are skipped with a warning
 
-`StructurePatternElementData.nbt` is currently ignored. Pattern elements are converted using only `blockId` and `meta` to create an `IBlockState`.
+### NBT matching
+
+`StructurePatternElementData.nbt` is supported via `StatedBlockNbtPredicate`.
+
+Limitation:
+
+- NBT constraints on `alternatives` are not fully supported yet; the loader warns and falls back to the base option only.
 
 ### Controller position overlap guard
 

@@ -1,0 +1,541 @@
+plugins {
+    id 'java'
+    id 'java-library'
+    id 'org.jetbrains.kotlin.jvm' version '2.1.0'
+    id 'me.champeau.jmh' version '0.7.2'
+    id 'xyz.wagyourtail.unimined' version '1.4.9-kappa'
+}
+// Modern Backend addon mod (Cleanroom + Java21+).
+// This build is intentionally isolated from the main RFG(Java8) build.
+
+def parentProps = new Properties()
+def parentPropsFile = file('../gradle.properties')
+if (parentPropsFile.exists()) {
+    parentPropsFile.withInputStream { parentProps.load(it) }
+}
+
+def mainModVersion = parentProps.getProperty('mod_version')
+def mainMavenGroup = parentProps.getProperty('maven_group')
+def mainArchivesBaseName = parentProps.getProperty('archives_base_name') ?: 'PrototypeMachinery'
+def mainForgelinVersion = parentProps.getProperty('forgelin_continuous_version') ?: '2.1.0.0'
+def mainKotlinVersion = parentProps.getProperty('kotlin_version') ?: '2.1.0'
+
+def modId = (findProperty('mod_id') ?: 'pm_modern_backend').toString()
+def modName = (findProperty('mod_name') ?: 'PrototypeMachinery - Modern Backend').toString()
+def modDescription = (findProperty('mod_description') ?: '').toString()
+
+// Optional Vector API runtime enablement for dev runs.
+// Usage:
+//   ./gradlew runClient -Penable_vector_api=true
+// This will add:
+//   --add-modules=jdk.incubator.vector
+// to the dev JVM args so the Vector API implementation can be reflectively loaded.
+//
+// Note:
+// - Vector accel classes are built into the main ModernBackend jar.
+// - Runtime selection is still guarded by reflection (see PositionTransformBackends).
+def enableVectorApi = (project.findProperty('enable_vector_api') ?: 'false').toString().toBoolean()
+
+// Optional: profiler-friendly flags for dev runs.
+// Usage:
+//   ./gradlew runClient -PpmProfiler=true
+//   ./gradlew runClient -PpmProfilerJvmArgs="-Dfoo=bar,-XX:StartFlightRecording"
+def pmProfiler = (project.findProperty('pmProfiler') ?: 'false').toString().toBoolean()
+def pmProfilerJvmArgs = (project.findProperty('pmProfilerJvmArgs') ?: '').toString().trim()
+
+// Optional runtime toggles for dev runs
+def enableLumenized = (project.findProperty('enable_lumenized') ?: 'false').toString().toBoolean()
+// Component Model Hider includes an ASM transformer which may assume FG2-style MCP "conf" files.
+// Keep it opt-in so a broken coremod doesn't block runClient.
+def enableComponentModelHider = (project.findProperty('enable_component_model_hider') ?: 'false').toString().toBoolean()
+// ModularUI 3.0.6 currently crashes on Cleanroom FG3 due to a KeyBinding field name mismatch (HASH vs. obf name).
+// Keep it opt-in for now to allow a stable baseline dev client.
+def enableModularUI = (project.findProperty('enable_modularui') ?: 'false').toString().toBoolean()
+
+def modVersion = ((findProperty('mod_version') ?: '').toString().trim())
+if (modVersion.isEmpty()) {
+    modVersion = (mainModVersion ?: '0.0.0').toString()
+}
+
+group = (findProperty('root_package') ?: mainMavenGroup ?: 'github.kasuminova').toString()
+version = modVersion
+
+base {
+    archivesName.set('PrototypeMachinery-ModernBackend')
+}
+
+java {
+    // Cleanroom Loader runs on modern Java.
+    // This sandbox uses a Java toolchain (default: 25).
+    // Override for comparisons, e.g.:
+    //   ./gradlew jmh -Pjava_toolchain=21
+    // NOTE: Kotlin (2.1.x) targets JVM 21 bytecode here; keep Java compilation target aligned
+    // to avoid Gradle's JVM-target mismatch validation.
+    toolchain {
+        def tc = (project.findProperty('java_toolchain') ?: '25').toString().toInteger()
+        languageVersion.set(JavaLanguageVersion.of(tc))
+    }
+}
+
+// Keep Java bytecode level consistent with Kotlin (jvmTarget=21).
+tasks.withType(JavaCompile).configureEach {
+    options.release.set(21)
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = '21'
+        freeCompilerArgs += ['-Xjsr305=strict']
+    }
+}
+
+repositories {
+    maven { url = uri('https://maven.aliyun.com/repository/public') }
+    maven { url = uri('https://maven.cleanroommc.com') }
+    // CodeChickenLib CRE (Cleanroom Edition)
+    maven { url = uri('https://repo.cleanroommc.com/releases') }
+    maven { url = uri('https://repo.spongepowered.org/maven') }
+    maven { url = uri('https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/') }
+    maven { url = uri('https://maven.blamejared.com/') }
+    // CurseMaven (Cleanroom mirror is usually more reliable for legacy modpacks)
+    maven { url = uri('https://curse.cleanroommc.com') }
+    // Fallback CurseMaven
+    maven {
+        url = uri('https://cursemaven.com')
+        content {
+            includeGroup('curse.maven')
+        }
+    }
+    // Fallback repo for Forge/FML compile-time APIs.
+    // (Unimined's CleanroomFG3 pipeline does its own jar injection, but does not currently
+    // populate Gradle's standard compileClasspath for this sandbox project.)
+    maven { url = uri('https://maven.minecraftforge.net') }
+    mavenCentral()
+    mavenLocal() // Must be last for caching to work
+}
+
+configurations {
+    // Template-style configs
+    embed
+    contain
+    implementation.extendsFrom(embed)
+    implementation.extendsFrom(contain)
+
+    modCompileOnly
+    compileOnly.extendsFrom(modCompileOnly)
+    modRuntimeOnly
+    runtimeOnly.extendsFrom(modRuntimeOnly)
+}
+
+// --- Optional Vector API accel classes (built into the main jar, but loaded reflectively) ---
+// We keep them in a dedicated sourceSet so only those compilation tasks need --add-modules.
+sourceSets {
+    vectorAccel {
+        java {
+            srcDir 'src/vectorAccel/java'
+        }
+        resources {
+            srcDir 'src/vectorAccel/resources'
+        }
+
+        // Allow Vector-accel sources to depend on main outputs and the normal classpath.
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+// Include vector accel classes/resources into the main jar.
+tasks.named('jar', Jar).configure {
+    from(sourceSets.vectorAccel.output)
+}
+
+// Ensure JMH sourceSet can see the reflectively-loaded backends on its classpath.
+// (JMH runs directly off classpaths, not from the built jar.)
+sourceSets.matching { it.name == 'jmh' }.configureEach {
+    compileClasspath += sourceSets.vectorAccel.output
+    runtimeClasspath += sourceSets.vectorAccel.output
+}
+
+// Ensure the vectorAccel sourceSet inherits normal dependencies.
+configurations {
+    vectorAccelImplementation.extendsFrom(implementation)
+    vectorAccelCompileOnly.extendsFrom(compileOnly)
+    vectorAccelRuntimeOnly.extendsFrom(runtimeOnly)
+}
+
+// Compile against the legacy main mod jar to access PMPlatform SPI.
+// NOTE: This addon is built with a separate Gradle wrapper; it does not "depend" on the main build.
+// You must build the main jar first (in the parent project) so it exists under ../build/libs.
+def pmJar = null
+def libsDir = file('../build/libs')
+if (libsDir.exists()) {
+    def candidates = libsDir.listFiles()?.findAll { f ->
+        f.isFile() &&
+                f.name.startsWith(mainArchivesBaseName + '-') &&
+                f.name.endsWith('.jar') &&
+                !f.name.endsWith('-sources.jar') &&
+                !f.name.endsWith('-javadoc.jar')
+    } ?: []
+    if (!candidates.isEmpty()) {
+        // Prefer the dev jar for deobf (MCP) runs.
+        def devCandidates = candidates.findAll { f -> f.name.contains('-dev') }
+        def normalCandidates = candidates.findAll { f -> !f.name.contains('-dev') }
+        devCandidates.sort { a, b -> Long.compare(b.lastModified(), a.lastModified()) }
+        normalCandidates.sort { a, b -> Long.compare(b.lastModified(), a.lastModified()) }
+        pmJar = (!devCandidates.isEmpty() ? devCandidates[0] : normalCandidates[0])
+    }
+}
+
+dependencies {
+    // Ensure Forge/FML annotations (e.g. @Mod) are available to javac.
+    // This is compile-only so it won't be bundled into the output jar.
+    // Note: the base coordinate is a POM (no classes). We explicitly depend on the universal jar.
+    compileOnly("net.minecraftforge:forge:1.12.2-14.23.5.2860:universal")
+
+    // Kotlin runtime & adapter comes from Forgelin-Continuous in the mod environment.
+    // We depend on it as a mod dep (compile + runtime) instead of bundling kotlin-stdlib.
+    modCompileOnly("io.github.chaosunity.forgelin:Forgelin-Continuous:${mainForgelinVersion}") {
+        exclude group: 'net.minecraftforge'
+    }
+    modRuntimeOnly("io.github.chaosunity.forgelin:Forgelin-Continuous:${mainForgelinVersion}") {
+        exclude group: 'net.minecraftforge'
+    }
+
+    // PM's baseline dependencies (for environment reproduction).
+    if (enableModularUI) {
+        modCompileOnly("com.cleanroommc:modularui:3.0.6") { transitive = false }
+        modRuntimeOnly("com.cleanroommc:modularui:3.0.6") { transitive = false }
+    }
+
+    modRuntimeOnly("CraftTweaker2:CraftTweaker2-MC1120-Main:1.12-4.+")
+    // Optional helpers used in PM's dev environment
+    modRuntimeOnly("software.bernie.geckolib:geckolib-forge-1.12.2:3.0.31")
+
+    // HEI + friends (matches main project's dev setup)
+    modRuntimeOnly("curse.maven:had-enough-items-557549:7282920")
+    // Use Cleanroom-compatible CodeChickenLib fork; the legacy CCL is known to crash in non-FG2 dev environments.
+    modRuntimeOnly("codechicken:CodeChickenLib:3.3.5")
+    modRuntimeOnly("curse.maven:ctm-267602:2915363")
+    // ZenUtils + dependency
+    modRuntimeOnly("curse.maven:zenutil-401178:7304021")
+    modRuntimeOnly("curse.maven:configanytime-870276:5212709")
+    // Component model hider
+    if (enableComponentModelHider) {
+        modRuntimeOnly("curse.maven:component-model-hider-940949:4885858")
+    }
+    // Bloom effect test (optional)
+    // Note: current Lumenized builds bundle a GregTech transformer which can crash in some dev environments
+    // (missing FG2-style MCP conf files). Keep it opt-in so runClient remains usable.
+    if (enableLumenized) {
+        modRuntimeOnly("curse.maven:lumenized-1234162:6734060")
+    }
+    // Performance test tool
+    modRuntimeOnly("curse.maven:spark-361579:3542217")
+    // Performance optimization
+    modRuntimeOnly("curse.maven:stellarcore-1064321:6480479")
+
+    // Mixin compile-time API (handy if ModernBackend later adds mixins)
+    compileOnly("com.cleanroommc:sponge-mixin:0.20.12+mixin.0.8.7")
+
+    if (pmJar != null) {
+        compileOnly(files(pmJar))
+    }
+
+    // --- JMH (microbenchmarks) ---
+    jmh('org.openjdk.jmh:jmh-core:1.37')
+    jmhAnnotationProcessor('org.openjdk.jmh:jmh-generator-annprocess:1.37')
+}
+
+// Ensure Vector API incubator module is available for JMH compilation and runtime.
+tasks.withType(JavaCompile).configureEach {
+    if (name.toLowerCase().contains('jmh')) {
+        options.compilerArgs += ['--add-modules', 'jdk.incubator.vector']
+    }
+
+    // Vector-accel sources directly reference the incubator module.
+    if (name.toLowerCase().contains('vectoraccel')) {
+        options.compilerArgs += ['--add-modules', 'jdk.incubator.vector']
+    }
+}
+
+// JMH uses separate JavaExec processes for bytecode generation and benchmark runs.
+// Those must also see the incubator module.
+tasks.withType(JavaExec).configureEach {
+    if (name.toLowerCase().contains('jmh')) {
+        jvmArgs '--add-modules', 'jdk.incubator.vector'
+    }
+}
+
+// The JMH plugin's bytecode generator is a dedicated task type (not a JavaExec).
+// It must also be given the incubator module, otherwise any benchmark classes
+// referencing Vector API will fail during metadata generation.
+tasks.withType(me.champeau.jmh.JmhBytecodeGeneratorTask).configureEach {
+    jvmArgs.addAll(['--add-modules', 'jdk.incubator.vector'])
+}
+
+// JMH benchmark runs are executed by the `jmh` task.
+// If we want reflectively loaded optional backends to be discoverable, we must add the accel jar to its classpath.
+jmh {
+    // Keep the benchmarks quick by default; tune as needed.
+    // You can override these from the command line, e.g.:
+    //   ./gradlew jmh -Pjmh_warmupIterations=8 -Pjmh_iterations=8 -Pjmh_warmup=1s -Pjmh_time=1s -Pjmh_fork=2
+    warmupIterations = (project.findProperty('jmh_warmupIterations') ?: 3).toString().toInteger()
+    iterations = (project.findProperty('jmh_iterations') ?: 5).toString().toInteger()
+    fork = (project.findProperty('jmh_fork') ?: 1).toString().toInteger()
+
+    def warmupTime = project.findProperty('jmh_warmup')
+    if (warmupTime != null) {
+        warmup = warmupTime.toString()
+    }
+    def measureTime = project.findProperty('jmh_time')
+    if (measureTime != null) {
+        timeOnIteration = measureTime.toString()
+    }
+
+    // Incubator Vector API requires explicit module enablement at runtime.
+    // You may append extra JVM args for experiments, e.g.:
+    //   ./gradlew jmh -Pjmh_jvmArgsExtra="-XX:-UseSuperWord -XX:UseAVX=0"
+    jvmArgs = ['--add-modules', 'jdk.incubator.vector']
+
+    def extraJvmArgs = project.findProperty('jmh_jvmArgsExtra')
+    if (extraJvmArgs != null) {
+        def s = extraJvmArgs.toString().trim()
+        if (!s.isEmpty()) {
+            // Accept either comma-separated or whitespace-separated args.
+            def parts = (s.contains(',') ? s.split(',') : s.split('\\s+'))
+            def cleaned = parts.collect { it.trim() }.findAll { !it.isEmpty() }
+            if (!cleaned.isEmpty()) {
+                jvmArgs.addAll(cleaned)
+            }
+        }
+    }
+
+    // Optional include/exclude filters to avoid running all benchmarks.
+    // Example:
+    //   ./gradlew jmh -Pjmh_includes=PositionTransformBackendBench
+    def includesProp = project.findProperty('jmh_includes')
+    if (includesProp != null) {
+        def s = includesProp.toString().trim()
+        if (!s.isEmpty()) {
+            includes = (s.contains(',') ? s.split(',') : s.split('\n')).collect { it.trim() }.findAll { !it.isEmpty() }
+        }
+    }
+    def excludesProp = project.findProperty('jmh_excludes')
+    if (excludesProp != null) {
+        def s = excludesProp.toString().trim()
+        if (!s.isEmpty()) {
+            excludes = (s.contains(',') ? s.split(',') : s.split('\n')).collect { it.trim() }.findAll { !it.isEmpty() }
+        }
+    }
+}
+
+tasks.named('compileJava').configure {
+    doFirst {
+        if (pmJar == null) {
+            throw new GradleException(
+                    "Cannot find main PrototypeMachinery jar under ../build/libs. " +
+                            "Build the main project first (e.g. run ../gradlew jar) so this addon can compile against PMPlatform API."
+            )
+        }
+    }
+}
+
+// Ensure the parent PrototypeMachinery mod jar is actually discoverable by FML in this dev workspace.
+// Rationale: Unimined's `mods { remap(configurations.*) }` reliably handles Maven-resolved artifacts;
+// file dependencies may not always be copied/registered as extra mod files.
+//
+// We copy the *dev* jar into run/client/mods so FML can find and load it when scanning the mods folder.
+tasks.register('installParentPmModToRunClient') {
+    group = 'run'
+    description = 'Copies the parent PrototypeMachinery -dev.jar into run/client/mods so it is loaded in dev runs.'
+
+    doLast {
+        if (pmJar == null || !pmJar.exists()) {
+            throw new GradleException('Cannot locate parent PrototypeMachinery jar in ../build/libs; build the parent project first.')
+        }
+        if (!pmJar.name.contains('-dev')) {
+            throw new GradleException(
+                    "Expected a *-dev.jar for deobf runs, but selected: ${pmJar.name}. " +
+                            "Please build the parent dev jar (it should be named like ${mainArchivesBaseName}-${version}-dev.jar)."
+            )
+        }
+
+        def modsDir = file('run/client/mods')
+        modsDir.mkdirs()
+
+        // Remove older copies to avoid duplicate mod files.
+        def old = modsDir.listFiles()?.findAll { f ->
+            f.isFile() && f.name.startsWith(mainArchivesBaseName + '-') && f.name.endsWith('.jar')
+        } ?: []
+        old.each { it.delete() }
+
+        copy {
+            from(pmJar)
+            into(modsDir)
+        }
+    }
+}
+
+// --- Cleanroom / Minecraft (1.12.2) ---
+unimined.minecraft {
+    version '1.12.2'
+
+    mappings {
+        // Matches the common 1.12.2 MCP mapping used across CR projects
+        mcp('stable', '39-1.12')
+    }
+
+    cleanroom {
+        // Keep in sync with upstream template (as of late 2025).
+        loader '0.3.31-alpha'
+        // Keep dev username stable; can be overridden by -Pminecraft_username=...
+        runs.auth.username = (rootProject.findProperty('minecraft_username') ?: 'Developer').toString()
+
+        runs.all {
+            if (enableVectorApi) {
+                jvmArgs += ['--add-modules', 'jdk.incubator.vector']
+            }
+
+            if (pmProfiler) {
+                // Improve stack traces for inlined/hot code paths (async-profiler / etc.).
+                jvmArgs += [
+                        '-XX:+UnlockDiagnosticVMOptions',
+                        '-XX:+DebugNonSafepoints',
+                        '-XX:+PreserveFramePointer'
+                ]
+            }
+
+            if (!pmProfilerJvmArgs.isEmpty()) {
+                // Accept either comma-separated or whitespace-separated args.
+                def parts = (pmProfilerJvmArgs.contains(',') ? pmProfilerJvmArgs.split(',') : pmProfilerJvmArgs.split('\\s+'))
+                def cleaned = parts.collect { it.trim() }.findAll { !it.isEmpty() }
+                if (!cleaned.isEmpty()) {
+                    jvmArgs.addAll(cleaned)
+                }
+            }
+
+            // --- FG2/GradleStart compat (for some legacy ASM transformers) ---
+            // Some legacy coremods (e.g. Lumenized / some GregTech-derived transformers) try to read MCP CSVs
+            // via ForgeGradle2's GradleStart system properties:
+            //   - net.minecraftforge.gradle.GradleStart.srg.notch-srg
+            //   - net.minecraftforge.gradle.GradleStart.csvDir
+            // CleanroomFG3 + Unimined does not provide these by default, so we emulate them for dev runs.
+            // Files are prepared by the `prepareGradleStartMappings` task.
+            def fg2CompatBaseDir = file('.gradle/fg2CompatMappings')
+            def fg2NotchSrgFile = new File(fg2CompatBaseDir, 'notch-srg.srg')
+            def fg2CsvDir = new File(fg2CompatBaseDir, 'csv')
+            jvmArgs += [
+                    "-Dnet.minecraftforge.gradle.GradleStart.srg.notch-srg=${fg2NotchSrgFile.absolutePath}",
+                    "-Dnet.minecraftforge.gradle.GradleStart.csvDir=${fg2CsvDir.absolutePath}",
+            ]
+
+            // --- ModularUI dev-only fix ---
+            // ModularUI expects KeyBinding.HASH (KeyBindingMap). In CleanroomFG3 deobf runs this field can exist only as the obf name `b`.
+            // We load a tiny dev-only coremod (via JVM arg) that patches KeyBinding bytecode before mixins apply.
+            if (enableModularUI) {
+                jvmArgs += [
+                        "-Dfml.coreMods.load=github.kasuminova.prototypemachinery.modernbackend.devfix.DevKeyBindingHashCoremod",
+                ]
+            }
+        }
+    }
+
+    // This sandbox does not publish/ship remapped jars; we only need run/compile for now.
+    defaultRemapJar = false
+
+    // Remap external mods (SRG->MCP) for the dev environment.
+    mods {
+        remap(configurations.modCompileOnly)
+        remap(configurations.modRuntimeOnly)
+    }
+}
+
+// Vector accel is now packaged into the main jar; no extra jar install steps required.
+
+// --- FG2/GradleStart compat mapping materialization ---
+// A few legacy transformers expect MCP's `fields.csv` / `methods.csv` files and a (notch->srg) SRG mapping file to exist
+// and be referenced through the ForgeGradle2 GradleStart system properties.
+//
+// We can source the CSVs from Unimined's local `srg2mcp.jar` (it contains fields.csv / methods.csv / params.csv).
+// The notch-srg file is only used as an existence gate in some implementations; we create an empty placeholder.
+// If a future transformer actually parses it, we'll need to materialize a real notch->srg mapping as well.
+tasks.register('prepareGradleStartMappings') {
+    group = 'run'
+    description = 'Prepares FG2 GradleStart mapping files (fields.csv/methods.csv) for legacy transformers.'
+
+    def uniminedMappingsDir = file('.gradle/unimined/local/mappings')
+    def srg2mcpJar = new File(uniminedMappingsDir, 'srg2mcp.jar')
+
+    def fg2CompatBaseDir = file('.gradle/fg2CompatMappings')
+    def fg2CsvDir = new File(fg2CompatBaseDir, 'csv')
+    def fg2NotchSrgFile = new File(fg2CompatBaseDir, 'notch-srg.srg')
+
+    inputs.file(srg2mcpJar)
+    outputs.dir(fg2CompatBaseDir)
+
+    doLast {
+        if (!srg2mcpJar.exists()) {
+            throw new GradleException(
+                    "Unimined mapping jar not found at ${srg2mcpJar}. " +
+                            "Run a CleanroomFG3 run task once (e.g. runClient) to let Unimined populate local mappings."
+            )
+        }
+
+        fg2CsvDir.mkdirs()
+        fg2CompatBaseDir.mkdirs()
+
+        // Extract MCP CSVs used by some transformers
+        copy {
+            from(zipTree(srg2mcpJar)) {
+                include 'fields.csv'
+                include 'methods.csv'
+                // params.csv is not required by the known remappers, but harmless if present.
+                include 'params.csv'
+            }
+            into(fg2CsvDir)
+        }
+
+        // Create a placeholder notch->srg mapping file.
+        // Many implementations only check existence; keep content minimal to avoid misleading people.
+        if (!fg2NotchSrgFile.exists()) {
+            fg2NotchSrgFile.text = "# Placeholder for FG2 GradleStart notch->srg mapping.\n"
+        }
+    }
+}
+
+// Ensure the mapping materialization happens before the JVM for runClient starts.
+// We run it after preRunClient (so Unimined has already populated local mappings).
+tasks.matching { it.name == 'runClient' }.configureEach {
+    dependsOn('prepareGradleStartMappings')
+    dependsOn('installParentPmModToRunClient')
+}
+tasks.matching { it.name == 'prepareGradleStartMappings' }.configureEach {
+    if (tasks.findByName('preRunClient') != null) {
+        dependsOn('preRunClient')
+    }
+}
+tasks.matching { it.name == 'installParentPmModToRunClient' }.configureEach {
+    if (tasks.findByName('preRunClient') != null) {
+        dependsOn('preRunClient')
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+processResources {
+    inputs.property 'mod_id', modId
+    inputs.property 'mod_name', modName
+    inputs.property 'mod_version', modVersion
+    inputs.property 'mod_description', modDescription
+
+    filesMatching(['mcmod.info', 'pack.mcmeta']) {
+        expand(
+                'mod_id': modId,
+                'mod_name': modName,
+                'mod_version': modVersion,
+                'mod_description': modDescription,
+        )
+    }
+}

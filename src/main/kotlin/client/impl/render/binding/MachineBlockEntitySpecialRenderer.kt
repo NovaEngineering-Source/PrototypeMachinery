@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery.client.impl.render.binding
 
 import github.kasuminova.prototypemachinery.api.machine.component.type.GeckoModelStateComponent
 import github.kasuminova.prototypemachinery.api.machine.component.type.GeckoModelStateComponentType
+import github.kasuminova.prototypemachinery.api.machine.component.type.StructureRenderDataComponentType
 import github.kasuminova.prototypemachinery.api.machine.component.type.ZSDataComponent
 import github.kasuminova.prototypemachinery.api.machine.component.type.ZSDataComponentType
 import github.kasuminova.prototypemachinery.client.api.render.RenderKey
@@ -16,16 +17,14 @@ import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelR
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoRenderSnapshot
 import github.kasuminova.prototypemachinery.client.impl.render.task.BuiltBuffers
 import github.kasuminova.prototypemachinery.client.impl.render.task.RenderTaskCache
+import github.kasuminova.prototypemachinery.client.impl.render.task.RenderTaskOwnerKeys
 import github.kasuminova.prototypemachinery.common.block.MachineBlock
 import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
-import github.kasuminova.prototypemachinery.impl.machine.structure.StructureUtils
-import github.kasuminova.prototypemachinery.impl.machine.structure.match.StructureMatchContextImpl
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.ResourceLocation
-import net.minecraft.util.math.BlockPos
 
 /**
  * TESR for MachineBlockEntity.
@@ -95,9 +94,51 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         val world = mc.world ?: return
         val resourcesRoot = mc.gameDir.toPath().resolve("resources")
 
+        // Chunk coordinates for spatial bucketing (controller position).
+        val chunkX = te.pos.x shr 4
+        val chunkZ = te.pos.z shr 4
+
         // --- Structure-level bindings (new preferred path) ---
         val structureBindings = ClientRenderBindingRegistryImpl.getStructureBindings(te.machine.type.id)
         if (structureBindings.isNotEmpty()) {
+            // IMPORTANT:
+            // Never run structure matching on the render thread.
+            // Server already matches on a schedule and syncs formed + slice counts.
+            if (te.machine.isFormed()) {
+                val sliceCounts = (te.machine.componentMap.get(StructureRenderDataComponentType)
+                    as? github.kasuminova.prototypemachinery.api.machine.component.type.StructureRenderDataComponent)
+                    ?.sliceCounts
+                    ?: emptyMap()
+
+                // Determine orientation in the same way as server-side structure checking.
+                val state = world.getBlockState(te.pos)
+                val facing = runCatching { state.getValue(MachineBlock.FACING) }.getOrDefault(EnumFacing.NORTH)
+                val top = te.getTopFacing(facing)
+                val orientation = github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation(front = facing, top = top)
+
+                val rootStructure = StructureRegistryImpl.get(te.machine.type.structure.id, orientation, facing)
+                    ?: te.machine.type.structure.transform { it }
+
+                val anchors = ClientStructureRenderAnchors.collectAnchorsFromSliceCounts(
+                    rootStructure,
+                    controllerPos = te.pos,
+                    sliceCountsById = sliceCounts,
+                    resolveSliceMode = { s ->
+                        // mode is binding-driven; default STRUCTURE_ONLY
+                        structureBindings[s.id]?.sliceRenderMode ?: SliceRenderMode.STRUCTURE_ONLY
+                    },
+                )
+
+                for (anchor in anchors) {
+                    val binding = structureBindings[anchor.structure.id] ?: continue
+                    val list = collectStructureBound(te, binding, anchor, resourcesRoot)
+                    if (list.isNotEmpty()) {
+                        MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData(chunkX, chunkZ) })
+                    }
+                }
+                return
+            }
+
             // Determine orientation in the same way as server-side structure checking.
             val state = world.getBlockState(te.pos)
             val facing = runCatching { state.getValue(MachineBlock.FACING) }.getOrDefault(EnumFacing.NORTH)
@@ -107,32 +148,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
             val rootStructure = StructureRegistryImpl.get(te.machine.type.structure.id, orientation, facing)
                 ?: te.machine.type.structure.transform { it }
 
-            val context = StructureMatchContextImpl(te.machine)
-            val matched = runCatching { rootStructure.matches(context, te.pos) }.getOrDefault(false)
-            val rootInstance = if (matched) context.getRootInstance() else null
-
-            if (rootInstance != null) {
-                val anchors = ClientStructureRenderAnchors.collectAnchors(
-                    rootStructure,
-                    rootInstance,
-                    controllerPos = te.pos,
-                    resolveSliceMode = { s ->
-                        // mode is binding-driven; default STRUCTURE_ONLY
-                        structureBindings[s.id]?.sliceRenderMode ?: SliceRenderMode.STRUCTURE_ONLY
-                    },
-                )
-
-                // Collect all render data and submit to dispatcher for centralized batch rendering.
-                // The dispatcher will render all machines' opaque content first, then all transparent.
-                for (anchor in anchors) {
-                    val binding = structureBindings[anchor.structure.id] ?: continue
-                    val list = collectStructureBound(te, binding, anchor, resourcesRoot)
-                    if (list.isNotEmpty()) {
-                        MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData() })
-                    }
-                }
-                return
-            }
+            // If not formed, fall back to legacy bindings below.
         }
 
         // --- Legacy bindings (fallback) ---
@@ -143,7 +159,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         if (machineBinding != null) {
             val list = collectLegacy(te, machineBinding, resourcesRoot, bindingKey = te.machine.type.id)
             if (list.isNotEmpty()) {
-                MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData() })
+                MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData(chunkX, chunkZ) })
             }
         }
 
@@ -153,7 +169,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                 if (!te.machine.componentMap.containsComponentTypeId(componentTypeId)) continue
                 val list = collectLegacy(te, binding, resourcesRoot, bindingKey = componentTypeId)
                 if (list.isNotEmpty()) {
-                    MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData() })
+                    MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData(chunkX, chunkZ) })
                 }
             }
         }
@@ -167,10 +183,12 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         val combinedLight: Int,
         val built: BuiltBuffers,
     ) {
-        fun toPendingRenderData(): MachineRenderDispatcher.PendingRenderData {
+        fun toPendingRenderData(chunkX: Int, chunkZ: Int): MachineRenderDispatcher.PendingRenderData {
             return MachineRenderDispatcher.PendingRenderData(
                 texture = texture,
                 combinedLight = combinedLight,
+                chunkX = chunkX,
+                chunkZ = chunkZ,
                 built = built,
             )
         }
@@ -206,7 +224,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
 
         val variantForAnim = run {
             var v = variantBase
-            v = 31 * v + animationNames.joinToString("\u0000").hashCode()
+            v = 31 * v + hashStringList(animationNames)
             v = 31 * v + (geckoState?.stateVersion ?: 0)
             v
         }
@@ -260,7 +278,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         val out = ArrayList<CollectedRenderData>(2)
 
         if (binding.animation == null) {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.ALL)
+            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.ALL.ordinal, RenderPart.values().size)
             val rk = baseKey(animationStateHash = animTick, animationTimeKey = 0, variant = variantBase)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ALL)
@@ -285,7 +303,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
 
         // Permanent static task: cache across animation switches.
         run {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.PERMANENT_STATIC)
+            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.PERMANENT_STATIC.ordinal, RenderPart.values().size)
             val rk = baseKey(animationStateHash = 0, animationTimeKey = 0, variant = variantBase)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.PERMANENT_STATIC_ONLY)
@@ -305,7 +323,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
 
         // Temporary static task: cache until animation selection changes.
         run {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.TEMP_STATIC)
+            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.TEMP_STATIC.ordinal, RenderPart.values().size)
             val rk = baseKey(animationStateHash = 0, animationTimeKey = 0, variant = variantForAnim)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.TEMP_STATIC_ONLY)
@@ -325,7 +343,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
 
         // Dynamic task: rebuild at tick-rate.
         run {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.DYNAMIC)
+            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.DYNAMIC.ordinal, RenderPart.values().size)
             val rk = baseKey(animationStateHash = animTick, animationTimeKey = animTimeKey, variant = variantForAnim)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ANIMATED_ONLY)
@@ -358,11 +376,13 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         val front = runCatching { state.getValue(MachineBlock.FACING) }.getOrDefault(EnumFacing.NORTH)
         val top = te.getTopFacing(front)
 
-        val bindingKey = StructureBindingKey(
-            machineTypeId = te.machine.type.id,
-            structureId = anchor.structure.id,
-            sliceIndex = anchor.sliceIndex,
-        )
+        // Binding identity seed (same as data-class hashCode, but without allocating a key object).
+        val bindingVariantSeed = run {
+            var h = te.machine.type.id.hashCode()
+            h = 31 * h + anchor.structure.id.hashCode()
+            h = 31 * h + anchor.sliceIndex
+            h
+        }
 
         val geckoState = te.machine.componentMap[GeckoModelStateComponentType] as? GeckoModelStateComponent
         val animationNames = resolveAnimationNames(te, model, geckoState)
@@ -374,14 +394,14 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         val animTimeKey = if (model.animation != null) RenderFrameClock.currentAnimationTimeKey() else 0
 
         val variantBase = run {
-            var v = bindingKey.hashCode()
+            var v = bindingVariantSeed
             v = 31 * v + (model.animation?.hashCode() ?: 0)
             v
         }
 
         val variantForAnim = run {
             var v = variantBase
-            v = 31 * v + animationNames.joinToString("\u0000").hashCode()
+            v = 31 * v + hashStringList(animationNames)
             v = 31 * v + (geckoState?.stateVersion ?: 0)
             v
         }
@@ -413,44 +433,33 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
             }
         }
 
-        val deltaX = (anchor.worldOrigin.x - te.pos.x).toDouble()
-        val deltaY = (anchor.worldOrigin.y - te.pos.y).toDouble()
-        val deltaZ = (anchor.worldOrigin.z - te.pos.z).toDouble()
+        val dx = anchor.worldOrigin.x - te.pos.x
+        val dy = anchor.worldOrigin.y - te.pos.y
+        val dz = anchor.worldOrigin.z - te.pos.z
 
-        // Convert the world-space anchor delta back into the base structure coordinate system (NORTH/UP).
-        // We'll apply the (front/top) orientation in GeckoModelRenderBuildTask so all offsets rotate together.
-        val rotation: (EnumFacing) -> EnumFacing = { facing ->
-            val baseFront = EnumFacing.NORTH
-            val baseTop = EnumFacing.UP
-            val baseRight = EnumFacing.EAST
+        // Convert the world-space anchor delta back into the base structure coordinate system (NORTH/UP),
+        // but without allocating lambdas / HashMaps like rotatePos(rotationFn).
+        val targetFront = front
+        val targetTop = top
+        val targetRight = github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation(targetFront, targetTop).right
 
-            val targetFront = front
-            val targetTop = top
-            val targetRight = github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation(targetFront, targetTop).right
-
-            when (facing) {
-                baseFront -> targetFront
-                baseFront.opposite -> targetFront.opposite
-                baseTop -> targetTop
-                baseTop.opposite -> targetTop.opposite
-                baseRight -> targetRight
-                baseRight.opposite -> targetRight.opposite
-                else -> facing
-            }
+        fun invFacing(f: EnumFacing): EnumFacing = when (f) {
+            targetFront -> EnumFacing.NORTH
+            targetFront.opposite -> EnumFacing.SOUTH
+            targetTop -> EnumFacing.UP
+            targetTop.opposite -> EnumFacing.DOWN
+            targetRight -> EnumFacing.EAST
+            targetRight.opposite -> EnumFacing.WEST
+            else -> f
         }
 
-        val inverseRotation: (EnumFacing) -> EnumFacing = run {
-            val inverseMap = HashMap<EnumFacing, EnumFacing>(EnumFacing.values().size)
-            for (f in EnumFacing.values()) {
-                inverseMap[rotation(f)] = f
-            }
-            return@run { f: EnumFacing -> inverseMap[f] ?: f }
-        }
+        val invEast = invFacing(EnumFacing.EAST).directionVec
+        val invUp = invFacing(EnumFacing.UP).directionVec
+        val invSouth = invFacing(EnumFacing.SOUTH).directionVec
 
-        val localDelta = StructureUtils.rotatePos(
-            BlockPos(deltaX.toInt(), deltaY.toInt(), deltaZ.toInt()),
-            inverseRotation
-        )
+        val localDx = dx * invEast.x + dy * invUp.x + dz * invSouth.x
+        val localDy = dx * invEast.y + dy * invUp.y + dz * invSouth.y
+        val localDz = dx * invEast.z + dy * invUp.z + dz * invSouth.z
 
 
         fun baseSnapshot(ownerKey: Any, renderKey: RenderKey, bakeMode: GeckoModelBaker.BakeMode): GeckoRenderSnapshot {
@@ -468,9 +477,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                 z = te.pos.z.toDouble(),
                 // Structure anchor delta + user modelOffset, both expressed in base/local structure coordinates.
                 // They will be rotated by (front/top) in GeckoModelRenderBuildTask.
-                modelOffsetX = localDelta.x.toDouble() + model.modelOffsetX,
-                modelOffsetY = localDelta.y.toDouble() + model.modelOffsetY,
-                modelOffsetZ = localDelta.z.toDouble() + model.modelOffsetZ,
+                modelOffsetX = localDx.toDouble() + model.modelOffsetX,
+                modelOffsetY = localDy.toDouble() + model.modelOffsetY,
+                modelOffsetZ = localDz.toDouble() + model.modelOffsetZ,
                 front = front,
                 top = top,
                 resourcesRoot = resourcesRoot,
@@ -481,7 +490,14 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         val out = ArrayList<CollectedRenderData>(2)
 
         if (model.animation == null) {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.ALL)
+            val ownerKey = RenderTaskOwnerKeys.structureOwnerKey(
+                te = te,
+                machineTypeId = te.machine.type.id,
+                structureId = anchor.structure.id,
+                sliceIndex = anchor.sliceIndex,
+                partOrdinal = RenderPart.ALL.ordinal,
+                partCount = RenderPart.values().size,
+            )
             val rk = baseKey(animationStateHash = animTick, animationTimeKey = 0, variant = variantBase)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ALL)
@@ -501,7 +517,14 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         }
 
         run {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.PERMANENT_STATIC)
+            val ownerKey = RenderTaskOwnerKeys.structureOwnerKey(
+                te = te,
+                machineTypeId = te.machine.type.id,
+                structureId = anchor.structure.id,
+                sliceIndex = anchor.sliceIndex,
+                partOrdinal = RenderPart.PERMANENT_STATIC.ordinal,
+                partCount = RenderPart.values().size,
+            )
             val rk = baseKey(animationStateHash = 0, animationTimeKey = 0, variant = variantBase)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.PERMANENT_STATIC_ONLY)
@@ -520,7 +543,14 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         }
 
         run {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.TEMP_STATIC)
+            val ownerKey = RenderTaskOwnerKeys.structureOwnerKey(
+                te = te,
+                machineTypeId = te.machine.type.id,
+                structureId = anchor.structure.id,
+                sliceIndex = anchor.sliceIndex,
+                partOrdinal = RenderPart.TEMP_STATIC.ordinal,
+                partCount = RenderPart.values().size,
+            )
             val rk = baseKey(animationStateHash = 0, animationTimeKey = 0, variant = variantForAnim)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.TEMP_STATIC_ONLY)
@@ -539,7 +569,14 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         }
 
         run {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.DYNAMIC)
+            val ownerKey = RenderTaskOwnerKeys.structureOwnerKey(
+                te = te,
+                machineTypeId = te.machine.type.id,
+                structureId = anchor.structure.id,
+                sliceIndex = anchor.sliceIndex,
+                partOrdinal = RenderPart.DYNAMIC.ordinal,
+                partCount = RenderPart.values().size,
+            )
             val rk = baseKey(animationStateHash = animTick, animationTimeKey = animTimeKey, variant = variantForAnim)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ANIMATED_ONLY)
@@ -614,18 +651,15 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         DYNAMIC,
     }
 
-    private data class RenderOwnerKey(
-        private val te: MachineBlockEntity,
-        private val bindingKey: Any,
-        private val part: RenderPart,
-    )
-
-    private data class StructureBindingKey(
-        private val machineTypeId: ResourceLocation,
-        private val structureId: String,
-        private val sliceIndex: Int,
-    ) {
-        override fun toString(): String = "$machineTypeId/$structureId#$sliceIndex"
+    private fun hashStringList(values: List<String>): Int {
+        // A stable, allocation-free alternative to values.joinToString("\u0000").hashCode().
+        // We mix the size and each element hash with a separator marker to reduce accidental collisions.
+        var h = values.size
+        for (s in values) {
+            h = 31 * h + s.hashCode()
+            h = 31 * h + 0x9E3779B9.toInt()
+        }
+        return h
     }
 
     private fun github.kasuminova.prototypemachinery.api.machine.component.MachineComponentMap.containsComponentTypeId(id: ResourceLocation): Boolean {

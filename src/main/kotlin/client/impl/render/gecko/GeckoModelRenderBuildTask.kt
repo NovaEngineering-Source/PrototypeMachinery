@@ -117,9 +117,14 @@ internal class GeckoModelRenderBuildTask(
 
         val buildersByPass = linkedMapOf<RenderPass, BufferBuilder>()
 
+        // Filled after we compute active/potential animated bones (see below).
+        var estimatedBytesByPass: Map<RenderPass, Int> = emptyMap()
+
         fun getOrCreate(pass: RenderPass): BufferBuilder {
             return buildersByPass.getOrPut(pass) {
-                BufferBuilderPool.borrow(32 * 1024, tag = "GeckoModelRenderBuildTask.$pass").also {
+                val want = estimatedBytesByPass[pass] ?: 0
+                val minCap = maxOf(32 * 1024, want)
+                BufferBuilderPool.borrow(minCap, tag = "GeckoModelRenderBuildTask.$pass").also {
                     it.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX_COLOR_NORMAL)
                 }
             }
@@ -168,6 +173,39 @@ internal class GeckoModelRenderBuildTask(
         }
 
         val potentialAnimatedBones = boneIndex?.allAnimatedBones ?: emptySet()
+
+        // Estimate vertex counts per routed pass and pre-size BufferBuilders.
+        // This avoids BufferBuilder.growBuffer() repeatedly reallocating direct memory (which can spike and OOM
+        // under low MaxDirectMemorySize and high build parallelism).
+        run {
+            fun bytesForVertices(vertices: Int): Int {
+                if (vertices <= 0) return 0
+                // POSITION_TEX_COLOR_NORMAL: 7 ints per vertex => 28 bytes.
+                // Add a small headroom to avoid tiny under-estimates from edge cases.
+                val bytes = vertices.toLong() * 28L
+                val withHeadroom = bytes + 16L * 1024L
+                return if (withHeadroom > Int.MAX_VALUE.toLong()) Int.MAX_VALUE else withHeadroom.toInt()
+            }
+
+            val routedVertexCounts = GeckoModelBaker.estimateRoutedFilteredVertexCounts(
+                model = model,
+                activeAnimatedBones = activeAnimatedBones,
+                mode = snapshot.bakeMode,
+                potentialAnimatedBones = potentialAnimatedBones,
+            )
+
+            val m = linkedMapOf<RenderPass, Int>()
+            if (forcedPass != null) {
+                val totalVerts = routedVertexCounts[0] + routedVertexCounts[1] + routedVertexCounts[2] + routedVertexCounts[3]
+                m[forcedPass] = bytesForVertices(totalVerts)
+            } else {
+                m[RenderPass.DEFAULT] = bytesForVertices(routedVertexCounts[0])
+                m[RenderPass.BLOOM] = bytesForVertices(routedVertexCounts[1])
+                m[RenderPass.TRANSPARENT] = bytesForVertices(routedVertexCounts[2])
+                m[RenderPass.BLOOM_TRANSPARENT] = bytesForVertices(routedVertexCounts[3])
+            }
+            estimatedBytesByPass = m
+        }
 
         GeckoModelBaker.bakeRoutedFiltered(
             model = model,

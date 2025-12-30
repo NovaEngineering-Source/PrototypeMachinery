@@ -1,0 +1,69 @@
+plugins {
+    id 'java'
+    id 'me.champeau.jmh' version '0.7.2'
+}
+
+// Standalone Java 8 scalar microbenchmarks.
+// Intentionally isolated from the main Java 8 Forge mod build and from modern-backend (Vector API).
+
+group = 'github.kasuminova'
+version = '0.0.0'
+
+java {
+    toolchain {
+        // Default to JDK8 for comparisons.
+        // Override, e.g.:
+        //   ../gradlew -p java8-bench jmh -Pjava_toolchain=21
+        def tc = (project.findProperty('java_toolchain') ?: '8').toString().toInteger()
+        languageVersion.set(JavaLanguageVersion.of(tc))
+    }
+}
+
+// Always emit Java 8 bytecode so the exact same artifacts can be compared under newer runtimes.
+def toolchainVersion = (project.findProperty('java_toolchain') ?: '8').toString().toInteger()
+tasks.withType(JavaCompile).configureEach {
+    // JDK8's javac does NOT support --release.
+    if (toolchainVersion >= 9) {
+        options.release.set(8)
+    } else {
+        sourceCompatibility = JavaVersion.VERSION_1_8.toString()
+        targetCompatibility = JavaVersion.VERSION_1_8.toString()
+    }
+    options.encoding = 'UTF-8'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    jmh('org.openjdk.jmh:jmh-core:1.37')
+    jmhAnnotationProcessor('org.openjdk.jmh:jmh-generator-annprocess:1.37')
+}
+
+jmh {
+    warmupIterations = (project.findProperty('jmh_warmupIterations') ?: 5).toString().toInteger()
+    iterations = (project.findProperty('jmh_iterations') ?: 5).toString().toInteger()
+    fork = (project.findProperty('jmh_fork') ?: 2).toString().toInteger()
+
+    def warmupTime = project.findProperty('jmh_warmup')
+    if (warmupTime != null) {
+        warmup = warmupTime.toString()
+    }
+    def measureTime = project.findProperty('jmh_time')
+    if (measureTime != null) {
+        timeOnIteration = measureTime.toString()
+    }
+
+    def extraJvmArgs = project.findProperty('jmh_jvmArgsExtra')
+    if (extraJvmArgs != null) {
+        def s = extraJvmArgs.toString().trim()
+        if (!s.isEmpty()) {
+            def parts = (s.contains(',') ? s.split(',') : s.split('\\s+'))
+            def cleaned = parts.collect { it.trim() }.findAll { !it.isEmpty() }
+            if (!cleaned.isEmpty()) {
+                jvmArgs = cleaned
+            }
+        }
+    }
+}

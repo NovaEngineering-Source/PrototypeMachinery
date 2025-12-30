@@ -43,6 +43,8 @@ internal object NativeBuffers {
             PrototypeMachinery.logger.warn("[NativeBuffers] Large BufferBuilder init: {} bytes, tag={}", initialSize, tag, t)
         }
 
-        return BufferBuilder(initialSize)
+        // MC 1.12 BufferBuilder(int) expects an INT count; the direct buffer capacity is (ints * 4) bytes.
+        val initInts = if (initialSize <= 0) 0 else ((initialSize + 3) ushr 2)
+        return BufferBuilder(initInts)
     }
 }

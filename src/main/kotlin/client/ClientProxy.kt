@@ -15,6 +15,7 @@ import github.kasuminova.prototypemachinery.client.impl.render.demo.GeckoBakeBen
 import github.kasuminova.prototypemachinery.client.impl.render.demo.GeckoBindMachineClientCommand
 import github.kasuminova.prototypemachinery.client.impl.render.demo.GeckoSmokeClientCommand
 import github.kasuminova.prototypemachinery.client.impl.render.demo.MachineIdClientCommand
+import github.kasuminova.prototypemachinery.client.impl.render.demo.RenderClearCachesClientCommand
 import github.kasuminova.prototypemachinery.client.impl.render.demo.RenderHudClientCommand
 import github.kasuminova.prototypemachinery.client.impl.render.demo.RenderStressClientCommand
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoAnimationDriver
@@ -92,6 +93,7 @@ internal class ClientProxy : CommonProxy() {
         // Perf/stress tools
         ClientCommandHandler.instance.registerCommand(RenderStressClientCommand)
         ClientCommandHandler.instance.registerCommand(RenderHudClientCommand)
+        ClientCommandHandler.instance.registerCommand(RenderClearCachesClientCommand)
         ClientCommandHandler.instance.registerCommand(GeckoBakeBenchClientCommand)
         ClientCommandHandler.instance.registerCommand(GeckoBakeAnimBenchClientCommand)
     }

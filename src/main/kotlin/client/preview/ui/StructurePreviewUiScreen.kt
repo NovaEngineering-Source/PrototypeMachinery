@@ -1,6 +1,5 @@
 package github.kasuminova.prototypemachinery.client.preview.ui
 
-import com.cleanroommc.modularui.api.IThemeApi
 import com.cleanroommc.modularui.api.drawable.IDrawable
 import com.cleanroommc.modularui.api.widget.IWidget
 import com.cleanroommc.modularui.drawable.UITexture
@@ -11,24 +10,17 @@ import com.cleanroommc.modularui.screen.UISettings
 import com.cleanroommc.modularui.utils.Color
 import com.cleanroommc.modularui.value.BoolValue
 import com.cleanroommc.modularui.value.IntValue
-import com.cleanroommc.modularui.value.StringValue
 import com.cleanroommc.modularui.widgets.ButtonWidget
-import com.cleanroommc.modularui.widgets.ItemDisplayWidget
-import com.cleanroommc.modularui.widgets.ListWidget
 import com.cleanroommc.modularui.widgets.TextWidget
 import com.cleanroommc.modularui.widgets.TransformWidget
 import com.cleanroommc.modularui.widgets.layout.Column
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
-import github.kasuminova.prototypemachinery.api.machine.structure.preview.AnyOfRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.BlockRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateRequirement
-import github.kasuminova.prototypemachinery.api.machine.structure.preview.LiteralRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.StructurePreviewModel
-import github.kasuminova.prototypemachinery.api.machine.structure.preview.UnknownRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ui.StructurePreviewBomLine
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ui.StructurePreviewEntryStatus
-import github.kasuminova.prototypemachinery.api.machine.structure.preview.ui.StructurePreviewStats
 import github.kasuminova.prototypemachinery.client.preview.ProjectionRenderMode
 import github.kasuminova.prototypemachinery.client.preview.ProjectionVisualMode
 import github.kasuminova.prototypemachinery.client.preview.StructureProjectionSession
@@ -42,13 +34,9 @@ import net.minecraft.block.Block
 import net.minecraft.client.Minecraft
 import net.minecraft.client.resources.I18n
 import net.minecraft.init.Blocks
-import net.minecraft.item.ItemStack
 import net.minecraft.util.ResourceLocation
 import net.minecraft.util.math.BlockPos
 import net.minecraft.util.text.TextComponentTranslation
-import net.minecraftforge.fluids.FluidRegistry
-import net.minecraftforge.fluids.FluidStack
-import net.minecraftforge.fluids.FluidUtil
 
 /**
  * Minimal read-only ModularUI screen for structure preview.
@@ -61,13 +49,41 @@ import net.minecraftforge.fluids.FluidUtil
  */
 internal object StructurePreviewUiScreen {
 
-    private fun tr(key: String, vararg args: Any): String = I18n.format(key, *args)
+    private data class ResolvedPreview(
+        val model: StructurePreviewModel,
+        val state: StructurePreviewUiState,
+        val structureName: String
+    )
+
+    private fun resolvePreview(structureId: String, sliceCountOverride: Int?, host: StructurePreviewUiHostConfig): ResolvedPreview? {
+        val structure = PrototypeMachineryAPI.structureRegistry.get(structureId) ?: return null
+
+        val model: StructurePreviewModel = StructurePreviewBuilder.build(
+            structure = structure,
+            options = StructurePreviewBuilder.Options(
+                sliceCountSelector = { sliceLike ->
+                    sliceCountOverride ?: sliceLike.minCount
+                }
+            )
+        )
+
+        val state = StructurePreviewUiState()
+        state.show3d.boolValue = host.defaultTo3DView
+
+        return ResolvedPreview(
+            model = model,
+            state = state,
+            structureName = structure.name
+        )
+    }
+
+    internal fun tr(key: String, vararg args: Any): String = I18n.format(key, *args)
 
     private fun onOffText(v: Boolean): String = tr(if (v) "pm.preview.ui.state.on" else "pm.preview.ui.state.off")
 
     private fun previewModeText(show3d: Boolean): String = tr(if (show3d) "pm.preview.ui.mode.3d" else "pm.preview.ui.mode.slice")
 
-    private fun entryStatusText(st: StructurePreviewEntryStatus): String = tr("pm.preview.ui.entry_status.${st.name.lowercase()}")
+    internal fun entryStatusText(st: StructurePreviewEntryStatus): String = tr("pm.preview.ui.entry_status.${st.name.lowercase()}")
 
     /**
      * Best-effort resolve controller block requirement for a structure.
@@ -102,7 +118,7 @@ internal object StructurePreviewUiScreen {
         return ExactBlockStateRequirement(id, meta, props)
     }
 
-    private fun guiTex(path: String): UITexture {
+    internal fun guiTex(path: String): UITexture {
         // ResourceLocation path is without the textures/ prefix and without .png
         // e.g. textures/gui/gui_structure_preview/base.png -> gui/gui_structure_preview/base
         return UITexture.fullImage(ResourceLocation("prototypemachinery", "gui/gui_structure_preview/$path"))
@@ -112,171 +128,11 @@ internal object StructurePreviewUiScreen {
 
     // Keep slot visuals consistent with ItemHatchGUI.
     // states.png sub-area: (73,0) size 18x18.
-    private val ITEM_SLOT_BG: IDrawable = UITexture.builder()
+    internal val ITEM_SLOT_BG: IDrawable = UITexture.builder()
         .location(ResourceLocation(PrototypeMachinery.MOD_ID, "textures/gui/states.png"))
         .imageSize(256, 256)
         .subAreaXYWH(73, 0, 18, 18)
         .build()
-
-    private class ToggleDrawableWidget(
-        private val valueProvider: () -> Boolean,
-        private val off: com.cleanroommc.modularui.api.drawable.IDrawable,
-        private val on: com.cleanroommc.modularui.api.drawable.IDrawable
-    ) : com.cleanroommc.modularui.widget.Widget<ToggleDrawableWidget>() {
-        override fun draw(context: com.cleanroommc.modularui.screen.viewport.ModularGuiContext, widgetTheme: com.cleanroommc.modularui.theme.WidgetThemeEntry<*>) {
-            val drawable = if (valueProvider()) on else off
-            drawable.drawAtZero(context, area, getActiveWidgetTheme(widgetTheme, isHovering))
-            super.draw(context, widgetTheme)
-        }
-    }
-
-    /**
-     * A Column that we frequently rebuild (remove + re-add children) at runtime.
-     *
-     * ModularUI 的布局系统会在 children 变化时自行重新计算，所以这里只需要确保 removeAll() 被调用即可。
-     */
-    private class ClearableColumn : Column() {
-        fun clearChildrenSafe() {
-            removeAll()
-            scheduleResize()
-        }
-    }
-
-    /**
-     * Transparent click-catcher that can wrap a child widget.
-     * Used to make display-only widgets (like ItemDisplayWidget) clickable without changing their rendering.
-     */
-    private class ClickableOverlay(
-        private val onLeftClick: () -> Unit
-    ) : com.cleanroommc.modularui.widget.SingleChildWidget<ClickableOverlay>(), com.cleanroommc.modularui.api.widget.Interactable {
-        override fun onMousePressed(mouseButton: Int): com.cleanroommc.modularui.api.widget.Interactable.Result {
-            if (mouseButton != 0) return com.cleanroommc.modularui.api.widget.Interactable.Result.ACCEPT
-            onLeftClick.invoke()
-            return com.cleanroommc.modularui.api.widget.Interactable.Result.SUCCESS
-        }
-    }
-
-    private class StructurePreviewUiState(
-        val search: StringValue = StringValue(""),
-        val showOk: BoolValue = BoolValue(true),
-        val showMismatch: BoolValue = BoolValue(true),
-        val showUnloaded: BoolValue = BoolValue(true),
-        val showUnknown: BoolValue = BoolValue(true),
-        val sortMode: IntValue = IntValue(0),
-        /** 是否显示 3D 视图（默认由 host 决定，JEI 建议默认开启）。 */
-        val show3d: BoolValue = BoolValue(false),
-        /** 是否启用世界扫描（默认关闭，避免 JEI/只读宿主依赖 world）。 */
-        val enableScan: BoolValue = BoolValue(false),
-
-        // Foldable menus
-        val menuView: BoolValue = BoolValue(true),
-        val menuFilter: BoolValue = BoolValue(true),
-        val menuScan: BoolValue = BoolValue(false),
-        val menuSelected: BoolValue = BoolValue(true)
-    ) {
-        var lastShownCount: Int = 0
-        var selectedKey: String? = null
-
-        var stats: StructurePreviewStats = StructurePreviewStats.EMPTY
-        var rawBomLines: List<StructurePreviewBomLine> = emptyList()
-
-        fun reset() {
-            search.stringValue = ""
-            showOk.boolValue = true
-            showMismatch.boolValue = true
-            showUnloaded.boolValue = true
-            showUnknown.boolValue = true
-            sortMode.intValue = 0
-            show3d.boolValue = false
-            enableScan.boolValue = false
-
-            menuView.boolValue = true
-            menuFilter.boolValue = true
-            menuScan.boolValue = false
-            menuSelected.boolValue = true
-            selectedKey = null
-        }
-
-        fun filterAndSort(lines: List<StructurePreviewBomLine>): List<StructurePreviewBomLine> {
-            val q = search.stringValue.trim().lowercase()
-            val filtered = lines.asSequence()
-                .filter { line ->
-                    if (q.isBlank()) return@filter true
-                    val key = line.requirement.stableKey().lowercase()
-                    val short = formatRequirementShort(line.requirement).lowercase()
-                    key.contains(q) || short.contains(q)
-                }
-                .filter { line ->
-                    val ok = line.mismatchCount == 0 && line.unloaded == 0 && line.unknown == 0
-                    val matchOk = showOk.boolValue && ok
-                    val matchMismatch = showMismatch.boolValue && line.mismatchCount > 0
-                    val matchUnloaded = showUnloaded.boolValue && line.unloaded > 0
-                    val matchUnknown = showUnknown.boolValue && line.unknown > 0
-                    matchOk || matchMismatch || matchUnloaded || matchUnknown
-                }
-                .toList()
-
-            // sortMode:
-            // 0 = by issues (mismatch/unloaded/unknown) then count
-            // 1 = by required count desc
-            // 2 = by key asc
-            return when (sortMode.intValue) {
-                1 -> filtered.sortedWith(
-                    compareByDescending<StructurePreviewBomLine> { it.requiredCount }
-                        .thenByDescending { it.mismatchCount }
-                        .thenByDescending { it.unloaded }
-                        .thenByDescending { it.unknown }
-                        .thenBy { it.key }
-                )
-
-                2 -> filtered.sortedWith(compareBy<StructurePreviewBomLine> { it.key })
-                else -> filtered.sortedWith(
-                    compareByDescending<StructurePreviewBomLine> { it.mismatchCount }
-                        .thenByDescending { it.unloaded }
-                        .thenByDescending { it.unknown }
-                        .thenByDescending { it.requiredCount }
-                        .thenBy { it.key }
-                )
-            }
-        }
-    }
-
-    /** Button helper for Kotlin (avoid dealing with W extends ButtonWidget<W>). */
-    private class UiButton : ButtonWidget<UiButton>()
-
-    private class UiHotspot : com.cleanroommc.modularui.widget.Widget<UiHotspot>()
-
-    private class RootRuntime(
-        var statusSnapshot: Map<BlockPos, StructurePreviewEntryStatus> = emptyMap(),
-        val issuesOnly: BoolValue = BoolValue(false),
-        val autoRotate: BoolValue = BoolValue(false),
-        val showWireframe: BoolValue = BoolValue(true),
-        val sliceY: IntValue,
-    ) {
-        var clickedPos: BlockPos? = null
-        var clickedRequirement: BlockRequirement? = null
-
-        // 0 = expanded, 1 = collapsed
-        // NOTE: This is updated per-frame (dt-based) to avoid visible 20tps stepping.
-        var collapseNow: Float = 0.0f
-        var sidebarNow: Float = 1.0f // 0 = shown, 1 = hidden
-        var animLastFrameMs: Long = -1L
-
-        var rebuildMaterialsUi: (() -> Unit)? = null
-        var rebuildReplaceUi: (() -> Unit)? = null
-    }
-
-    private data class MaterialsUiParts(
-        val materialPinnedOpen: BoolValue,
-        val materialPreviewUiBg: com.cleanroommc.modularui.widget.Widget<*>,
-        val materialPreviewUiContent: ClearableColumn
-    )
-
-    /**
-     * Kotlin helper to avoid dealing with ModularUI's self-referential generics
-     * (ListWidget<I, W extends ListWidget<I, W>>) at call sites.
-     */
-    private class WidgetList : ListWidget<IWidget, WidgetList>()
 
     fun open(
         structureId: String,
@@ -288,28 +144,16 @@ internal object StructurePreviewUiScreen {
         val mc = Minecraft.getMinecraft()
         val player = mc.player ?: return
 
-        val structure = PrototypeMachineryAPI.structureRegistry.get(structureId)
-        if (structure == null) {
+        val resolved = resolvePreview(structureId, sliceCountOverride, host)
+        if (resolved == null) {
             player.sendMessage(TextComponentTranslation("pm.preview.unknown_structure", structureId))
             return
         }
-
-        val model: StructurePreviewModel = StructurePreviewBuilder.build(
-            structure = structure,
-            options = StructurePreviewBuilder.Options(
-                sliceCountSelector = { sliceLike ->
-                    sliceCountOverride ?: sliceLike.minCount
-                }
-            )
-        )
-
-        val state = StructurePreviewUiState()
-        state.show3d.boolValue = host.defaultTo3DView
         val panel = buildPanel(
-            state = state,
-            model = model,
+            state = resolved.state,
+            model = resolved.model,
             structureId = structureId,
-            structureName = structure.name,
+            structureName = resolved.structureName,
             host = host,
             showMaterials = showMaterials,
             selectedPositionsProvider = selectedPositionsProvider
@@ -341,24 +185,12 @@ internal object StructurePreviewUiScreen {
         showMaterials: Boolean = true,
         selectedPositionsProvider: (() -> Set<BlockPos>?)? = null,
     ): ModularPanel? {
-        val structure = PrototypeMachineryAPI.structureRegistry.get(structureId) ?: return null
-
-        val model: StructurePreviewModel = StructurePreviewBuilder.build(
-            structure = structure,
-            options = StructurePreviewBuilder.Options(
-                sliceCountSelector = { sliceLike ->
-                    sliceCountOverride ?: sliceLike.minCount
-                }
-            )
-        )
-
-        val state = StructurePreviewUiState()
-        state.show3d.boolValue = host.defaultTo3DView
+        val resolved = resolvePreview(structureId, sliceCountOverride, host) ?: return null
         return buildPanel(
-            state = state,
-            model = model,
+            state = resolved.state,
+            model = resolved.model,
             structureId = structureId,
-            structureName = structure.name,
+            structureName = resolved.structureName,
             host = host,
             showMaterials = showMaterials,
             selectedPositionsProvider = selectedPositionsProvider
@@ -377,24 +209,12 @@ internal object StructurePreviewUiScreen {
         showMaterials: Boolean = true,
         selectedPositionsProvider: (() -> Set<BlockPos>?)? = null,
     ): IWidget? {
-        val structure = PrototypeMachineryAPI.structureRegistry.get(structureId) ?: return null
-
-        val model: StructurePreviewModel = StructurePreviewBuilder.build(
-            structure = structure,
-            options = StructurePreviewBuilder.Options(
-                sliceCountSelector = { sliceLike ->
-                    sliceCountOverride ?: sliceLike.minCount
-                }
-            )
-        )
-
-        val state = StructurePreviewUiState()
-        state.show3d.boolValue = host.defaultTo3DView
+        val resolved = resolvePreview(structureId, sliceCountOverride, host) ?: return null
         return buildRoot(
-            state = state,
-            model = model,
+            state = resolved.state,
+            model = resolved.model,
             structureId = structureId,
-            structureName = structure.name,
+            structureName = resolved.structureName,
             host = host,
             showMaterials = showMaterials,
             selectedPositionsProvider = selectedPositionsProvider
@@ -488,6 +308,7 @@ internal object StructurePreviewUiScreen {
             sliceYProvider = { rt.sliceY.intValue },
             autoRotateProvider = { rt.autoRotate.boolValue },
             wireframeProvider = { rt.showWireframe.boolValue },
+            anyOfSelectionProvider = host.anyOfSelectionProvider,
             selectedPositionsProvider = combinedSelectedPositionsProvider,
             onBlockClicked = { pos, req ->
                 // Toggle selection on repeated click.
@@ -542,17 +363,85 @@ internal object StructurePreviewUiScreen {
         }
         root.child(CollapseAnimatorWidget())
 
+        buildTopBar(
+            root = root,
+            rt = rt,
+            state = state,
+            model = model,
+            structureId = structureId,
+            structureName = structureName,
+            view3d = view3d
+        )
+
+        // --- Optional: materials UI ---
+        val materials: MaterialsUiParts? = if (showMaterials) {
+            buildMaterialsSection(
+                root = root,
+                host = host,
+                model = model,
+                rt = rt
+            )
+        } else {
+            null
+        }
+
+        val layerPreview = BoolValue(false)
+        val rightSlider = buildRightLayerSlider(
+            root = root,
+            model = model,
+            sliceY = sliceY
+        )
+
+        val bottomBar = buildBottomBar(
+            root = root,
+            rt = rt,
+            host = host,
+            mc = mc,
+            structureId = structureId,
+            showMaterials = showMaterials,
+            materials = materials,
+            bottomCollapsed = bottomCollapsed,
+            layerPreview = layerPreview
+        )
+
+        attachUpdateListener(
+            root = root,
+            rt = rt,
+            host = host,
+            mc = mc,
+            state = state,
+            model = model,
+            structureId = structureId,
+            showMaterials = showMaterials,
+            materials = materials,
+            bottomBar = bottomBar,
+            rightSlider = rightSlider
+        )
+
+        return root
+    }
+
+    private fun buildTopBar(
+        root: Column,
+        rt: RootRuntime,
+        state: StructurePreviewUiState,
+        model: StructurePreviewModel,
+        structureId: String,
+        structureName: String,
+        view3d: StructurePreview3DWidget
+    ) {
         // --- Top (clipped): components slide up and get masked within their own rectangles ---
         // NOTE: In the spec, each top component slides up when component_switch is pressed,
         // and the part outside the *component's own* area should be masked.
 
         // machine_prefix_name @ (8,11) size 115x18, slide Y -16
         val titleClip = ScissorGroupWidget()
-            .pos(7, 10)
-            .size(115, 18)
+        titleClip.pos(7, 10)
+        titleClip.size(115, 18)
+
         val titleContent = Column()
-            .pos(0, 0)
-            .size(115, 18)
+        titleContent.pos(0, 0)
+        titleContent.size(115, 18)
 
         val topTitleBg = guiTex("top_machine_prefix_name_base").asWidget().pos(0, 0).size(115, 18)
         val title = if (structureName.isNotBlank()) structureName else structureId
@@ -672,7 +561,7 @@ internal object StructurePreviewUiScreen {
                 tt.addLine(tr("pm.preview.ui.struct_info.structure", structureId))
                 tt.addLine(tr("pm.preview.ui.struct_info.scan", onOffText(state.enableScan.boolValue)))
                 tt.addLine(tr("pm.preview.ui.struct_info.mode", previewModeText(state.show3d.boolValue)))
-                tt.addLine(tr("pm.preview.ui.struct_info.slice_y", (sliceY.intValue + model.bounds.min.y)))
+                tt.addLine(tr("pm.preview.ui.struct_info.slice_y", (rt.sliceY.intValue + model.bounds.min.y)))
                 tt.addLine(tr("pm.preview.ui.struct_info.forming", onOffText(structuralForming.boolValue)))
             }
         structuralInfoContent.child(structuralInfo)
@@ -686,21 +575,14 @@ internal object StructurePreviewUiScreen {
             }
         structuralInfoClip.child(structuralInfoSlide)
         root.child(structuralInfoClip)
+    }
 
-        // --- Optional: materials UI ---
-        val materials: MaterialsUiParts? = if (showMaterials) {
-            buildMaterialsSection(
-                root = root,
-                host = host,
-                model = model,
-                rt = rt
-            )
-        } else {
-            null
-        }
-
+    private fun buildRightLayerSlider(
+        root: Column,
+        model: StructurePreviewModel,
+        sliceY: IntValue
+    ): RightSliderParts {
         // --- Right: layer selection slider ---
-        val layerPreview = BoolValue(false)
         val layerSelectionBg = guiTex("right_layer_selection").asWidget().pos(165, 33).size(10, 158)
         root.child(layerSelectionBg)
 
@@ -725,6 +607,23 @@ internal object StructurePreviewUiScreen {
             }
         root.child(layerSlider)
 
+        return RightSliderParts(
+            layerSelectionBg = layerSelectionBg,
+            layerSlider = layerSlider
+        )
+    }
+
+    private fun buildBottomBar(
+        root: Column,
+        rt: RootRuntime,
+        host: StructurePreviewUiHostConfig,
+        mc: Minecraft,
+        structureId: String,
+        showMaterials: Boolean,
+        materials: MaterialsUiParts?,
+        bottomCollapsed: BoolValue,
+        layerPreview: BoolValue
+    ): BottomBarParts {
         // --- Bottom (clipped): down_button group ---
         // Spec: down_button component is 78x16 at (100,196). When collapsed, inner button group shifts +57px and is clipped.
         val bottomClip = ScissorGroupWidget()
@@ -860,17 +759,40 @@ internal object StructurePreviewUiScreen {
 
         root.child(bottomClip)
 
+        return BottomBarParts(
+            bottomCollapsed = bottomCollapsed,
+            layerPreview = layerPreview,
+            placeProjection = placeProjection,
+            materialPreviewBtn = materialPreviewBtn,
+            replaceBlock = replaceBlock,
+            layerPreviewBtn = layerPreviewBtn
+        )
+    }
+
+    private fun attachUpdateListener(
+        root: Column,
+        rt: RootRuntime,
+        host: StructurePreviewUiHostConfig,
+        mc: Minecraft,
+        state: StructurePreviewUiState,
+        model: StructurePreviewModel,
+        structureId: String,
+        showMaterials: Boolean,
+        materials: MaterialsUiParts?,
+        bottomBar: BottomBarParts,
+        rightSlider: RightSliderParts
+    ) {
         // Enable/disable the folded menu children based on [menuExpanded].
         root.onUpdateListener {
             // bottom collapsed => disable base buttons
-            val collapsed = bottomCollapsed.boolValue
-            if (placeProjection.isEnabled == collapsed) placeProjection.isEnabled = !collapsed
-            if (showMaterials && materialPreviewBtn!!.isEnabled == collapsed) materialPreviewBtn.isEnabled = !collapsed
-            if (replaceBlock.isEnabled == collapsed) replaceBlock.isEnabled = !collapsed
-            if (layerPreviewBtn.isEnabled == collapsed) layerPreviewBtn.isEnabled = !collapsed
+            val collapsed = bottomBar.bottomCollapsed.boolValue
+            if (bottomBar.placeProjection.isEnabled == collapsed) bottomBar.placeProjection.isEnabled = !collapsed
+            if (showMaterials && bottomBar.materialPreviewBtn!!.isEnabled == collapsed) bottomBar.materialPreviewBtn.isEnabled = !collapsed
+            if (bottomBar.replaceBlock.isEnabled == collapsed) bottomBar.replaceBlock.isEnabled = !collapsed
+            if (bottomBar.layerPreviewBtn.isEnabled == collapsed) bottomBar.layerPreviewBtn.isEnabled = !collapsed
 
             // Tie preview mode to the layer preview toggle.
-            state.show3d.boolValue = !layerPreview.boolValue
+            state.show3d.boolValue = !bottomBar.layerPreview.boolValue
 
             if (showMaterials) {
                 // material preview UI visibility:
@@ -882,14 +804,14 @@ internal object StructurePreviewUiScreen {
             }
 
             // layer selection visibility
-            val showLayer = layerPreview.boolValue
-            if (layerSelectionBg.isEnabled != showLayer) layerSelectionBg.isEnabled = showLayer
-            if (layerSlider.isEnabled != showLayer) layerSlider.isEnabled = showLayer
+            val showLayer = bottomBar.layerPreview.boolValue
+            if (rightSlider.layerSelectionBg.isEnabled != showLayer) rightSlider.layerSelectionBg.isEnabled = showLayer
+            if (rightSlider.layerSlider.isEnabled != showLayer) rightSlider.layerSlider.isEnabled = showLayer
 
             // When not in layer preview, keep the slider panel tucked to the right (+8px) like the spec.
             val layerX = if (showLayer) 165 else 173
-            layerSelectionBg.pos(layerX, 33)
-            layerSlider.pos(layerX, 33)
+            rightSlider.layerSelectionBg.pos(layerX, 33)
+            rightSlider.layerSlider.pos(layerX, 33)
 
             if (host.allowWorldScan && state.enableScan.boolValue) {
                 val w = mc.world
@@ -909,8 +831,6 @@ internal object StructurePreviewUiScreen {
             rt.rebuildMaterialsUi?.invoke()
             rt.rebuildReplaceUi?.invoke()
         }
-
-        return root
     }
 
     private fun buildMaterialsSection(
@@ -919,363 +839,23 @@ internal object StructurePreviewUiScreen {
         model: StructurePreviewModel,
         rt: RootRuntime
     ): MaterialsUiParts {
-        // 默认不打开材料界面。
-        // When not pinned, materials UI is auto-shown only when a block is selected.
-        val materialPinnedOpen = BoolValue(false)
-        val materialPreviewUiBg = guiTex("base_material_preview_ui").asWidget().pos(29, 31).size(134, 163)
-        val materialPreviewUiContent: ClearableColumn = run {
-            val c = ClearableColumn()
-            c.pos(33, 35)
-            c.size(111, 160)
-            c.childPadding(2)
-            c.flex().coverChildrenWidth()
-            c.flex().coverChildrenHeight()
-            c
-        }
-
-        fun makeSlot(
-            stack: ItemStack,
-            displayAmount: Boolean,
-            tooltipLines: () -> List<String>,
-            onLeftClick: (() -> Unit)? = null
-        ): com.cleanroommc.modularui.widget.Widget<*> {
-            val slot = ItemDisplayWidget()
-                .item(stack)
-                .displayAmount(displayAmount)
-                .size(18)
-                // Avoid theme-provided slot background; we draw our own.
-                .widgetTheme(IThemeApi.FALLBACK)
-                .background(ITEM_SLOT_BG)
-                .disableHoverBackground()
-
-            val attachTooltip: (com.cleanroommc.modularui.widget.Widget<*>) -> Unit = { ttWidget ->
-                ttWidget.tooltipDynamic { tt ->
-                    for (line in tooltipLines()) {
-                        tt.addLine(line)
-                    }
-                }
-                ttWidget.tooltipAutoUpdate(true)
-            }
-
-            return if (onLeftClick != null) {
-                val overlay = ClickableOverlay(onLeftClick)
-                    .size(18)
-                    .child(slot)
-                attachTooltip(overlay)
-                overlay
-            } else {
-                attachTooltip(slot)
-                slot
-            }
-        }
-
-        fun stateFromReq(req: ExactBlockStateRequirement): net.minecraft.block.state.IBlockState? {
-            val block = Block.REGISTRY.getObject(req.blockId) ?: return null
-            if (block == Blocks.AIR) return null
-            return try {
-                @Suppress("DEPRECATION")
-                block.getStateFromMeta(req.meta)
-            } catch (_: Throwable) {
-                null
-            }
-        }
-
-        fun stackForExact(req: ExactBlockStateRequirement, count: Int): ItemStack? {
-            val block = Block.REGISTRY.getObject(req.blockId) ?: return null
-            if (block == Blocks.AIR) return null
-
-            val st = ItemStack(block, count.coerceAtLeast(1), req.meta)
-            if (!st.isEmpty) return st
-
-            // Fluid blocks: use a filled bucket for display.
-            val state = stateFromReq(req)
-            val fluid = FluidRegistry.lookupFluidForBlock(block)
-                ?: when (state?.material) {
-                    net.minecraft.block.material.Material.WATER -> FluidRegistry.WATER
-                    net.minecraft.block.material.Material.LAVA -> FluidRegistry.LAVA
-                    else -> null
-                }
-            if (fluid != null) {
-                val bucket = FluidUtil.getFilledBucket(FluidStack(fluid, 1000))
-                if (!bucket.isEmpty) {
-                    bucket.count = count.coerceAtLeast(1)
-                    return bucket
-                }
-            }
-            return null
-        }
-
-        fun resolveAnyOfOption(anyOf: AnyOfRequirement): ExactBlockStateRequirement {
-            val reqKey = anyOf.stableKey()
-            val chosenKey = host.anyOfSelectionProvider(reqKey)
-            return anyOf.options.firstOrNull { it.stableKey() == chosenKey } ?: anyOf.options.first()
-        }
-
-        fun displayStackForRequirement(req: BlockRequirement, count: Int): ItemStack? {
-            return when (req) {
-                is ExactBlockStateRequirement -> stackForExact(req, count)
-                is AnyOfRequirement -> stackForExact(resolveAnyOfOption(req), count)
-                else -> null
-            }
-        }
-
-        fun computeDisplayBom(): List<Pair<BlockRequirement, Int>> {
-            // When a block is selected, show only that position's requirement.
-            val selected = rt.clickedRequirement
-            if (selected != null) {
-                return listOf(selected to 1)
-            }
-
-            if (host.materialsMode == StructurePreviewUiHostConfig.MaterialsMode.REMAINING && rt.statusSnapshot.isNotEmpty()) {
-                data class Acc(var req: BlockRequirement, var count: Int)
-                val byKey = LinkedHashMap<String, Acc>()
-                for ((relPos, req) in model.blocks) {
-                    val st = rt.statusSnapshot[relPos] ?: continue
-                    if (st != StructurePreviewEntryStatus.MISSING && st != StructurePreviewEntryStatus.WRONG) continue
-                    val key = req.stableKey()
-                    val acc = byKey.getOrPut(key) { Acc(req, 0) }
-                    acc.count++
-                }
-                return byKey.values
-                    .filter { it.count > 0 }
-                    .sortedByDescending { it.count }
-                    .map { it.req to it.count }
-            }
-
-            return model.bom
-                .asSequence()
-                .map { it.requirement to it.count }
-                .sortedByDescending { it.second }
-                .toList()
-        }
-
-        // --- Left: replace preview (collapsible like top/bottom menus) ---
-        // Spec note: treat this as a self-contained clipped component that slides out when component_switch is toggled.
-        val leftReplaceClip = ScissorGroupWidget()
-            .pos(9, 31)
-            .size(18, 181)
-
-        val leftReplaceContent: ClearableColumn = run {
-            val c = ClearableColumn()
-            c.pos(0, 0)
-            c.size(18, 181)
-            c
-        }
-
-        leftReplaceContent.child(guiTex("left_replace_preview").asWidget().pos(0, 0).size(18, 181))
-
-        val leftReplaceSlide = TransformWidget(leftReplaceContent)
-            .pos(0, 0)
-            .size(18, 181)
-            .transform { stack ->
-                // Auto-hide side bar when no selection; show it when user clicked any block.
-                // Also respects the component_switch collapse animation.
-                val switchT = rt.collapseNow.coerceIn(0.0f, 1.0f)
-                val selectionT = rt.sidebarNow.coerceIn(0.0f, 1.0f)
-                val t = kotlin.math.max(switchT, selectionT)
-                // Slide out to the left within the clip window.
-                stack.translate(-18.0f * t, 0.0f)
-            }
-
-        leftReplaceClip.child(leftReplaceSlide)
-        root.child(leftReplaceClip)
-
-        // --- Material preview UI (dynamic; toggled by bottom button) ---
-        root.child(materialPreviewUiBg)
-        root.child(materialPreviewUiContent)
-
-        var lastMatKey: String? = null
-        var lastReplaceKey: String? = null
-
-        rt.rebuildMaterialsUi = {
-            run {
-                val bom = computeDisplayBom()
-                    .asSequence()
-                    .mapNotNull { (req, cnt) ->
-                        val stack = displayStackForRequirement(req, cnt) ?: return@mapNotNull null
-                        Triple(req, stack, cnt)
-                    }
-                    .take(24)
-                    .toList()
-
-                val key = bom.joinToString("|") { (_, s, _) ->
-                    val rn = s.item.registryName?.toString() ?: s.item.javaClass.name
-                    "$rn:${s.metadata}:${s.count}"
-                }
-                if (key == lastMatKey) return@run
-                lastMatKey = key
-
-                materialPreviewUiContent.clearChildrenSafe()
-                for ((req, s, cnt) in bom) {
-                    val isRemaining = host.materialsMode == StructurePreviewUiHostConfig.MaterialsMode.REMAINING
-                    val status = rt.clickedPos?.let { pos -> rt.statusSnapshot[pos] }
-                    val lines = mutableListOf<String>()
-
-                    // Item name
-                    val name = if (s.isEmpty) tr("pm.preview.ui.empty") else s.displayName
-                    lines.add(name)
-
-                    // Requirement + count
-                    if (rt.clickedRequirement != null) {
-                        lines.add(tr("pm.preview.ui.requirement", formatRequirementShort(req)))
-                        if (status != null) lines.add(tr("pm.preview.ui.status", entryStatusText(status)))
-                        lines.add(tr("pm.preview.ui.count", cnt))
-                    } else {
-                        lines.add(tr(if (isRemaining) "pm.preview.ui.remaining" else "pm.preview.ui.required", cnt))
-                        lines.add(tr("pm.preview.ui.key", req.stableKey()))
-                    }
-
-                    if (req is AnyOfRequirement) {
-                        lines.add(tr("pm.preview.ui.replaceable_hint", req.options.size))
-                    }
-
-                    materialPreviewUiContent.child(
-                        makeSlot(
-                            stack = s,
-                            displayAmount = true,
-                            tooltipLines = { lines }
-                        )
-                    )
-                }
-            }
-        }
-
-        rt.rebuildReplaceUi = {
-            run {
-                val clicked = rt.clickedRequirement
-                val anyOf = clicked as? AnyOfRequirement
-                val key = clicked?.stableKey() ?: "<none>"
-                if (key == lastReplaceKey) return@run
-                lastReplaceKey = key
-
-                leftReplaceContent.clearChildrenSafe()
-                leftReplaceContent.child(guiTex("left_replace_preview").asWidget().pos(0, 0).size(18, 181))
-
-                if (clicked == null) {
-                    leftReplaceContent.child(
-                        makeSlot(
-                            stack = ItemStack.EMPTY,
-                            displayAmount = false,
-                            tooltipLines = { listOf(tr("pm.preview.ui.no_selection.title"), tr("pm.preview.ui.no_selection.hint")) }
-                        ).pos(0, 0)
-                    )
-                    return@run
-                }
-
-                // Non-AnyOf requirement: show the required stack in the top slot only.
-                if (anyOf == null) {
-                    val stack = displayStackForRequirement(clicked, 1) ?: ItemStack.EMPTY
-                    leftReplaceContent.child(
-                        makeSlot(
-                            stack = stack,
-                            displayAmount = false,
-                            tooltipLines = {
-                                listOf(
-                                    if (!stack.isEmpty) stack.displayName else tr("pm.preview.ui.empty"),
-                                    tr("pm.preview.ui.requirement", formatRequirementShort(clicked)),
-                                    tr("pm.preview.ui.key", clicked.stableKey())
-                                )
-                            }
-                        ).pos(0, 0)
-                    )
-                    return@run
-                }
-
-                val reqKey = anyOf.stableKey()
-                val selected = resolveAnyOfOption(anyOf)
-                val selectedStack = stackForExact(selected, 1) ?: ItemStack.EMPTY
-
-                leftReplaceContent.child(
-                    makeSlot(
-                        stack = selectedStack,
-                        displayAmount = false,
-                        tooltipLines = {
-                            listOf(
-                                tr("pm.preview.ui.current_selection", selectedStack.displayName),
-                                tr("pm.preview.ui.anyof_choose_one", anyOf.options.size),
-                                tr("pm.preview.ui.key", reqKey)
-                            )
-                        }
-                    ).pos(0, 0)
-                )
-
-                val optionsColumn = ClearableColumn()
-                    .pos(0, 18)
-                    .size(18, 163)
-                    .apply { flex().coverChildrenWidth(); flex().coverChildrenHeight() }
-
-                var added = 0
-                for (opt in anyOf.options) {
-                    if (opt.stableKey() == selected.stableKey()) continue
-                    val st = stackForExact(opt, 1) ?: continue
-
-                    val optKey = opt.stableKey()
-                    val onClick = host.anyOfSelectionSetter?.let { setter ->
-                        { setter.invoke(reqKey, optKey) }
-                    }
-
-                    optionsColumn.child(
-                        makeSlot(
-                            stack = st,
-                            displayAmount = false,
-                            tooltipLines = {
-                                listOf(
-                                    tr("pm.preview.ui.candidate", st.displayName),
-                                    if (onClick != null) tr("pm.preview.ui.click_to_select") else tr("pm.preview.ui.read_only"),
-                                    tr("pm.preview.ui.key", optKey)
-                                )
-                            },
-                            onLeftClick = onClick
-                        )
-                    )
-                    added++
-                    if (added >= 9) break
-                }
-
-                leftReplaceContent.child(optionsColumn)
-            }
-        }
-
-        // Initial build.
-        rt.rebuildMaterialsUi?.invoke()
-        rt.rebuildReplaceUi?.invoke()
-
-        return MaterialsUiParts(
-            materialPinnedOpen = materialPinnedOpen,
-            materialPreviewUiBg = materialPreviewUiBg,
-            materialPreviewUiContent = materialPreviewUiContent
+        return StructurePreviewMaterialsSection.build(
+            root = root,
+            host = host,
+            model = model,
+            rt = rt
         )
     }
 
+    internal fun formatRequirementShort(req: BlockRequirement): String {
+        return StructurePreviewUiFormatting.formatRequirementShort(req)
+    }
+
     private fun formatBomLine(line: StructurePreviewBomLine): String {
-        val req = formatRequirementShort(line.requirement)
-        val tail = buildString {
-            if (line.mismatchCount > 0) append(tr("pm.preview.ui.bom.mismatch", line.mismatchCount))
-            if (line.unloaded > 0) append(tr("pm.preview.ui.bom.unloaded", line.unloaded))
-            if (line.unknown > 0) append(tr("pm.preview.ui.bom.unknown", line.unknown))
-        }
-        return "${line.requiredCount}x $req$tail"
+        return StructurePreviewUiFormatting.formatBomLine(line)
     }
 
     private fun colorForLine(line: StructurePreviewBomLine): Int {
-        return when {
-            line.mismatchCount > 0 -> Color.RED.main
-            line.unloaded > 0 -> Color.ORANGE.main
-            line.unknown > 0 -> Color.GREY.brighter(1)
-            else -> Color.GREEN.main
-        }
-    }
-
-    private fun formatRequirementShort(req: BlockRequirement): String {
-        return when (req) {
-            is ExactBlockStateRequirement -> {
-                val base = req.blockId.toString()
-                if (req.meta != 0) "$base@${req.meta}" else base
-            }
-
-            is LiteralRequirement -> req.key
-            is UnknownRequirement -> tr("pm.preview.ui.unknown_requirement", req.debug)
-            else -> req.stableKey()
-        }
+        return StructurePreviewUiFormatting.colorForLine(line)
     }
 }

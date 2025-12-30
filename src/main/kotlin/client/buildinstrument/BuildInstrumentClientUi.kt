@@ -18,6 +18,7 @@ import github.kasuminova.prototypemachinery.client.buildinstrument.widget.TreeDi
 import github.kasuminova.prototypemachinery.client.preview.ui.StructurePreviewUiHostConfig
 import github.kasuminova.prototypemachinery.client.preview.ui.StructurePreviewUiScreen
 import github.kasuminova.prototypemachinery.client.preview.ui.widget.ScissorGroupWidget
+import github.kasuminova.prototypemachinery.client.util.ItemStackDisplayUtil
 import github.kasuminova.prototypemachinery.common.buildinstrument.BuildInstrumentNbt
 import github.kasuminova.prototypemachinery.common.buildinstrument.BuildInstrumentUi
 import github.kasuminova.prototypemachinery.common.util.times
@@ -441,7 +442,7 @@ internal object BuildInstrumentClientUi {
     private fun stackForExact(req: ExactBlockStateRequirement): ItemStack? {
         val block = Block.REGISTRY.getObject(req.blockId) ?: return null
         if (block == Blocks.AIR) return null
-        return ItemStack(block, 1, req.meta)
+        return ItemStackDisplayUtil.stackForBlock(block, req.meta, 1)
     }
 
     private fun formatRequirementShort(req: BlockRequirement): String {

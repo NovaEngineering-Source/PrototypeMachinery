@@ -184,6 +184,8 @@ dependencies {
     // Performance test tool
     runtimeOnly(rfg.deobf("curse.maven:spark-361579:3542217"))
 //    runtimeOnly(rfg.deobf("curse.maven:flare-692142:6598523"))
+    // Performance optimization
+    runtimeOnly(rfg.deobf("curse.maven:stellarcore-1064321:6480479"))
 
     // linux only
     if (System.getProperty("os.name").lowercase().contains("linux")) {

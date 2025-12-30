@@ -5,9 +5,9 @@ import github.kasuminova.prototypemachinery.client.impl.render.RenderStats
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.BufferBuilder
 import net.minecraft.client.renderer.OpenGlHelper
-import net.minecraft.client.renderer.vertex.VertexBuffer
 import net.minecraft.client.renderer.vertex.VertexFormat
 import java.nio.ByteBuffer
+import java.util.ArrayDeque
 import java.util.WeakHashMap
 
 /**
@@ -28,23 +28,38 @@ import java.util.WeakHashMap
 internal object BufferBuilderVboCache {
 
     internal data class Entry(
-        val vbo: VertexBuffer,
+        val vboId: Int,
         val format: VertexFormat,
         val drawMode: Int,
         val vertexCount: Int,
         val bytesUsed: Int,
     )
 
+    private data class PooledVbo(
+        val id: Int,
+        val bytesEstimate: Int,
+    )
+
     private val map: MutableMap<BufferBuilder, Entry> = WeakHashMap()
+
+    // Reuse GL buffer objects to avoid expensive glGenBuffers churn on the render thread.
+    private val pooled: ArrayDeque<PooledVbo> = ArrayDeque()
 
     @Volatile
     private var bytesHeldEstimate: Long = 0L
+
+    @Volatile
+    private var pooledBytesEstimate: Long = 0L
 
     internal fun enabled(): Boolean = RenderTuning.vboCacheEnabled
 
     internal fun size(): Int = synchronized(this) { map.size }
 
     internal fun bytesHeld(): Long = bytesHeldEstimate
+
+    internal fun pooledBytesHeld(): Long = pooledBytesEstimate
+
+    internal fun pooledCount(): Int = synchronized(this) { pooled.size }
 
     /**
      * Called when a builder is returned to the pool.
@@ -53,23 +68,34 @@ internal object BufferBuilderVboCache {
     internal fun onRecycle(builder: BufferBuilder) {
         if (!enabled()) {
             // If disabled, still try to drop any existing entry.
-            removeAndDelete(builder)
+            removeAndRelease(builder)
             return
         }
-        removeAndDelete(builder)
+        removeAndRelease(builder)
     }
 
     internal fun clearAll(reason: String) {
         val mc = Minecraft.getMinecraft()
         mc.addScheduledTask {
-            val entries: List<Entry> = synchronized(this) {
-                val list = map.values.toList()
+            val toDelete: IntArray = synchronized(this) {
+                val ids = IntArray(map.size + pooled.size)
+                var i = 0
+                for (e in map.values) {
+                    ids[i++] = e.vboId
+                }
+                for (p in pooled) {
+                    ids[i++] = p.id
+                }
                 map.clear()
+                pooled.clear()
                 bytesHeldEstimate = 0L
-                list
+                pooledBytesEstimate = 0L
+                ids
             }
-            for (e in entries) {
-                runCatching { e.vbo.deleteGlBuffers() }
+            for (id in toDelete) {
+                if (id != 0) {
+                    runCatching { OpenGlHelper.glDeleteBuffers(id) }
+                }
             }
         }
     }
@@ -93,14 +119,18 @@ internal object BufferBuilderVboCache {
         if (existing != null) {
             // If the builder was reused without recycle (should not happen), refresh.
             if (existing.format == format && existing.drawMode == drawMode && existing.vertexCount == vertexCount) {
+                RenderStats.addVboCacheHit()
                 return existing
             }
             // Mismatch: drop and rebuild.
-            removeAndDelete(builder)
+            removeAndRelease(builder)
         }
 
         // Upload.
-        val vbo = VertexBuffer(format)
+        RenderStats.addVboCacheMiss()
+
+        val vboId = acquireVboId(bytesUsed)
+        if (vboId == 0) return null
 
         val data: ByteBuffer = builder.byteBuffer.duplicate().also { dup ->
             dup.clear()
@@ -108,10 +138,13 @@ internal object BufferBuilderVboCache {
         }
 
         RenderStats.addVboUpload(bytesUsed)
-        vbo.bufferData(data)
+        // Upload to ARRAY_BUFFER.
+        OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, vboId)
+        OpenGlHelper.glBufferData(OpenGlHelper.GL_ARRAY_BUFFER, data, OpenGlHelper.GL_STATIC_DRAW)
+        OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, 0)
 
         val entry = Entry(
-            vbo = vbo,
+            vboId = vboId,
             format = format,
             drawMode = drawMode,
             vertexCount = vertexCount,
@@ -126,7 +159,7 @@ internal object BufferBuilderVboCache {
         return entry
     }
 
-    private fun removeAndDelete(builder: BufferBuilder) {
+    private fun removeAndRelease(builder: BufferBuilder) {
         val mc = Minecraft.getMinecraft()
         val entry = synchronized(this) {
             val e = map.remove(builder)
@@ -136,13 +169,62 @@ internal object BufferBuilderVboCache {
             e
         } ?: return
 
-        // Ensure GL deletion on render thread.
+        // Ensure GL operations on render thread.
+        val release = {
+            releaseVboId(entry.vboId, entry.bytesUsed)
+        }
+
         if (mc.isCallingFromMinecraftThread) {
-            runCatching { entry.vbo.deleteGlBuffers() }
+            release()
         } else {
-            mc.addScheduledTask {
-                runCatching { entry.vbo.deleteGlBuffers() }
+            mc.addScheduledTask { release() }
+        }
+    }
+
+    private fun acquireVboId(bytesHint: Int): Int {
+        if (!RenderTuning.vboCachePoolEnabled) {
+            return runCatching { OpenGlHelper.glGenBuffers() }.getOrDefault(0)
+        }
+
+        val pooledVbo: PooledVbo? = synchronized(this) {
+            val p = if (pooled.isEmpty()) null else pooled.removeFirst()
+            if (p != null) {
+                pooledBytesEstimate = (pooledBytesEstimate - p.bytesEstimate.toLong()).coerceAtLeast(0L)
+            }
+            p
+        }
+
+        if (pooledVbo != null) {
+            return pooledVbo.id
+        }
+
+        return runCatching { OpenGlHelper.glGenBuffers() }.getOrDefault(0)
+    }
+
+    private fun releaseVboId(id: Int, bytesEstimate: Int) {
+        if (id == 0) return
+
+        if (!RenderTuning.vboCachePoolEnabled) {
+            runCatching { OpenGlHelper.glDeleteBuffers(id) }
+            return
+        }
+
+        val maxEntries = RenderTuning.vboCachePoolMaxEntries
+        val maxBytes = RenderTuning.vboCachePoolMaxBytes
+
+        // If budgets are exceeded, delete instead of pooling.
+        synchronized(this) {
+            val overEntries = maxEntries > 0 && pooled.size >= maxEntries
+            val overBytes = maxBytes > 0 && (pooledBytesEstimate + bytesEstimate.toLong()) > maxBytes
+            if (overEntries || overBytes) {
+                // fallthrough; delete outside synchronized
+            } else {
+                pooled.addLast(PooledVbo(id = id, bytesEstimate = bytesEstimate.coerceAtLeast(0)))
+                pooledBytesEstimate += bytesEstimate.toLong().coerceAtLeast(0L)
+                return
             }
         }
+
+        runCatching { OpenGlHelper.glDeleteBuffers(id) }
     }
 }

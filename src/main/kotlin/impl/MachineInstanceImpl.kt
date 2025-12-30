@@ -9,6 +9,8 @@ import github.kasuminova.prototypemachinery.api.machine.component.AffinityKeyPro
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponent
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentProvider
+import github.kasuminova.prototypemachinery.api.machine.component.type.StructureRenderDataComponent
+import github.kasuminova.prototypemachinery.api.machine.component.type.StructureRenderDataComponentType
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.scheduler.ExecutionMode
 import github.kasuminova.prototypemachinery.api.scheduler.ISchedulable
@@ -25,6 +27,7 @@ import github.kasuminova.prototypemachinery.impl.machine.component.MachineCompon
 import github.kasuminova.prototypemachinery.impl.machine.component.StructureComponentMapImpl
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureBlockPositions
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
+import github.kasuminova.prototypemachinery.impl.machine.structure.StructureSliceCounts
 import github.kasuminova.prototypemachinery.impl.machine.structure.match.StructureMatchContextImpl
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.util.EnumFacing
@@ -96,6 +99,19 @@ public class MachineInstanceImpl(
             }.onFailure {
                 PrototypeMachinery.logger.warnWithBlockEntity(
                     "Error while creating machine `${type.id}` component `${componentType.id}`",
+                    blockEntity,
+                    it
+                )
+            }
+        }
+
+        // System/internal components that should exist on every machine instance.
+        if (!componentMap.components.containsKey(StructureRenderDataComponentType)) {
+            runCatching {
+                componentMap.add(StructureRenderDataComponentType.createComponent(this))
+            }.onFailure {
+                PrototypeMachinery.logger.warnWithBlockEntity(
+                    "Error while creating system component `${StructureRenderDataComponentType.id}`",
                     blockEntity,
                     it
                 )
@@ -296,20 +312,49 @@ public class MachineInstanceImpl(
                     }
                     .getOrDefault(false)
 
-                val positions: Set<BlockPos> = if (!matched) {
+                val rootInstance = if (matched) context.getRootInstance() else null
+
+                val positions: Set<BlockPos> = if (rootInstance == null) {
                     emptySet()
                 } else {
-                    val rootInstance = context.getRootInstance()
-                    if (rootInstance == null) {
-                        emptySet()
-                    } else {
-                        StructureBlockPositions.collect(structure, rootInstance, controllerPos)
+                    StructureBlockPositions.collect(structure, rootInstance, controllerPos)
+                }
+
+                val sliceCounts: Map<String, Int> = if (rootInstance == null) {
+                    emptyMap()
+                } else {
+                    StructureSliceCounts.collect(structure, rootInstance)
+                }
+
+                // Compute bounds (include controller pos for render/hide systems).
+                val (minPos, maxPos) = if (matched) {
+                    var minX = controllerPos.x
+                    var minY = controllerPos.y
+                    var minZ = controllerPos.z
+                    var maxX = controllerPos.x
+                    var maxY = controllerPos.y
+                    var maxZ = controllerPos.z
+
+                    for (p in positions) {
+                        val x = p.x
+                        val y = p.y
+                        val z = p.z
+                        if (x < minX) minX = x
+                        if (y < minY) minY = y
+                        if (z < minZ) minZ = z
+                        if (x > maxX) maxX = x
+                        if (y > maxY) maxY = y
+                        if (z > maxZ) maxZ = z
                     }
+
+                    BlockPos(minX, minY, minZ) to BlockPos(maxX, maxY, maxZ)
+                } else {
+                    null to null
                 }
 
                 PrototypeMachineryAPI.taskScheduler.submitTask(
                     Runnable {
-                        applyStructureRefreshResult(orientation, matched, positions)
+                        applyStructureRefreshResult(orientation, matched, positions, sliceCounts, minPos, maxPos)
                     },
                     ExecutionMode.MAIN_THREAD
                 )
@@ -321,7 +366,10 @@ public class MachineInstanceImpl(
     private fun applyStructureRefreshResult(
         orientation: StructureOrientation,
         matched: Boolean,
-        positions: Set<BlockPos>
+        positions: Set<BlockPos>,
+        sliceCounts: Map<String, Int>,
+        minPos: BlockPos?,
+        maxPos: BlockPos?
     ) {
         structureCheckInFlight = false
 
@@ -333,7 +381,16 @@ public class MachineInstanceImpl(
             if (formed) {
                 setFormed(false)
                 structureComponentMap.replaceAll(emptyList())
-                (blockEntity as? MachineBlockEntity)?.sync()
+
+                // Clear any previously-synced structure render data via component incremental sync.
+                (componentMap.get(StructureRenderDataComponentType) as? StructureRenderDataComponent)?.let { c ->
+                    if (c.updateFromServer(false, null, null, emptyMap())) {
+                        syncComponent(c)
+                    }
+                }
+
+                val te = blockEntity as? MachineBlockEntity
+                te?.sync() // formed state is TE-synced
             }
             lastKnownOrientation = orientation
             return
@@ -346,9 +403,16 @@ public class MachineInstanceImpl(
             structureComponentMap.replaceAll(components)
         }
 
+        // Update and sync structure render data even if formed stays true (slice counts can change for variable-length structures).
+        (componentMap.get(StructureRenderDataComponentType) as? StructureRenderDataComponent)?.let { c ->
+            if (c.updateFromServer(true, minPos, maxPos, sliceCounts)) {
+                syncComponent(c)
+            }
+        }
+
         if (!formed) {
             setFormed(true)
-            (blockEntity as? MachineBlockEntity)?.sync()
+            (blockEntity as? MachineBlockEntity)?.sync() // formed state is TE-synced
         }
 
         lastKnownOrientation = orientation

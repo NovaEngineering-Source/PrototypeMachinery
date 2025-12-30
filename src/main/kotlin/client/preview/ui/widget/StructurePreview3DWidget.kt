@@ -5,6 +5,7 @@ import com.cleanroommc.modularui.api.widget.IGuiAction
 import com.cleanroommc.modularui.screen.viewport.ModularGuiContext
 import com.cleanroommc.modularui.theme.WidgetThemeEntry
 import com.cleanroommc.modularui.widget.Widget
+import github.kasuminova.prototypemachinery.api.machine.structure.preview.AnyOfRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.BlockRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.StructurePreviewModel
@@ -76,6 +77,8 @@ internal class StructurePreview3DWidget(
     private val autoRotateProvider: (() -> Boolean)? = null,
     /** When false, hide wireframe overlays (axes + cube lines) to better see block model rendering. */
     private val wireframeProvider: (() -> Boolean)? = null,
+    /** AnyOf selection provider: requirementKey -> selected optionKey (stableKey). */
+    private val anyOfSelectionProvider: ((requirementKey: String) -> String?)? = null,
     /** Optional set of positions (model coords, controller origin = (0,0,0)) to highlight. */
     private val selectedPositionsProvider: (() -> Set<BlockPos>?)? = null,
     /** Optional callback invoked when user clicks a rendered block (model coords). */
@@ -147,6 +150,15 @@ internal class StructurePreview3DWidget(
         val guiScale: Int
     )
 
+    private val dims: StructureDims
+    private val sizeY: Int
+
+    // Per-frame scratch to reduce allocations.
+    private val tmpSelectedChunkMeshes: ArrayList<BlockModelChunkMesh> = ArrayList(64)
+    private val tmpTranslucentMeshes: ArrayList<BlockModelChunkMesh> = ArrayList(64)
+    private var tmpTranslucentDistSq: DoubleArray = DoubleArray(64)
+    private val tmpLookupPos: BlockPos.MutableBlockPos = BlockPos.MutableBlockPos()
+
     private val cubes: List<Cube>
     private val blockEntries: List<BlockEntry>
 
@@ -167,7 +179,11 @@ internal class StructurePreview3DWidget(
     )
 
     /** Full block state map (structure-local coords) for adjacency queries. */
-    private val allBlockStates: Map<BlockPos, IBlockState>
+    private val allBlockStates: MutableMap<BlockPos, IBlockState>
+
+    private val anyOfRequirementKeys: List<String>
+    private var lastAnyOfSelectionHash: Int = 0
+    private var forceFullRebuildOnce: Boolean = false
 
     /** Dummy access providing neighbor states + fullbright, for renderBlock face culling. */
     private val blockAccess: IBlockAccess
@@ -238,7 +254,16 @@ internal class StructurePreview3DWidget(
         requirementByShiftedPos = blockEntries.associate { it.relPos to it.requirement }
         blockModelGroups = groupByChunk(blockEntries)
 
-        val statesMut = buildAllBlockStates(model).toMutableMap()
+        anyOfRequirementKeys = model.blocks.values
+            .asSequence()
+            .filterIsInstance<AnyOfRequirement>()
+            .map { it.stableKey() }
+            .distinct()
+            .toList()
+
+        lastAnyOfSelectionHash = computeAnyOfSelectionHash()
+
+        val statesMut = buildAllBlockStates(model)
         if (controllerRequirement != null) {
             val ox = 0 - min.x
             val oy = 0 - min.y
@@ -249,6 +274,9 @@ internal class StructurePreview3DWidget(
         }
         allBlockStates = statesMut
         blockAccess = StructureBlockAccess(allBlockStates, ProjectionConfig.FULLBRIGHT_LIGHTMAP_UV)
+
+        dims = computeStructureDims()
+        sizeY = dims.sizeY
     }
 
     fun resetView() {
@@ -297,6 +325,37 @@ internal class StructurePreview3DWidget(
         }
         builtBlockModelMeshes.clear()
         super.dispose()
+    }
+
+    private fun invalidateBlockModelMeshes() {
+        // Release existing VBOs to avoid leaking GPU memory on rebuild.
+        for (m in builtBlockModelMeshes) {
+            try {
+                m.solid?.deleteGlBuffers()
+            } catch (_: Throwable) {
+                // ignore
+            }
+            try {
+                m.cutoutMipped?.deleteGlBuffers()
+            } catch (_: Throwable) {
+                // ignore
+            }
+            try {
+                m.cutout?.deleteGlBuffers()
+            } catch (_: Throwable) {
+                // ignore
+            }
+            try {
+                m.translucent?.deleteGlBuffers()
+            } catch (_: Throwable) {
+                // ignore
+            }
+        }
+
+        builtBlockModelMeshes.clear()
+        blockModelBuildCursor = 0
+        blockModelRenderCursor = 0
+        blockModelBuildStarted = false
     }
 
     override fun afterInit() {
@@ -433,16 +492,35 @@ internal class StructurePreview3DWidget(
         GlStateManager.pushMatrix()
         GlStateManager.loadIdentity()
 
-        val dims = computeStructureDims()
         applyCameraTransform(dims)
 
         // Handle click picking after matrices are configured.
         handlePendingClick(mc, vp)
 
+        val sliceMode = sliceModeProvider?.invoke() == true
         // Textured block models (performance path: VBO, built incrementally).
-        drawBlockModels(context)
+        drawBlockModels(context, sliceMode)
 
-        drawWireframeOverlays(context, dims)
+        // Provider results are potentially non-trivial (e.g. allocations in providers).
+        // Evaluate at most once per frame.
+        val selectedNow = selectedPositionsProvider?.invoke()
+
+        // Only fetch statuses if wireframe drawing is enabled.
+        val wireframeEnabled = wireframeProvider?.invoke() != false
+        val statusesNow = if (wireframeEnabled) (statusProvider?.invoke() ?: emptyMap()) else emptyMap()
+
+        val issuesOnly = issuesOnlyProvider?.invoke() == true
+        val sliceYNow = (sliceYProvider?.invoke() ?: 0).coerceIn(0, (sizeY - 1).coerceAtLeast(0))
+
+        drawWireframeOverlays(
+            context = context,
+            selected = selectedNow,
+            statuses = statusesNow,
+            issuesOnly = issuesOnly,
+            sliceMode = sliceMode,
+            sliceY = sliceYNow,
+            wireframeEnabled = wireframeEnabled
+        )
 
         // Restore matrices.
         GlStateManager.popMatrix() // MODELVIEW
@@ -461,22 +539,36 @@ internal class StructurePreview3DWidget(
         super.draw(context, widgetTheme)
     }
 
-    private fun drawWireframeOverlays(context: ModularGuiContext, dims: StructureDims) {
+    private fun drawWireframeOverlays(
+        context: ModularGuiContext,
+        selected: Set<BlockPos>?,
+        statuses: Map<BlockPos, StructurePreviewEntryStatus>,
+        issuesOnly: Boolean,
+        sliceMode: Boolean,
+        sliceY: Int,
+        wireframeEnabled: Boolean
+    ) {
         // Wireframe overlays.
         GlStateManager.disableTexture2D()
 
         // If the host hides wireframe to better see block models, still draw a clear selection outline.
-        val selectedNow = selectedPositionsProvider?.invoke()
-        if ((wireframeProvider?.invoke() == false) && !selectedNow.isNullOrEmpty()) {
-            drawSelectionOutline(selectedNow)
+        if (!wireframeEnabled && !selected.isNullOrEmpty()) {
+            drawSelectionOutline(selected)
         }
 
-        if (wireframeProvider?.invoke() != false) {
+        if (wireframeEnabled) {
             // Draw axes (subtle).
             drawAxes(dims.sizeX.toFloat(), dims.sizeY.toFloat(), dims.sizeZ.toFloat())
 
             // Draw cubes.
-            drawCubes(context)
+            drawCubes(
+                context = context,
+                statuses = statuses,
+                selected = selected,
+                issuesOnly = issuesOnly,
+                sliceMode = sliceMode,
+                sliceY = sliceY
+            )
         }
     }
 
@@ -683,13 +775,16 @@ internal class StructurePreview3DWidget(
         return bestCube
     }
 
-    private fun drawBlockModels(context: ModularGuiContext) {
+    private fun drawBlockModels(context: ModularGuiContext, sliceMode: Boolean) {
         if (!vboAvailable) return
         if (blockEntries.isEmpty()) return
 
         // Slice mode is primarily for debugging layer-by-layer; keeping VBOs static avoids costly rebuilds.
         // We therefore skip block models when slice mode is enabled and rely on wireframe overlays.
-        if (sliceModeProvider?.invoke() == true) return
+        if (sliceMode) return
+
+        // AnyOf selection can change at runtime; refresh render states + VBOs on change.
+        refreshAnyOfSelectionIfChanged()
 
         // Start/continue incremental building.
         if (!blockModelBuildStarted) {
@@ -722,7 +817,6 @@ internal class StructurePreview3DWidget(
         enableBlockModelClientState()
 
         // Approx camera position (in structure local coords) for translucent sorting.
-        val dims = computeStructureDims()
         val (camX, camY, camZ) = approximateCameraPosition(dims)
 
         val selected = selectChunkMeshesForThisFrame()
@@ -778,20 +872,61 @@ internal class StructurePreview3DWidget(
         camY: Double,
         camZ: Double
     ) {
-        val translucentMeshes = ArrayList<Pair<BlockModelChunkMesh, Double>>()
+        tmpTranslucentMeshes.clear()
+
+        // Build parallel arrays: meshes + distSq.
         for (m in meshes) {
-            if (m.translucent != null) {
-                translucentMeshes.add(m to meshDistSq(m, camX, camY, camZ))
+            if (m.translucent == null) continue
+            val i = tmpTranslucentMeshes.size
+            tmpTranslucentMeshes.add(m)
+            if (i >= tmpTranslucentDistSq.size) {
+                tmpTranslucentDistSq = DoubleArray(max(tmpTranslucentDistSq.size * 2, i + 1))
             }
+            tmpTranslucentDistSq[i] = meshDistSq(m, camX, camY, camZ)
         }
 
-        if (translucentMeshes.isNotEmpty()) {
-            translucentMeshes.sortByDescending { it.second }
-            for ((m, _) in translucentMeshes) {
-                val vbo = m.translucent ?: continue
-                drawVbo(vbo)
-            }
+        val n = tmpTranslucentMeshes.size
+        if (n <= 0) return
+
+        sortByDistDesc(tmpTranslucentMeshes, tmpTranslucentDistSq, n)
+
+        for (i in 0 until n) {
+            val vbo = tmpTranslucentMeshes[i].translucent ?: continue
+            drawVbo(vbo)
         }
+    }
+
+    private fun sortByDistDesc(meshes: ArrayList<BlockModelChunkMesh>, distSq: DoubleArray, size: Int) {
+        fun swap(i: Int, j: Int) {
+            val td = distSq[i]
+            distSq[i] = distSq[j]
+            distSq[j] = td
+
+            val tm = meshes[i]
+            meshes[i] = meshes[j]
+            meshes[j] = tm
+        }
+
+        fun quickSort(lo: Int, hi: Int) {
+            var i = lo
+            var j = hi
+            val pivot = distSq[(lo + hi) ushr 1]
+
+            while (i <= j) {
+                while (distSq[i] > pivot) i++
+                while (distSq[j] < pivot) j--
+                if (i <= j) {
+                    if (i != j) swap(i, j)
+                    i++
+                    j--
+                }
+            }
+
+            if (lo < j) quickSort(lo, j)
+            if (i < hi) quickSort(i, hi)
+        }
+
+        if (size > 1) quickSort(0, size - 1)
     }
 
     private fun meshDistSq(m: BlockModelChunkMesh, camX: Double, camY: Double, camZ: Double): Double {
@@ -813,7 +948,8 @@ internal class StructurePreview3DWidget(
             if (meshes.size <= ProjectionConfig.RENDER_ALL_CHUNKS_IF_UNDER) Int.MAX_VALUE else ProjectionConfig.MAX_CHUNKS_RENDER_PER_FRAME
 
         // Budgeted selection: iterate a moving window each frame.
-        val selected = ArrayList<BlockModelChunkMesh>(minOf(64, maxChunksThisFrame))
+        val selected = tmpSelectedChunkMeshes
+        selected.clear()
         var iter = 0
         while (selected.size < maxChunksThisFrame && iter < meshes.size) {
             val idx = (start + iter) % meshes.size
@@ -859,7 +995,8 @@ internal class StructurePreview3DWidget(
         if (blockModelBuildCursor >= blockModelGroups.size) return
 
         // Budget: build a small number of chunk meshes per frame to avoid UI hitching.
-        val maxBuildThisFrame = if (blockModelGroups.size <= 12) Int.MAX_VALUE else 2
+        val maxBuildThisFrame = if (forceFullRebuildOnce || blockModelGroups.size <= 12) Int.MAX_VALUE else 2
+        forceFullRebuildOnce = false
 
         val mc = Minecraft.getMinecraft()
         val brd: BlockRendererDispatcher = mc.blockRendererDispatcher
@@ -1043,16 +1180,16 @@ internal class StructurePreview3DWidget(
     }
 
     private fun stateFromRequirementCached(req: BlockRequirement): IBlockState? {
+        val resolved = resolveExactRequirementForRender(req) ?: return null
         val key = try {
-            req.stableKey()
+            resolved.stableKey()
         } catch (_: Throwable) {
-            // Fallback: most requirements implement stableKey(); if not, use class name.
-            req.javaClass.name
+            resolved.javaClass.name
         }
 
         if (reqStateCache.containsKey(key)) return reqStateCache[key]
 
-        val state = stateFromRequirement(req)
+        val state = stateFromRequirement(resolved)
         reqStateCache[key] = state
 
         // Cap cache size.
@@ -1095,18 +1232,72 @@ internal class StructurePreview3DWidget(
         return state
     }
 
-    private fun buildAllBlockStates(model: StructurePreviewModel): Map<BlockPos, IBlockState> {
-        if (model.blocks.isEmpty()) return emptyMap()
+    private fun resolveExactRequirementForRender(req: BlockRequirement): ExactBlockStateRequirement? {
+        return when (req) {
+            is ExactBlockStateRequirement -> req
+            is AnyOfRequirement -> resolveAnyOfOption(req)
+            else -> null
+        }
+    }
+
+    private fun resolveAnyOfOption(anyOf: AnyOfRequirement): ExactBlockStateRequirement {
+        val reqKey = anyOf.stableKey()
+        val chosenKey = anyOfSelectionProvider?.invoke(reqKey)
+        return anyOf.options.firstOrNull { it.stableKey() == chosenKey } ?: anyOf.options.first()
+    }
+
+    private fun computeAnyOfSelectionHash(): Int {
+        if (anyOfSelectionProvider == null) return 0
+        if (anyOfRequirementKeys.isEmpty()) return 0
+
+        var h = 1
+        for (k in anyOfRequirementKeys) {
+            val sel = anyOfSelectionProvider.invoke(k) ?: ""
+            h = 31 * h + sel.hashCode()
+        }
+        return h
+    }
+
+    private fun refreshAnyOfSelectionIfChanged() {
+        if (anyOfSelectionProvider == null) return
+        if (anyOfRequirementKeys.isEmpty()) return
+
+        val h = computeAnyOfSelectionHash()
+        if (h == lastAnyOfSelectionHash) return
+
+        lastAnyOfSelectionHash = h
+
+        // Selection changed: rebuild render states + VBOs.
+        reqStateCache.clear()
+        allBlockStates.clear()
+        allBlockStates.putAll(buildAllBlockStates(model))
+
+        if (controllerRequirement != null) {
+            val ox = 0 - min.x
+            val oy = 0 - min.y
+            val oz = 0 - min.z
+            val rel = BlockPos(ox, oy, oz)
+            val st = stateFromRequirementCached(controllerRequirement) ?: Blocks.AIR.defaultState
+            allBlockStates[rel] = st
+        }
+
+        invalidateBlockModelMeshes()
+        // Build everything in one go once, so the user sees the choice reflected immediately.
+        forceFullRebuildOnce = true
+    }
+
+    private fun buildAllBlockStates(model: StructurePreviewModel): MutableMap<BlockPos, IBlockState> {
+        if (model.blocks.isEmpty()) return mutableMapOf()
 
         val out = HashMap<BlockPos, IBlockState>(model.blocks.size * 2)
         for ((pos, req) in model.blocks) {
             val rel = BlockPos(pos.x - min.x, pos.y - min.y, pos.z - min.z)
-            val state = when (req) {
-                is ExactBlockStateRequirement -> stateFromRequirement(req) ?: Blocks.AIR.defaultState
-                else -> {
-                    // Fallback for non-exact requirements: ensure neighbors exist so face culling works.
-                    Blocks.STONE.defaultState
-                }
+            val exact = resolveExactRequirementForRender(req)
+            val state = if (exact != null) {
+                stateFromRequirement(exact) ?: Blocks.AIR.defaultState
+            } else {
+                // Fallback for non-exact requirements: ensure neighbors exist so face culling works.
+                Blocks.STONE.defaultState
             }
             out[rel] = state
         }
@@ -1162,15 +1353,14 @@ internal class StructurePreview3DWidget(
         t.draw()
     }
 
-    private fun drawCubes(context: ModularGuiContext) {
-        val statuses = statusProvider?.invoke() ?: emptyMap()
-
-        val selected = selectedPositionsProvider?.invoke()
-
-        val issuesOnly = issuesOnlyProvider?.invoke() == true
-        val sliceMode = sliceModeProvider?.invoke() == true
-        val sizeY = (maxB.y - min.y + 1).coerceAtLeast(1)
-        val sliceY = (sliceYProvider?.invoke() ?: 0).coerceIn(0, sizeY - 1)
+    private fun drawCubes(
+        context: ModularGuiContext,
+        statuses: Map<BlockPos, StructurePreviewEntryStatus>,
+        selected: Set<BlockPos>?,
+        issuesOnly: Boolean,
+        sliceMode: Boolean,
+        sliceY: Int
+    ) {
 
         val t = Tessellator.getInstance()
         val b = t.buffer
@@ -1178,10 +1368,10 @@ internal class StructurePreview3DWidget(
 
         for (c in cubes) {
             if (sliceMode && c.y != sliceY) continue
-            val rel = BlockPos(c.x + min.x, c.y + min.y, c.z + min.z)
-            val status = statuses[rel]
+            tmpLookupPos.setPos(c.x + min.x, c.y + min.y, c.z + min.z)
+            val status = statuses[tmpLookupPos]
 
-            val isSelected = selected?.contains(rel) == true
+            val isSelected = selected?.contains(tmpLookupPos) == true
 
             // If user is focusing a selection, don't hide selected blocks even in issues-only mode.
             if (!isSelected && issuesOnly && status == StructurePreviewEntryStatus.MATCH) continue

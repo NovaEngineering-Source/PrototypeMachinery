@@ -244,8 +244,10 @@ assert(basicMachine.children[0] === energyHatch)
 
 ### 1) validators / nbt 字段
 
-- `StructureData.validators` 当前不会反序列化为 `StructureValidator`（loader 里固定使用 `emptyList()`，并标注了 TODO）。
-- `StructurePatternElementData.nbt` 字段目前不会参与匹配（loader 仅使用 `blockId/meta` 构造 `IBlockState`）。
+- `StructureData.validators` 已支持：loader 会把字符串按 `ResourceLocation` 解析，并通过 `StructureValidatorRegistry` 创建 `StructureValidator`。
+  - 无效 / 未注册的 validator 会被跳过，并输出 warn。
+- `StructurePatternElementData.nbt` 已支持：当元素带 `nbt` 时，会使用 `StatedBlockNbtPredicate`。
+  - 限制：当 `alternatives` 中存在 NBT 约束时，目前不会对“多个候选 + NBT”做完整匹配；loader 会 warn 并回退为仅使用 base option。
 
 ### 2) 缺失引用的处理策略
 

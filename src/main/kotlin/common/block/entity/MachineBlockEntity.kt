@@ -287,4 +287,5 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
 
         return DefaultMachineUI.build(this, syncManager)
     }
+
 }

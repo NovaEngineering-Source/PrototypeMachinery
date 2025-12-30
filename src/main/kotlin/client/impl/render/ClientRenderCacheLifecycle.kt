@@ -44,6 +44,16 @@ internal object ClientRenderCacheLifecycle : IResourceManagerReloadListener {
         clearAll("resource_reload")
     }
 
+    /**
+     * Manual debug hook to force-clear all render caches at runtime.
+     *
+     * This is useful for A/B profiling: it guarantees the next frame will rebuild tasks
+     * (including Gecko baking) instead of hitting caches.
+     */
+    internal fun clearAllForDebug(reason: String = "manual") {
+        clearAll(reason)
+    }
+
     private fun clearAll(reason: String) {
         val mc = Minecraft.getMinecraft()
 

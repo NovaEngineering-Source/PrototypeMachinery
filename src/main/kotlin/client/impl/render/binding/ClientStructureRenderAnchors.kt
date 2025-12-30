@@ -34,6 +34,23 @@ internal object ClientStructureRenderAnchors {
         return out
     }
 
+    /**
+     * Collect anchors without matching on the client.
+     *
+     * The server periodically matches the structure and syncs SliceStructure matched counts.
+     * Client can reconstruct anchor positions deterministically using the structure definition.
+     */
+    internal fun collectAnchorsFromSliceCounts(
+        structure: MachineStructure,
+        controllerPos: BlockPos,
+        sliceCountsById: Map<String, Int>,
+        resolveSliceMode: (MachineStructure) -> SliceRenderMode,
+    ): List<Anchor> {
+        val out = ArrayList<Anchor>()
+        collectIntoFromCounts(structure, controllerPos, out, sliceCountsById, resolveSliceMode)
+        return out
+    }
+
     private fun collectInto(
         structure: MachineStructure,
         instance: StructureInstance,
@@ -92,6 +109,57 @@ internal object ClientStructureRenderAnchors {
                     for (childInstance in childInstances) {
                         collectInto(child, childInstance, offsetOrigin, out, resolveSliceMode)
                     }
+                }
+            }
+        }
+    }
+
+    private fun collectIntoFromCounts(
+        structure: MachineStructure,
+        origin: BlockPos,
+        out: MutableList<Anchor>,
+        sliceCountsById: Map<String, Int>,
+        resolveSliceMode: (MachineStructure) -> SliceRenderMode,
+    ) {
+        val offsetOrigin = origin.add(structure.offset)
+
+        when (structure) {
+            is TemplateStructure -> {
+                out.add(Anchor(structure, offsetOrigin, sliceIndex = -1))
+
+                for (child in structure.children) {
+                    // Template children origin is simply offsetOrigin.
+                    collectIntoFromCounts(child, offsetOrigin, out, sliceCountsById, resolveSliceMode)
+                }
+            }
+
+            is SliceStructure -> {
+                val count = (sliceCountsById[structure.id] ?: 0).coerceAtLeast(0)
+                val mode = resolveSliceMode(structure)
+
+                if (mode == SliceRenderMode.PER_SLICE) {
+                    var current = offsetOrigin
+                    for (i in 0 until count) {
+                        out.add(Anchor(structure, current, sliceIndex = i))
+                        current = current.add(structure.sliceOffset)
+                    }
+                } else {
+                    out.add(Anchor(structure, offsetOrigin, sliceIndex = -1))
+                }
+
+                // Children attach to the last slice (mirrors server-side traversal).
+                val accumulatedOffset = structure.sliceOffset * (count - 1).coerceAtLeast(0)
+                val childOrigin = offsetOrigin.add(accumulatedOffset)
+
+                for (child in structure.children) {
+                    collectIntoFromCounts(child, childOrigin, out, sliceCountsById, resolveSliceMode)
+                }
+            }
+
+            else -> {
+                out.add(Anchor(structure, offsetOrigin, sliceIndex = -1))
+                for (child in structure.children) {
+                    collectIntoFromCounts(child, offsetOrigin, out, sliceCountsById, resolveSliceMode)
                 }
             }
         }

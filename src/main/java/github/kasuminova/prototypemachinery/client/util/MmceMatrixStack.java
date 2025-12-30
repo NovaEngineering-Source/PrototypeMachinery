@@ -16,6 +16,11 @@ public class MmceMatrixStack {
     private final Matrix4f tempModelMatrix  = new Matrix4f();
     private final Matrix3f tempNormalMatrix = new Matrix3f();
 
+    // Reusable temporaries to avoid per-call allocations in hot paths.
+    private final Matrix4f tempRotModelMatrix  = new Matrix4f();
+    private final Matrix3f tempRotNormalMatrix = new Matrix3f();
+    private final Vector3f tempTranslationVec  = new Vector3f();
+
     public MmceMatrixStack() {
         Matrix4f model = new Matrix4f();
         Matrix3f normal = new Matrix3f();
@@ -69,7 +74,8 @@ public class MmceMatrixStack {
     }
 
     public void translate(float x, float y, float z) {
-        this.translate(new Vector3f(x, y, z));
+        this.tempTranslationVec.set(x, y, z);
+        this.translate(this.tempTranslationVec);
     }
 
     public void translate(Vector3f vec) {
@@ -81,12 +87,20 @@ public class MmceMatrixStack {
 
     public void moveToPivot(GeoCube cube) {
         Vector3f pivot = cube.pivot;
-        this.translate(pivot.getX() / 16, pivot.getY() / 16, pivot.getZ() / 16);
+        float px = pivot.getX();
+        float py = pivot.getY();
+        float pz = pivot.getZ();
+        if (px == 0.0F && py == 0.0F && pz == 0.0F) return;
+        this.translate(px / 16, py / 16, pz / 16);
     }
 
     public void moveBackFromPivot(GeoCube cube) {
         Vector3f pivot = cube.pivot;
-        this.translate(-pivot.getX() / 16, -pivot.getY() / 16, -pivot.getZ() / 16);
+        float px = pivot.getX();
+        float py = pivot.getY();
+        float pz = pivot.getZ();
+        if (px == 0.0F && py == 0.0F && pz == 0.0F) return;
+        this.translate(-px / 16, -py / 16, -pz / 16);
     }
 
     public void moveToPivot(GeoBone bone) {
@@ -176,28 +190,30 @@ public class MmceMatrixStack {
 
     public void rotate(GeoCube bone) {
         Vector3f rotation = bone.rotation;
-        Matrix4f matrix4f = new Matrix4f();
-        Matrix3f matrix3f = new Matrix3f();
+        float rx = rotation.getX();
+        float ry = rotation.getY();
+        float rz = rotation.getZ();
+        if (rx == 0.0F && ry == 0.0F && rz == 0.0F) return;
 
         this.tempModelMatrix.setIdentity();
-        matrix4f.rotZ(rotation.getZ());
-        this.tempModelMatrix.mul(matrix4f);
+        this.tempRotModelMatrix.rotZ(rz);
+        this.tempModelMatrix.mul(this.tempRotModelMatrix);
 
-        matrix4f.rotY(rotation.getY());
-        this.tempModelMatrix.mul(matrix4f);
+        this.tempRotModelMatrix.rotY(ry);
+        this.tempModelMatrix.mul(this.tempRotModelMatrix);
 
-        matrix4f.rotX(rotation.getX());
-        this.tempModelMatrix.mul(matrix4f);
+        this.tempRotModelMatrix.rotX(rx);
+        this.tempModelMatrix.mul(this.tempRotModelMatrix);
 
         this.tempNormalMatrix.setIdentity();
-        matrix3f.rotZ(rotation.getZ());
-        this.tempNormalMatrix.mul(matrix3f);
+        this.tempRotNormalMatrix.rotZ(rz);
+        this.tempNormalMatrix.mul(this.tempRotNormalMatrix);
 
-        matrix3f.rotY(rotation.getY());
-        this.tempNormalMatrix.mul(matrix3f);
+        this.tempRotNormalMatrix.rotY(ry);
+        this.tempNormalMatrix.mul(this.tempRotNormalMatrix);
 
-        matrix3f.rotX(rotation.getX());
-        this.tempNormalMatrix.mul(matrix3f);
+        this.tempRotNormalMatrix.rotX(rx);
+        this.tempNormalMatrix.mul(this.tempRotNormalMatrix);
 
         getModelMatrix().mul(this.tempModelMatrix);
         getNormalMatrix().mul(this.tempNormalMatrix);

@@ -85,8 +85,7 @@ To avoid duplicating the topic docs, this section is a navigation map:
 Based on current implementation, potential future work:
 
 1. **More expressive structure JSON**
-   - validators: the schema includes `validators`, but loader support is TODO (see `StructureLoader`)
-   - pattern NBT: schema includes `pattern[].nbt`, but it is currently ignored
+   - pattern NBT: `pattern[].nbt` is supported (via `StatedBlockNbtPredicate`), but full matching for NBT constraints on `alternatives` is still limited (the loader warns and falls back to the base option)
 
 2. **A validator library**
    - e.g. `HeightValidator`, `BiomeValidator`, `NeighborValidator`

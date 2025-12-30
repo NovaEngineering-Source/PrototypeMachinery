@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery.impl.scheduler.backend
 
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.scheduler.SchedulingAffinity
+import github.kasuminova.prototypemachinery.impl.platform.PMPlatformManager
 import github.kasuminova.prototypemachinery.impl.scheduler.SchedulerMetrics
 import github.kasuminova.prototypemachinery.impl.scheduler.SchedulerRuntimeSettings
 import github.kasuminova.prototypemachinery.impl.scheduler.SchedulerState
@@ -15,9 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.Closeable
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 
 internal class CoroutineTaskSchedulerBackend(
     settings: SchedulerRuntimeSettings,
@@ -25,7 +24,7 @@ internal class CoroutineTaskSchedulerBackend(
 
     override val backendName: String = "COROUTINES"
 
-    private val threadCounter = AtomicInteger(0)
+    private val platform = PMPlatformManager.get()
 
     @Volatile
     private var isShutdown = false
@@ -41,23 +40,23 @@ internal class CoroutineTaskSchedulerBackend(
 
     private var scope: CoroutineScope = CoroutineScope(SupervisorJob())
 
+    init {
+        PrototypeMachinery.logger.info(
+            "Task scheduler backend '{}' initialized on platform '{}' (executor={}, lanes={})",
+            backendName,
+            platform.id(),
+            executorService.javaClass.name,
+            laneExecutors.size
+        )
+    }
+
     private fun createExecutorService(settings: SchedulerRuntimeSettings): ExecutorService =
-        Executors.newFixedThreadPool(settings.workerThreads.coerceAtLeast(1)) { runnable ->
-            Thread(runnable, "PrototypeMachinery-Scheduler-${threadCounter.incrementAndGet()}").apply {
-                isDaemon = true
-                priority = Thread.NORM_PRIORITY + 1
-            }
-        }
+        platform.createSchedulerExecutor(settings.workerThreads.coerceAtLeast(1), "PrototypeMachinery-Scheduler")
 
     private fun createLaneExecutors(settings: SchedulerRuntimeSettings): Array<ExecutorService> {
         val lanes = settings.laneCount.coerceAtLeast(1)
         return Array(lanes) { lane ->
-            Executors.newSingleThreadExecutor { runnable ->
-                Thread(runnable, "PrototypeMachinery-Scheduler-Lane-${lane + 1}").apply {
-                    isDaemon = true
-                    priority = Thread.NORM_PRIORITY + 1
-                }
-            }
+            platform.createSchedulerLaneExecutor(lane + 1, "PrototypeMachinery-Scheduler")
         }
     }
 
@@ -211,11 +210,12 @@ internal class CoroutineTaskSchedulerBackend(
         val jobs = ArrayList<Job>()
 
         var customConcurrentCount = 0
-        var customTask = state.customConcurrentTasks.poll()
-        while (customTask != null) {
-            jobs.add(scope.launch(executorDispatcher.dispatcher) { safeRun(customTask) })
+        while (true) {
+            val task = state.customConcurrentTasks.poll() ?: break
+            // Important: capture the task value, not the mutable loop variable.
+            // Otherwise the coroutine may observe it as null after the loop advances.
+            jobs.add(scope.launch(executorDispatcher.dispatcher) { safeRun(task) })
             customConcurrentCount++
-            customTask = state.customConcurrentTasks.poll()
         }
 
         val active = state.concurrentTasks.asSequence().filter { it.isActive() }.toList()
@@ -255,7 +255,9 @@ internal class CoroutineTaskSchedulerBackend(
             val hasAffinity = indexes.any { affinityKeysByIndex[it].isNotEmpty() }
             if (!hasAffinity) {
                 for (i in indexes) {
-                    jobs.add(scope.launch(executorDispatcher.dispatcher) { safeRun { active[i].onSchedule() } })
+                    // Capture index per-iteration to avoid closure pitfalls.
+                    val idx = i
+                    jobs.add(scope.launch(executorDispatcher.dispatcher) { safeRun { active[idx].onSchedule() } })
                     concurrentSchedulableCount++
                 }
                 continue

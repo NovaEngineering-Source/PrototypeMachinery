@@ -24,6 +24,9 @@ run
 # local logs
 logs
 
+# heap dumps
+*.hprof
+
 # Kotlin generated files
 .kotlin
 

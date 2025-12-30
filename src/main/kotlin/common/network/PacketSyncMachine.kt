@@ -50,15 +50,17 @@ internal class PacketSyncMachine : IMessage {
                     if (message.componentId.isEmpty()) {
                         // Machine level sync (if needed)
                     } else {
-                        val componentType = tile.machine.type.componentTypes.find { it.id.toString() == message.componentId }
-                        if (componentType != null) {
-                            val component = tile.machine.componentMap.get(componentType)
-                            if (component is MachineComponent.Synchronizable) {
-                                component.readClientNBT(
-                                    message.data,
-                                    if (message.isFullSync) MachineComponent.Synchronizable.SyncType.FULL else MachineComponent.Synchronizable.SyncType.INCREMENTAL
-                                )
-                            }
+                        // Resolve by runtime componentMap instead of machineType.componentTypes,
+                        // so internal/system components can also be synced.
+                        val type = tile.machine.componentMap.components.keys.firstOrNull { it.id.toString() == message.componentId }
+                            ?: return@addScheduledTask
+
+                        val component = tile.machine.componentMap.get(type)
+                        if (component is MachineComponent.Synchronizable) {
+                            component.readClientNBT(
+                                message.data,
+                                if (message.isFullSync) MachineComponent.Synchronizable.SyncType.FULL else MachineComponent.Synchronizable.SyncType.INCREMENTAL
+                            )
                         }
                     }
                 }

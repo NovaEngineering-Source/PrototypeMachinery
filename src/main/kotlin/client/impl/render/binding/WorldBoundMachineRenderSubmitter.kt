@@ -10,6 +10,7 @@ import github.kasuminova.prototypemachinery.client.impl.render.BatchedRenderer
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelBaker
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelRenderBuildTask
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoRenderSnapshot
+import github.kasuminova.prototypemachinery.client.impl.render.task.RenderTaskOwnerKeys
 import github.kasuminova.prototypemachinery.common.block.MachineBlock
 import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
 import net.minecraft.client.Minecraft
@@ -93,7 +94,7 @@ internal object WorldBoundMachineRenderSubmitter {
 
         val variantForAnim = run {
             var v = variantBase
-            v = 31 * v + animationNames.joinToString("\u0000").hashCode()
+            v = 31 * v + hashStringList(animationNames)
             v = 31 * v + (geckoState?.stateVersion ?: 0)
             v
         }
@@ -140,7 +141,7 @@ internal object WorldBoundMachineRenderSubmitter {
         )
 
         if (binding.animation == null) {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.ALL)
+            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.ALL.ordinal, RenderPart.values().size)
             val rk = baseKey(animationStateHash = animTick, variant = variantBase)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ALL)
@@ -149,7 +150,7 @@ internal object WorldBoundMachineRenderSubmitter {
         }
 
         run {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.PERMANENT_STATIC)
+            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.PERMANENT_STATIC.ordinal, RenderPart.values().size)
             val rk = baseKey(animationStateHash = 0, variant = variantBase)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.PERMANENT_STATIC_ONLY)
@@ -157,7 +158,7 @@ internal object WorldBoundMachineRenderSubmitter {
         }
 
         run {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.TEMP_STATIC)
+            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.TEMP_STATIC.ordinal, RenderPart.values().size)
             val rk = baseKey(animationStateHash = 0, variant = variantForAnim)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.TEMP_STATIC_ONLY)
@@ -165,7 +166,7 @@ internal object WorldBoundMachineRenderSubmitter {
         }
 
         run {
-            val ownerKey = RenderOwnerKey(te, bindingKey, RenderPart.DYNAMIC)
+            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.DYNAMIC.ordinal, RenderPart.values().size)
             val rk = baseKey(animationStateHash = animTick, variant = variantForAnim)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ANIMATED_ONLY)
@@ -175,17 +176,20 @@ internal object WorldBoundMachineRenderSubmitter {
         return 1
     }
 
-    private data class RenderOwnerKey(
-        private val te: MachineBlockEntity,
-        private val bindingKey: ResourceLocation,
-        private val part: RenderPart,
-    )
-
     private enum class RenderPart {
         ALL,
         PERMANENT_STATIC,
         TEMP_STATIC,
         DYNAMIC,
+    }
+
+    private fun hashStringList(values: List<String>): Int {
+        var h = values.size
+        for (s in values) {
+            h = 31 * h + s.hashCode()
+            h = 31 * h + 0x9E3779B9.toInt()
+        }
+        return h
     }
 
     private fun resolveAnimationNames(

@@ -94,8 +94,18 @@ internal object RenderTaskCache {
      * This is called when a TileEntity is invalidated to avoid memory leaks.
      */
     internal fun removeByTe(te: Any) {
+        // Fast path: remove all interned keys for this TE without scanning.
+        val interned = RenderTaskOwnerKeys.removeByTe(te)
+        if (interned.isNotEmpty()) {
+            for (k in interned) {
+                tasks.remove(k)?.clearBuilt()
+                nextTasks.remove(k)?.clearBuilt()
+            }
+        }
+
         val keysToRemove = tasks.keys.filter { key ->
             when (key) {
+                is RenderTaskOwnerKeys.OwnerKey -> key.te === te
                 is Iterable<*> -> key.any { it === te }
                 is Array<*> -> key.any { it === te }
                 else -> {

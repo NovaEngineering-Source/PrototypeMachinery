@@ -39,8 +39,10 @@ The corresponding data class is:
 
 #### Reserved fields (current behavior)
 
-- `validators` (Array<String>): currently the JSON loader does **not** deserialize validators into `StructureValidator` (TODO in `StructureLoader`; currently `emptyList()`).
-- `pattern[].nbt` (Object): present in `StructurePatternElementData`, but `StructureLoader.convertPattern(...)` currently **does not use** it; predicates are primarily built from `blockId/meta`.
+- `validators` (Array<String>): supported. The loader parses each entry as a `ResourceLocation` and resolves it via `StructureValidatorRegistry`.
+  - Invalid / unknown validator ids are skipped with a warning.
+- `pattern[].nbt` (Object): supported via `StatedBlockNbtPredicate`.
+  - Limitation: NBT constraints on `alternatives` are not fully supported yet; the loader warns and falls back to the base option only.
 
 ### Pattern elements
 
@@ -49,7 +51,7 @@ Each element:
 - `pos`: `{x,y,z}`
 - `blockId`: e.g. `"minecraft:iron_block"`
 - `meta`: optional, default 0 (used for `getStateFromMeta(meta)`)
-- `nbt`: optional (currently unused; see above)
+- `nbt`: optional (supported; see above)
 
 ### Slice-only fields
 

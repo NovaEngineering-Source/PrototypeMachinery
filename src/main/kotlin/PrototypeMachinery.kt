@@ -1,14 +1,17 @@
 package github.kasuminova.prototypemachinery
 
+import github.kasuminova.prototypemachinery.PrototypeMachinery.preInit
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.common.CommonProxy
 import github.kasuminova.prototypemachinery.common.buildinstrument.BuildInstrumentTaskManager
+import github.kasuminova.prototypemachinery.common.command.PmConfigServerCommand
 import github.kasuminova.prototypemachinery.common.command.SchedulerServerCommand
 import github.kasuminova.prototypemachinery.common.config.PrototypeMachineryCommonConfig
 import github.kasuminova.prototypemachinery.common.handler.CraftTweakerReloadHandler
 import github.kasuminova.prototypemachinery.common.network.NetworkHandler
 import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
 import github.kasuminova.prototypemachinery.common.structure.loader.StructureLoader
+import github.kasuminova.prototypemachinery.impl.platform.PMPlatformManager
 import github.kasuminova.prototypemachinery.impl.recipe.index.RecipeIndexRegistry
 import github.kasuminova.prototypemachinery.impl.recipe.scanning.DefaultRecipeParallelismConstraints
 import github.kasuminova.prototypemachinery.impl.scheduler.TaskSchedulerImpl
@@ -22,6 +25,7 @@ import net.minecraftforge.fml.common.event.FMLPostInitializationEvent
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent
 import net.minecraftforge.fml.common.event.FMLServerStoppingEvent
+import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
 
 @Mod(
@@ -42,7 +46,12 @@ public object PrototypeMachinery {
     public const val MOD_NAME: String = Tags.MOD_NAME
     public const val VERSION: String = Tags.VERSION
 
-    internal lateinit var logger: Logger
+    /**
+     * Must be available even during very early class initialization (e.g. CraftTweaker / static init).
+     * Replaced with Forge's mod logger in [preInit].
+     */
+    @JvmField
+    internal var logger: Logger = LogManager.getLogger(MOD_ID)
 
     @JvmStatic
     @SidedProxy(
@@ -55,6 +64,10 @@ public object PrototypeMachinery {
     internal fun preInit(event: FMLPreInitializationEvent) {
         logger = event.modLog
         event.modMetadata.version = Tags.VERSION
+
+        // Resolve platform implementation early.
+        // This enables optional addon mods (e.g. Cleanroom + modern Java backends) to hook in.
+        PMPlatformManager.bootstrap(logger)
 
         // Load config early so performance-related tunings apply to all systems.
         PrototypeMachineryCommonConfig.load(event)
@@ -126,6 +139,9 @@ public object PrototypeMachinery {
     internal fun serverStarting(event: FMLServerStartingEvent) {
         // Server-side debug/admin command for scheduler control.
         event.registerServerCommand(SchedulerServerCommand)
+
+        // Admin command for in-game config tweaking (hot-apply).
+        event.registerServerCommand(PmConfigServerCommand)
     }
 
     @Mod.EventHandler
@@ -133,6 +149,10 @@ public object PrototypeMachinery {
         // Shutdown scheduler and cleanup resources
         // 关闭调度器并清理资源
         TaskSchedulerImpl.shutdown()
+        
+        // Let platform implementation release resources (e.g. ModernBackend virtual-thread executor)
+        // 让平台实现释放资源（例如 ModernBackend 的虚拟线程执行器）
+        runCatching { PMPlatformManager.get().shutdown() }
     }
 
 }
