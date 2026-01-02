@@ -3,6 +3,7 @@ package github.kasuminova.prototypemachinery.common.structure.loader
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
+import github.kasuminova.prototypemachinery.api.machine.structure.logic.JsonConfigurableStructureValidator
 import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidator
 import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidatorRegistry
 import github.kasuminova.prototypemachinery.api.machine.structure.pattern.StructurePattern
@@ -10,6 +11,7 @@ import github.kasuminova.prototypemachinery.api.machine.structure.pattern.predic
 import github.kasuminova.prototypemachinery.common.registry.StructureRegisterer
 import github.kasuminova.prototypemachinery.common.structure.serialization.StructureData
 import github.kasuminova.prototypemachinery.common.structure.serialization.StructurePatternElementData
+import github.kasuminova.prototypemachinery.common.structure.serialization.StructureValidatorSpecData
 import github.kasuminova.prototypemachinery.impl.machine.structure.SliceStructure
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
 import github.kasuminova.prototypemachinery.impl.machine.structure.TemplateStructure
@@ -22,6 +24,7 @@ import net.minecraft.block.Block
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.ResourceLocation
 import net.minecraft.util.math.BlockPos
+import net.minecraftforge.fml.common.Loader
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent
 import java.io.File
@@ -37,6 +40,14 @@ import java.io.File
  * 使用 kotlinx.serialization 反序列化，并转换为 MachineStructure 实例。
  */
 public object StructureLoader {
+
+    public data class ReloadReport(
+        val ok: Boolean,
+        val filesScanned: Int,
+        val structuresLoaded: Int,
+        val structuresConverted: Int,
+        val errors: Int,
+    )
 
     private val json = Json {
         prettyPrint = true
@@ -165,6 +176,120 @@ public object StructureLoader {
         structureInstanceCache.clear()
 
         PrototypeMachinery.logger.info("Structure processing completed")
+    }
+
+    /**
+     * Runtime structure hot-reload.
+     *
+     * Notes / 注意：
+     * - This runs on the current physical side (client/server).
+     * - For multiplayer, you typically want to execute reload on BOTH sides to avoid preview desync.
+     * - This method intentionally does NOT copy example structures.
+     */
+    public fun reloadFromDisk(replaceRegistry: Boolean = true): ReloadReport {
+        val configDir = Loader.instance().configDir
+        val structuresDir = File(configDir, "prototypemachinery/structures")
+
+        if (!structuresDir.exists()) {
+            structuresDir.mkdirs()
+            PrototypeMachinery.logger.info("[Structures] Created structures directory at: ${structuresDir.absolutePath}")
+        }
+
+        val jsonFiles = if (!structuresDir.exists()) {
+            emptyList()
+        } else {
+            structuresDir
+                .walkTopDown()
+                .filter { it.isFile && it.extension.equals("json", ignoreCase = true) }
+                .toList()
+        }
+
+        if (jsonFiles.isEmpty()) {
+            return ReloadReport(
+                ok = false,
+                filesScanned = 0,
+                structuresLoaded = 0,
+                structuresConverted = 0,
+                errors = 0,
+            )
+        }
+
+        // 1) Load all StructureData.
+        val dataById = LinkedHashMap<String, StructureData>(jsonFiles.size)
+        var errors = 0
+        for (file in jsonFiles) {
+            val rel = try {
+                file.relativeTo(structuresDir).path
+            } catch (_: Throwable) {
+                file.absolutePath
+            }
+
+            try {
+                val txt = file.readText()
+                val data = json.decodeFromString<StructureData>(txt)
+                if (dataById.containsKey(data.id)) {
+                    PrototypeMachinery.logger.warn("[Structures] Duplicate structure id '${data.id}' in file: $rel (ignored)")
+                    continue
+                }
+                dataById[data.id] = data
+            } catch (t: Throwable) {
+                errors++
+                PrototypeMachinery.logger.error("[Structures] Failed to load structure data from file: $rel", t)
+            }
+        }
+
+        if (dataById.isEmpty()) {
+            return ReloadReport(
+                ok = false,
+                filesScanned = jsonFiles.size,
+                structuresLoaded = 0,
+                structuresConverted = 0,
+                errors = errors,
+            )
+        }
+
+        // 2) Convert to MachineStructure without consulting the existing registry.
+        val converted = runCatching {
+            convertAll(dataById, allowRegistryLookup = false)
+        }.onFailure {
+            errors++
+            PrototypeMachinery.logger.error("[Structures] Failed to convert structure data (reload aborted)", it)
+        }.getOrNull()
+
+        if (converted == null) {
+            return ReloadReport(
+                ok = false,
+                filesScanned = jsonFiles.size,
+                structuresLoaded = dataById.size,
+                structuresConverted = 0,
+                errors = errors,
+            )
+        }
+
+        // 3) Swap into registry.
+        if (replaceRegistry) {
+            StructureRegistryImpl.replaceAll(converted)
+        } else {
+            // Legacy behavior: try register one-by-one.
+            for (s in converted) {
+                runCatching { StructureRegistryImpl.register(s) }.onFailure {
+                    errors++
+                    PrototypeMachinery.logger.error("[Structures] Failed to register structure '${s.id}'", it)
+                }
+            }
+        }
+
+        PrototypeMachinery.logger.info(
+            "[Structures] Hot reload done: files=${jsonFiles.size}, loaded=${dataById.size}, converted=${converted.size}, errors=$errors"
+        )
+
+        return ReloadReport(
+            ok = errors == 0,
+            filesScanned = jsonFiles.size,
+            structuresLoaded = dataById.size,
+            structuresConverted = converted.size,
+            errors = errors,
+        )
     }
 
     /**
@@ -302,6 +427,103 @@ public object StructureLoader {
         return structure
     }
 
+    private fun convertAll(
+        dataById: Map<String, StructureData>,
+        allowRegistryLookup: Boolean,
+    ): List<MachineStructure> {
+        // Use local caches for reload safety.
+        val instanceCache = HashMap<String, MachineStructure>(dataById.size)
+        val out = ArrayList<MachineStructure>(dataById.size)
+
+        fun convert(
+            data: StructureData,
+            conversionPath: MutableSet<String> = mutableSetOf(),
+        ): MachineStructure {
+            if (data.id in conversionPath) {
+                val cycle = conversionPath.joinToString(" -> ") + " -> ${data.id}"
+                throw IllegalStateException("Circular dependency detected in structure hierarchy: $cycle")
+            }
+            instanceCache[data.id]?.let { return it }
+
+            conversionPath.add(data.id)
+
+            val offset = BlockPos(data.offset.x, data.offset.y, data.offset.z)
+            val pattern = convertPattern(data.id, offset, data.pattern)
+            val validators = resolveValidators(data.id, data.validators)
+
+            val children = data.children.mapNotNull { childId ->
+                if (allowRegistryLookup) {
+                    StructureRegistryImpl.get(childId)?.let { return@mapNotNull it }
+                }
+
+                instanceCache[childId]?.let { return@mapNotNull it }
+
+                val childData = dataById[childId]
+                if (childData != null) {
+                    return@mapNotNull convert(childData, conversionPath)
+                }
+
+                PrototypeMachinery.logger.warn("Child structure '$childId' not found for structure '${data.id}'")
+                null
+            }
+
+            conversionPath.remove(data.id)
+
+            val displayName = data.name?.takeIf { it.isNotBlank() } ?: data.id
+            val structure = when (data.type.lowercase()) {
+                "template" -> TemplateStructure(
+                    id = data.id,
+                    name = displayName,
+                    orientation = DEFAULT_ORIENTATION,
+                    offset = offset,
+                    hideWorldBlocks = data.hideWorldBlocks,
+                    pattern = pattern,
+                    validators = validators,
+                    children = children
+                )
+
+                "slice" -> {
+                    val minCount = data.minCount
+                        ?: throw IllegalArgumentException("Slice structure '${data.id}' must have 'minCount' field")
+                    val maxCount = data.maxCount
+                        ?: throw IllegalArgumentException("Slice structure '${data.id}' must have 'maxCount' field")
+
+                    val sliceOffset = data.sliceOffset?.let {
+                        BlockPos(it.x, it.y, it.z)
+                    } ?: BlockPos(0, 1, 0)
+
+                    SliceStructure(
+                        id = data.id,
+                        name = displayName,
+                        orientation = DEFAULT_ORIENTATION,
+                        offset = offset,
+                        hideWorldBlocks = data.hideWorldBlocks,
+                        pattern = pattern,
+                        minCount = minCount,
+                        maxCount = maxCount,
+                        sliceOffset = sliceOffset,
+                        validators = validators,
+                        children = children
+                    )
+                }
+
+                else -> throw IllegalArgumentException("Unknown structure type: ${data.type}")
+            }
+
+            instanceCache[data.id] = structure
+            return structure
+        }
+
+        for ((id, data) in dataById) {
+            val s = convert(data, mutableSetOf())
+            // Ensure deterministic order and unique ids.
+            require(s.id == id) { "Converted structure id mismatch: expected=$id actual=${s.id}" }
+            out.add(s)
+        }
+
+        return out
+    }
+
     /**
      * Convert pattern elements to StructurePattern.
      * 将模式元素转换为 StructurePattern。
@@ -370,14 +592,15 @@ public object StructureLoader {
         return SimpleStructurePattern(blocks)
     }
 
-    private fun resolveValidators(structureId: String, ids: List<String>): List<StructureValidator> {
-        if (ids.isEmpty()) return emptyList()
+    private fun resolveValidators(structureId: String, specs: List<StructureValidatorSpecData>): List<StructureValidator> {
+        if (specs.isEmpty()) return emptyList()
 
-        val out = ArrayList<StructureValidator>(ids.size)
-        for (raw in ids) {
-            val id = runCatching { ResourceLocation(raw) }.getOrNull()
+        val out = ArrayList<StructureValidator>(specs.size)
+        for (spec in specs) {
+            val rawId = spec.id
+            val id = runCatching { ResourceLocation(rawId) }.getOrNull()
             if (id == null) {
-                PrototypeMachinery.logger.warn("Invalid validator id '$raw' in structure '$structureId' (skipped)")
+                PrototypeMachinery.logger.warn("Invalid validator id '$rawId' in structure '$structureId' (skipped)")
                 continue
             }
 
@@ -385,6 +608,24 @@ public object StructureLoader {
             if (validator == null) {
                 PrototypeMachinery.logger.warn("Unknown validator '$id' in structure '$structureId' (skipped)")
                 continue
+            }
+
+            if (spec.params.isNotEmpty()) {
+                if (validator is JsonConfigurableStructureValidator) {
+                    try {
+                        validator.configure(spec.params)
+                    } catch (t: Throwable) {
+                        PrototypeMachinery.logger.warn(
+                            "Validator '$id' in structure '$structureId' failed to parse params: ${t.message} (skipped)",
+                            t
+                        )
+                        continue
+                    }
+                } else {
+                    PrototypeMachinery.logger.warn(
+                        "Validator '$id' in structure '$structureId' does not support params; params will be ignored"
+                    )
+                }
             }
 
             out.add(validator)

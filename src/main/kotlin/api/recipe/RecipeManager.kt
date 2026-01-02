@@ -14,7 +14,7 @@ import net.minecraft.util.ResourceLocation
  * ## Related Classes / 相关类
  * - [MachineRecipe] - Recipe definitions stored in this manager
  * - [github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess] - Executes recipes
- * - [github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirement] - Requirements inside recipes
+ * - [github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent] - Requirement payloads grouped by type inside recipes
  */
 public interface RecipeManager {
 

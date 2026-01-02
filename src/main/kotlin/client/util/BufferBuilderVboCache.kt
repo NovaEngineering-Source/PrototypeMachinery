@@ -62,6 +62,30 @@ internal object BufferBuilderVboCache {
     internal fun pooledCount(): Int = synchronized(this) { pooled.size }
 
     /**
+     * Returns a cached entry for this builder if present and still compatible.
+     *
+     * This does NOT create/upload a VBO and does NOT affect hit/miss stats.
+     * Intended for heuristics (e.g., deciding whether to merge or draw individually).
+     */
+    internal fun peek(builder: BufferBuilder): Entry? {
+        if (!enabled()) return null
+        if (!OpenGlHelper.useVbo()) return null
+        if (builder.vertexCount <= 0) return null
+
+        val existing = synchronized(this) { map[builder] } ?: return null
+
+        val format = builder.vertexFormat
+        val drawMode = builder.drawMode
+        val vertexCount = builder.vertexCount
+        if (existing.format == format && existing.drawMode == drawMode && existing.vertexCount == vertexCount) {
+            return existing
+        }
+
+        // Builder was likely reused without proper recycle; treat as not cached.
+        return null
+    }
+
+    /**
      * Called when a builder is returned to the pool.
      * Schedules VBO deletion and removes it from the cache.
      */

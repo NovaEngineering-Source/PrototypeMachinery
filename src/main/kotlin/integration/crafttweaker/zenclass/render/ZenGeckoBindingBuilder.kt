@@ -38,7 +38,7 @@ public class ZenGeckoBindingBuilder {
     private var forceGlobalRenderer: Boolean = false
 
     private var pass: RenderPass = RenderPass.DEFAULT
-    private var sliceRenderMode: SliceRenderMode = SliceRenderMode.STRUCTURE_ONLY
+    private var sliceRenderMode: SliceRenderMode = SliceRenderMode.PER_SLICE
 
     @ZenMethod
     public fun geo(geo: String): ZenGeckoBindingBuilder {
@@ -150,7 +150,7 @@ public class ZenGeckoBindingBuilder {
     /**
      * For Slice structures: how many anchors to create.
      * Supported (case-insensitive):
-     * - "structure_only" (default)
+        * - "structure_only"
      * - "per_slice"
      */
     @ZenMethod

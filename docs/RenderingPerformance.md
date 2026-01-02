@@ -73,21 +73,19 @@
 - 构建完成后的 `BufferBuilder` 可绑定一个 GPU VBO（缓存上传结果），在缓存命中时避免 `glBufferData`/`VertexBuffer.bufferData` 的重复上传。
 - 同时支持 **VBO id 池化**（减少 `glGenBuffers`/`VertexBuffer.<init>` 开销），对“主线程 GL churn”热点有明显改善。
 
-### 2.4 OpaqueChunkVboCache（实验）：按 chunk-group 缓存不透明合并 VBO
+### 2.4 ReusableVboUploader：合并上传优化（ring + orphaning / 可选 mapRange）
 
 相关文件：
 
-- `src/main/kotlin/client/util/OpaqueChunkVboCache.kt`
-- `src/main/kotlin/client/impl/render/MachineRenderDispatcher.kt`
+- `src/main/kotlin/client/util/ReusableVboUploader.kt`
 
 要点：
 
-- 仅对 `RenderPass.DEFAULT`（不透明）启用：
-  - 把空间上同一 chunk-group（1x1 / 2x2 / 4x4 chunks）内的 **合并后不透明几何** 缓存在一个条目里。
-  - 目标是减少“不同机器/大量结构”导致的重复合并与上传。
-- 透明/Bloom 被刻意排除：
-  - 透明排序与 Bloom 时序更敏感，容易引入错误与收益不确定。
-- 采用 LRU/预算清理，HUD 可观测命中/重建/占用。
+- 当需要把多个 `BufferBuilder` 合并为一次 draw 时，优先走 scratch VBO 合并上传：
+  - 小 ring（多个 VBO）减少“同一 VBO 被反复覆盖导致驱动等待”的概率。
+  - 默认使用 classic orphaning：`glBufferData(size, null)` + `glBufferSubData(...)`。
+  - 在支持 `glMapBufferRange` 时，可选 `MAP_RANGE_UNSYNC` 路径（实现上仍会先 orphan 再 map，避免覆盖 in-flight 数据）。
+- 目标是减少 draw call 与减少无谓的 builder->scratch memcpy（支持直接写入 mapped VBO 的 slice 上传路径）。
 
 ---
 
@@ -107,7 +105,6 @@ Forge 配置加载与热更新：
 - `render_animation`
 - `render_merge`
 - `render_vbo_cache`
-- `render_opaque_chunk_vbo_cache`
 - `render_gecko`
 
 ### 3.1 运行时热调（建议流程）
@@ -134,7 +131,7 @@ Forge 配置加载与热更新：
 HUD 常见用途：
 
 - 判断是否发生 **构建抖动**（build/s 指标持续很高）
-- 判断 VBO cache / chunk cache 是否有效（命中率、重建次数）
+- 判断 VBO cache 是否有效（命中率、重建次数）
 - 判断 BufferBuilderPool 是否在反复 new/borrow（池子不足或被 trim）
 - 判断动画 key 是否被自动限流（防止 smooth 动画引起的重建风暴）
 
@@ -153,5 +150,4 @@ HUD 常见用途：
 - 统计：`src/main/kotlin/client/impl/render/RenderStats.kt`
 - BufferBuilder 池：`src/main/kotlin/client/util/BufferBuilderPool.kt`
 - VBO cache：`src/main/kotlin/client/util/BufferBuilderVboCache.kt`
-- Chunk cache：`src/main/kotlin/client/util/OpaqueChunkVboCache.kt`
 - 调优对象：`src/main/kotlin/api/tuning/RenderTuning.kt`

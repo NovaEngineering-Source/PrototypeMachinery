@@ -1,7 +1,7 @@
 {
   "id": "example_structure_render_top_mid_tail_top",
   "name": "Render Demo: Top",
-  "type": "slice",
+  "type": "template",
   "hideWorldBlocks": true,
   "offset": { "x": -1, "y": -2, "z": -2 },
   "pattern": [
@@ -33,16 +33,130 @@
     {"pos":{"x":0,"y":4,"z":1},"blockId":"minecraft:iron_block","meta":0},
     {"pos":{"x":0,"y":4,"z":2},"blockId":"minecraft:iron_block","meta":0},
     {"pos":{"x":0,"y":4,"z":3},"blockId":"minecraft:iron_block","meta":0},
-    {"pos":{"x":0,"y":4,"z":4},"blockId":"minecraft:iron_block","meta":0}
+    {"pos":{"x":0,"y":4,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-1,"y":0,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-1,"y":0,"z":1},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-1,"y":0,"z":2},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-1,"y":0,"z":3},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-1,"y":0,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-1,"y":1,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-1,"y":1,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-1,"y":1,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-1,"y":1,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-1,"y":1,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-1,"y":2,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-1,"y":2,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-1,"y":2,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-1,"y":2,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-1,"y":2,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-1,"y":3,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-1,"y":3,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-1,"y":3,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-1,"y":3,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-1,"y":3,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-1,"y":4,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-1,"y":4,"z":1},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-1,"y":4,"z":2},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-1,"y":4,"z":3},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-1,"y":4,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-2,"y":0,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-2,"y":0,"z":1},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-2,"y":0,"z":2},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-2,"y":0,"z":3},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-2,"y":0,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-2,"y":1,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-2,"y":1,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-2,"y":1,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-2,"y":1,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-2,"y":1,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-2,"y":2,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-2,"y":2,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-2,"y":2,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-2,"y":2,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-2,"y":2,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-2,"y":3,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-2,"y":3,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-2,"y":3,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-2,"y":3,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-2,"y":3,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-2,"y":4,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-2,"y":4,"z":1},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-2,"y":4,"z":2},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-2,"y":4,"z":3},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-2,"y":4,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-3,"y":0,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-3,"y":0,"z":1},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-3,"y":0,"z":2},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-3,"y":0,"z":3},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-3,"y":0,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-3,"y":1,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-3,"y":1,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-3,"y":1,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-3,"y":1,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-3,"y":1,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-3,"y":2,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-3,"y":2,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-3,"y":2,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-3,"y":2,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-3,"y":2,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-3,"y":3,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-3,"y":3,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-3,"y":3,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-3,"y":3,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-3,"y":3,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-3,"y":4,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-3,"y":4,"z":1},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-3,"y":4,"z":2},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-3,"y":4,"z":3},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-3,"y":4,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-4,"y":0,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-4,"y":0,"z":1},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-4,"y":0,"z":2},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-4,"y":0,"z":3},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-4,"y":0,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-4,"y":1,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-4,"y":1,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-4,"y":1,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-4,"y":1,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-4,"y":1,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-4,"y":2,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-4,"y":2,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-4,"y":2,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-4,"y":2,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-4,"y":2,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-4,"y":3,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-4,"y":3,"z":1},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-4,"y":3,"z":2},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-4,"y":3,"z":3},"blockId":"minecraft:air","meta":0},
+    {"pos":{"x":-4,"y":3,"z":4},"blockId":"minecraft:iron_block","meta":0},
+
+    {"pos":{"x":-4,"y":4,"z":0},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-4,"y":4,"z":1},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-4,"y":4,"z":2},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-4,"y":4,"z":3},"blockId":"minecraft:iron_block","meta":0},
+    {"pos":{"x":-4,"y":4,"z":4},"blockId":"minecraft:iron_block","meta":0}
   ],
-  "minCount": 5,
-  "maxCount": 5,
-  "sliceOffset": { "x": -1, "y": 0, "z": 0 },
   "validators": [],
   "children": [
-    "example_structure_render_top_mid_tail_mid",
-    "example_structure_render_top_mid_tail_mid_2",
-    "example_structure_render_top_mid_tail_mid_3",
-    "example_structure_render_top_mid_tail_tail"
+    "example_structure_render_top_mid_tail_mid"
   ]
 }

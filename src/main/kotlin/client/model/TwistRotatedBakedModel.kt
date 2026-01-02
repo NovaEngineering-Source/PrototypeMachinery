@@ -24,6 +24,7 @@ import javax.vecmath.Vector3f
  * This wrapper intercepts getQuads() and applies the appropriate rotation transform
  * to all quads based on the (facing, twist) combination in the blockstate.
  */
+@Suppress("DEPRECATION")
 @SideOnly(Side.CLIENT)
 internal class TwistRotatedBakedModel(
     private val baseModel: IBakedModel,

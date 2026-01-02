@@ -40,7 +40,25 @@ public class StatedBlockPredicate(public val state: IBlockState) : PreviewableBl
                     newState = newState.withProperty(directionProp, newFacing)
                 }
             }
-            // TODO: Handle EnumAxis properties if needed
+
+            // Handle EnumFacing.Axis properties (Axis)
+            // Some blocks store orientation as an axis instead of a full facing.
+            if (prop.valueClass === EnumFacing.Axis::class.java) {
+                @Suppress("UNCHECKED_CAST")
+                val axisProp = prop as IProperty<EnumFacing.Axis>
+                val currentAxis = state.getValue(axisProp)
+
+                // Pick a representative facing for the axis, rotate it, then project back to axis.
+                val sample = when (currentAxis) {
+                    EnumFacing.Axis.X -> EnumFacing.EAST
+                    EnumFacing.Axis.Y -> EnumFacing.UP
+                    EnumFacing.Axis.Z -> EnumFacing.NORTH
+                }
+                val newAxis = rotation(sample).axis
+                if (axisProp.allowedValues.contains(newAxis)) {
+                    newState = newState.withProperty(axisProp, newAxis)
+                }
+            }
         }
         return StatedBlockPredicate(newState)
     }

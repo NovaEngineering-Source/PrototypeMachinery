@@ -1,5 +1,8 @@
 package github.kasuminova.prototypemachinery.api.platform;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 /**
  * Platform abstraction for PrototypeMachinery.
  *
@@ -53,7 +56,7 @@ public interface PMPlatform {
      * <p>Default uses {@link java.util.concurrent.ForkJoinPool#commonPool()} to avoid creating
      * dedicated threads in the legacy environment.
      */
-    default java.util.concurrent.ExecutorService schedulerExecutor() {
+    default ExecutorService schedulerExecutor() {
         return java.util.concurrent.ForkJoinPool.commonPool();
     }
 
@@ -65,21 +68,18 @@ public interface PMPlatform {
      *
      * <p>Default: a fixed thread pool with daemon threads and a mild priority bump.
      */
-    default java.util.concurrent.ExecutorService createSchedulerExecutor(int workerThreads, String threadNamePrefix) {
+    default ExecutorService createSchedulerExecutor(int workerThreads, String threadNamePrefix) {
         final int threads = Math.max(1, workerThreads);
         final String prefix = (threadNamePrefix == null || threadNamePrefix.trim().isEmpty())
                 ? "PM-Scheduler"
                 : threadNamePrefix.trim();
 
         final java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger(0);
-        return java.util.concurrent.Executors.newFixedThreadPool(threads, new java.util.concurrent.ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable r) {
-                Thread t = new Thread(r, prefix + "-" + counter.incrementAndGet());
-                t.setDaemon(true);
-                t.setPriority(Math.min(Thread.NORM_PRIORITY + 1, Thread.MAX_PRIORITY));
-                return t;
-            }
+        return Executors.newFixedThreadPool(threads, r -> {
+            Thread t = new Thread(r, prefix + "-" + counter.incrementAndGet());
+            t.setDaemon(true);
+            t.setPriority(Math.min(Thread.NORM_PRIORITY + 1, Thread.MAX_PRIORITY));
+            return t;
         });
     }
 
@@ -88,20 +88,17 @@ public interface PMPlatform {
      *
      * <p>Default: one daemon thread.
      */
-    default java.util.concurrent.ExecutorService createSchedulerLaneExecutor(int laneIndex, String threadNamePrefix) {
+    default ExecutorService createSchedulerLaneExecutor(int laneIndex, String threadNamePrefix) {
         final int lane = Math.max(1, laneIndex);
         final String prefix = (threadNamePrefix == null || threadNamePrefix.trim().isEmpty())
                 ? "PM-Scheduler"
                 : threadNamePrefix.trim();
 
-        return java.util.concurrent.Executors.newSingleThreadExecutor(new java.util.concurrent.ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable r) {
-                Thread t = new Thread(r, prefix + "-Lane-" + lane);
-                t.setDaemon(true);
-                t.setPriority(Math.min(Thread.NORM_PRIORITY + 1, Thread.MAX_PRIORITY));
-                return t;
-            }
+        return Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, prefix + "-Lane-" + lane);
+            t.setDaemon(true);
+            t.setPriority(Math.min(Thread.NORM_PRIORITY + 1, Thread.MAX_PRIORITY));
+            return t;
         });
     }
 

@@ -31,4 +31,13 @@ internal open class CommonProxy {
         // no-op on dedicated server
     }
 
+    /**
+     * Hook for adding client-only widgets to the Scanner Instrument UI.
+     *
+     * IMPORTANT: CommonProxy must not reference any client-only classes.
+     */
+    open fun addScannerInstrumentClientWidgets(root: Flow, tagProvider: () -> NBTTagCompound?, syncManager: PanelSyncManager) {
+        // no-op on dedicated server
+    }
+
 }

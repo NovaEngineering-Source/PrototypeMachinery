@@ -12,6 +12,11 @@
 >
 > 维护时请优先以本节与源码为准（下面的草案章节可作为后续扩展的约束与目标）。
 
+补充：当前版本中，“安全资源（`secure/*`）”**并未实现解密**。
+
+- 代码层面：`SecureAssetResolver` 对 `secure/` 路径会直接拒绝访问（抛出 `UnsupportedOperationException` / `exists=false`），避免“解锁后读到的仍是密文”这种更隐蔽的错误。
+- 因此：本文件中关于“磁盘密文、进服解密”的内容目前仍属于**未来规划/设计约束**，不应当被视为已可用功能。
+
 ### 当前渲染时序（Minecraft 1.12.2 / Forge）
 
 - **TESR 阶段（只提交，不绘制）**：`MachineBlockEntitySpecialRenderer` 仅收集渲染数据并提交到集中队列。
@@ -43,7 +48,7 @@
 - RenderTask 缓存策略：`src/main/kotlin/client/impl/render/task/RenderTaskCache.kt`
 - mixin 配置：`src/main/resources/mixins.prototypemachinery.json` + `src/main/java/github/kasuminova/prototypemachinery/mixin/PMMixinLoader.java`
 
-（补充）性能与调优现状（HUD 指标、RenderTuning 配置、VBO/Chunk 缓存与 BufferBuilder 池）：
+（补充）性能与调优现状（HUD 指标、RenderTuning 配置、VBO 缓存与 BufferBuilder 池）：
 
 - [`docs/RenderingPerformance.md`](./RenderingPerformance.md)
 
@@ -265,8 +270,8 @@ MMCE 的关键点：
 
 2) **后处理 bloom（可选）**：
    - 检测 Lumenized/GTCEu 是否存在：
-     - 存在：注册 bloom effect 回调，在回调内调用 `RenderManager.drawBloomOnly()`
-     - 不存在：仅走 fullbright pass
+    - 存在：注册 bloom effect 回调，在回调内调用 `RenderManager.drawBloomPasses(clearAfterDraw = true)`
+    - 不存在：仅走 fullbright pass
 
 ### 7.2 避免强依赖
 

@@ -80,6 +80,26 @@ Validators are supported. The loader parses validator ids as `ResourceLocation` 
 - invalid ids are skipped with a warning
 - unknown (unregistered) validators are skipped with a warning
 
+Built-in parameter-free validators:
+
+- `prototypemachinery:overworld_only` (dimension == 0)
+- `prototypemachinery:nether_only` (dimension == -1)
+- `prototypemachinery:end_only` (dimension == 1)
+- `prototypemachinery:day_only`
+- `prototypemachinery:night_only`
+- `prototypemachinery:clear_weather_only` (not raining & not thundering)
+
+Example:
+
+```json
+{
+  "validators": [
+    "prototypemachinery:overworld_only",
+    "prototypemachinery:clear_weather_only"
+  ]
+}
+```
+
 ### NBT matching
 
 `StructurePatternElementData.nbt` is supported via `StatedBlockNbtPredicate`.

@@ -3,7 +3,6 @@ package github.kasuminova.prototypemachinery.api
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.machineTypeRegistry
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.recipeIndexRegistry
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.recipeManager
-import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.recipeRequirementRegistry
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.selectiveModifierRegistry
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.structureRegistry
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI.taskScheduler
@@ -14,7 +13,6 @@ import github.kasuminova.prototypemachinery.api.machine.structure.StructureRegis
 import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidatorRegistry
 import github.kasuminova.prototypemachinery.api.recipe.RecipeManager
 import github.kasuminova.prototypemachinery.api.recipe.index.IRecipeIndexRegistry
-import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementRegistry
 import github.kasuminova.prototypemachinery.api.recipe.scanning.RecipeParallelismConstraintRegistry
 import github.kasuminova.prototypemachinery.api.recipe.selective.SelectiveModifierRegistry
 import github.kasuminova.prototypemachinery.api.scheduler.TaskScheduler
@@ -69,10 +67,6 @@ import github.kasuminova.prototypemachinery.integration.crafttweaker.zenclass.Ze
  * - **[recipeIndexRegistry]**:
  *   Optimizes recipe lookups using pre-calculated indices.
  *   使用预计算索引优化配方查找。
- *
- * - **[recipeRequirementRegistry]**:
- *   Registers custom recipe requirement types (e.g., Item, Fluid, Energy).
- *   注册自定义配方需求类型（例如：物品、流体、能量）。
  *
  * - **[selectiveModifierRegistry]**:
  *   Manages dynamic modifiers for recipe logic.
@@ -177,18 +171,6 @@ public object PrototypeMachineryAPI {
      */
     @get:JvmStatic
     public val recipeIndexRegistry: IRecipeIndexRegistry = RecipeIndexRegistry
-
-    /**
-     * The recipe requirement registry.
-     *
-     * Registry for recipe requirements.
-     *
-     * 配方需求注册表。
-     *
-     * 配方需求的注册表。
-     */
-    @get:JvmStatic
-    public val recipeRequirementRegistry: RecipeRequirementRegistry = RecipeRequirementRegistry
 
     /**
      * Recipe scan-time parallelism constraint registry.

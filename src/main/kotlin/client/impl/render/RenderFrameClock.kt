@@ -74,26 +74,59 @@ internal object RenderFrameClock {
         smoothSuppressedReason = null
         if (!RenderTuning.animSmooth) return 0
 
-        if (RenderTuning.animAutoThrottle) {
-            // Stress testing intentionally amplifies draw work; using smooth animation keys here
-            // can create massive rebuild churn and makes profiling misleading.
-            if (RenderStress.drawMultiplier > RenderTuning.animMaxStressMultiplier) {
-                smoothSuppressedReason = "stress"
-                return 0
-            }
-            val queued = runCatching { RenderTaskExecutor.pool.queuedTaskCount }.getOrDefault(0L)
-            if (queued > RenderTuning.animMaxQueued) {
-                smoothSuppressedReason = "queue"
-                return 0
-            }
-        }
         val t = frameTimeTicks
         if (t <= 0.0) return 0
         val step = RenderTuning.animStepTicks
-        val q = floor(t / step).toLong()
+
+        // Base key at configured resolution.
+        val raw = floor(t / step).toLong().toInt()
+
+        if (!RenderTuning.animAutoThrottle) {
+            return raw
+        }
+
+        // Auto-throttle: instead of returning 0 (which freezes animation), snap to a coarser grid.
+        // IMPORTANT: We must keep the mapping reversible by seekTimeTicksFromKey(key) = key * animStepTicks,
+        // so we only return a *multiple* of the base key.
+        var snap = 1
+        val reasons = ArrayList<String>(2)
+
+        // Stress testing intentionally amplifies draw work; using smooth animation keys here
+        // can create massive rebuild churn and makes profiling misleading.
+        val maxStress = RenderTuning.animMaxStressMultiplier
+        val stress = RenderStress.drawMultiplier
+        if (stress > maxStress) {
+            // e.g. stress=8, max=2 => snap>=4
+            val s = ((stress + maxStress - 1) / maxStress).coerceAtLeast(2)
+            snap = maxOf(snap, s)
+            reasons += "stress"
+        }
+
+        // Queue-based throttle: animMaxQueued <= 0 means "disable queue throttle".
+        val maxQueued = RenderTuning.animMaxQueued
+        if (maxQueued > 0L) {
+                val queued = RenderTaskExecutor.queuedBuildTaskCount()
+            if (queued > maxQueued) {
+                // Use ceil(queued/maxQueued) as snap factor.
+                val q = ((queued + maxQueued - 1L) / maxQueued).coerceAtLeast(2L)
+                snap = maxOf(snap, q.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+                reasons += "queue"
+            }
+        }
+
+        if (snap <= 1) {
+            return raw
+        }
+
+        // Cap snap so animation still makes visible progress eventually.
+        snap = snap.coerceIn(2, 64)
+        smoothSuppressedReason = reasons.joinToString("+") + " x$snap"
+
+        val snapped = raw - (raw % snap)
+
         // Int wrap is acceptable for extremely long uptimes; it keeps key monotonic enough
         // for practical play sessions while preserving a simple reversible mapping.
-        return q.toInt()
+        return snapped
     }
 
     internal fun seekTimeTicksFromKey(animationTimeKey: Int): Double {

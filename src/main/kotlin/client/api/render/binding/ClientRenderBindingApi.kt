@@ -45,7 +45,7 @@ public object ClientRenderBindingApi {
         machineTypeId: ResourceLocation,
         structureId: String,
         model: GeckoModelBinding,
-        sliceRenderMode: SliceRenderMode = SliceRenderMode.STRUCTURE_ONLY,
+        sliceRenderMode: SliceRenderMode = SliceRenderMode.PER_SLICE,
     ) {
         bindGeckoToStructure(machineTypeId, structureId, GeckoStructureBinding(model, sliceRenderMode))
     }

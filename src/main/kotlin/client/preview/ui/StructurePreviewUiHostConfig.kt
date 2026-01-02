@@ -1,5 +1,6 @@
 package github.kasuminova.prototypemachinery.client.preview.ui
 
+import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import net.minecraft.client.Minecraft
 import net.minecraft.util.math.BlockPos
 
@@ -27,6 +28,11 @@ internal data class StructurePreviewUiHostConfig(
     val allowOperateChildren: Boolean = false,
     /** Provides a default scan anchor; null disables scan initialization. */
     val anchorProvider: (Minecraft) -> BlockPos? = { mc -> mc.player?.position },
+    /**
+     * Optional locked orientation used for world projection placement.
+     * If non-null, place_projection will use locked mode instead of followPlayerFacing.
+     */
+    val lockedOrientationProvider: ((Minecraft) -> StructureOrientation?)? = null,
     /** Whether scan should be enabled by default (useful when host hides scan controls). */
     val defaultEnableScan: Boolean = false,
     /** Which BOM the materials panel should show. */

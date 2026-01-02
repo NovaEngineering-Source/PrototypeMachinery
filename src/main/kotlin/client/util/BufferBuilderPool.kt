@@ -5,8 +5,11 @@ import it.unimi.dsi.fastutil.objects.ObjectArrayList
 import it.unimi.dsi.fastutil.objects.ObjectLists
 import net.minecraft.client.renderer.BufferBuilder
 import java.lang.ref.WeakReference
+import java.util.Collections
+import java.util.IdentityHashMap
 import java.util.NavigableMap
 import java.util.Queue
+import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.ConcurrentSkipListMap
 
@@ -48,6 +51,48 @@ internal object BufferBuilderPool {
     // Maintenance throttling: avoid doing cleanup/trim on every hot-path call.
     private var opsSinceMaintenance: Int = 0
     private var lastMaintenanceNanos: Long = 0L
+
+    // --- Pinning (async-safe reads) ---
+    // Some background tasks (e.g., async merge/packing) may need to read BufferBuilder.byteBuffer
+    // after the render task cache decides to recycle old built buffers. To prevent data races where
+    // a recycled builder gets reused and overwritten while still being read, we support pin/unpin.
+    //
+    // recycle(builder) will defer the actual pool return while pinned.
+    private val pinCounts: MutableMap<BufferBuilder, Int> = Collections.synchronizedMap(WeakHashMap())
+    private val pendingRecycle: MutableSet<BufferBuilder> = Collections.synchronizedSet(Collections.newSetFromMap(IdentityHashMap()))
+
+    internal fun pin(builder: BufferBuilder) {
+        synchronized(pinCounts) {
+            val c = pinCounts[builder] ?: 0
+            pinCounts[builder] = c + 1
+        }
+    }
+
+    internal fun unpin(builder: BufferBuilder) {
+        val shouldRecycle = synchronized(pinCounts) {
+            val c = pinCounts[builder] ?: 0
+            val newCount = if (c <= 1) {
+                pinCounts.remove(builder)
+                0
+            } else {
+                val nc = c - 1
+                pinCounts[builder] = nc
+                nc
+            }
+
+            val wasPending = pendingRecycle.remove(builder)
+            newCount == 0 && wasPending
+        }
+
+        if (shouldRecycle) {
+            // NOTE: we call recycle() again so it goes through the usual trimming logic.
+            recycle(builder)
+        }
+    }
+
+    private fun isPinned(builder: BufferBuilder): Boolean {
+        return synchronized(pinCounts) { (pinCounts[builder] ?: 0) > 0 }
+    }
 
     private fun bytesToInitInts(bytes: Int): Int {
         // MC 1.12 BufferBuilder(int) expects an INT count and allocates a direct ByteBuffer of (ints * 4) bytes.
@@ -220,6 +265,12 @@ internal object BufferBuilderPool {
     /** Return a builder back to the pool for reuse. */
     @Synchronized
     fun recycle(builder: BufferBuilder) {
+        if (isPinned(builder)) {
+            // Defer reuse until background readers are done.
+            pendingRecycle.add(builder)
+            return
+        }
+
         // If the builder had a cached GPU VBO, it must be deleted before reuse to avoid stale draws.
         BufferBuilderVboCache.onRecycle(builder)
         try {

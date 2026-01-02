@@ -8,6 +8,10 @@ import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndex
 import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndexFactory
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.FuzzyInputGroup
+import github.kasuminova.prototypemachinery.api.recipe.requirement.advanced.RequirementPropertyKeys
+import github.kasuminova.prototypemachinery.api.util.PortMode
+import github.kasuminova.prototypemachinery.impl.machine.component.container.StructureFluidStorageContainerComponent
 import net.minecraftforge.fluids.FluidStack
 
 /**
@@ -25,8 +29,6 @@ public class FluidRequirementIndex(
 ) : RequirementIndex {
 
     public override fun lookup(machine: MachineInstance): Set<MachineRecipe>? {
-        // 1. Get all StructureFluidKeyContainers from the machine
-        // We use StructureFluidKeyContainer (key-level API) for consistency with ItemRequirementIndex
         val fluidComponents = machine.structureComponentMap.getByInstanceOf(
             github.kasuminova.prototypemachinery.api.machine.component.container.StructureFluidKeyContainer::class.java
         )
@@ -36,52 +38,35 @@ public class FluidRequirementIndex(
             return null
         }
 
-        // 2. Collect all available fluids as PMKey<FluidStack>
-        // We're only interested in type (prototype), not count
-        // because the index is a conservative filter
-        val availableKeys = mutableSetOf<PMKey<FluidStack>>()
+        var hasEnumerableSource = false
+        var hasAnyKey = false
+        val potentialRecipes = LinkedHashSet<MachineRecipe>()
 
         for (component in fluidComponents) {
             // Only consider OUTPUT mode containers as sources (fluids available for input)
-            if (!component.isAllowedPortMode(github.kasuminova.prototypemachinery.api.util.PortMode.OUTPUT)) {
-                continue
-            }
+            if (!component.isAllowedPortMode(PortMode.OUTPUT)) continue
 
-            // Try to access storage if this is a storage-backed component
-            // (e.g., StructureFluidStorageContainerComponent)
-            if (component is github.kasuminova.prototypemachinery.impl.machine.component.container.StructureFluidStorageContainerComponent) {
-                val storage = component.storage
+            // Only storage-backed containers can be enumerated cheaply.
+            val storageComponent = component as? StructureFluidStorageContainerComponent ?: continue
+            hasEnumerableSource = true
 
-                // Get all stored fluid types
-                for (storedKey in storage.getAllResources()) {
-                    if (storedKey.count > 0L) {
-                        // Create a copy with count=1 for lookup
-                        // (count doesn't matter for equality)
-                        val lookupKey = storedKey.copy()
-                        lookupKey.count = 1L
-                        availableKeys.add(lookupKey)
-                    }
-                }
+            val storage = storageComponent.storage
+            for (storedKey in storage.getAllResources()) {
+                if (storedKey.count <= 0L) continue
+                hasAnyKey = true
+
+                // Count does not participate in equality for lookup.
+                val lookupKey = storedKey.copy()
+                lookupKey.count = 1L
+                index[lookupKey]?.let { potentialRecipes.addAll(it) }
             }
         }
 
-        if (availableKeys.isEmpty()) {
-            // No fluids available, no recipes can match
-            return emptySet()
-        }
+        // If we cannot enumerate any source container, indexing can't contribute.
+        if (!hasEnumerableSource) return null
 
-        // 3. Query the index
-        // Union of all recipes that match ANY available fluid
-        // This is conservative: it may include recipes that need other inputs,
-        // but won't exclude recipes that could potentially match
-        val potentialRecipes = mutableSetOf<MachineRecipe>()
-
-        for (key in availableKeys) {
-            val recipes = index[key]
-            if (recipes != null) {
-                potentialRecipes.addAll(recipes)
-            }
-        }
+        // We enumerated successfully and found no keys => hard empty.
+        if (!hasAnyKey) return emptySet()
 
         return if (potentialRecipes.isEmpty()) emptySet() else potentialRecipes
     }
@@ -99,6 +84,17 @@ public class FluidRequirementIndex(
 
                 for (req in fluidReqs) {
                     if (req is github.kasuminova.prototypemachinery.impl.recipe.requirement.FluidRequirementComponent) {
+                        // Index fuzzy candidates conservatively (they are explicit and thus safe to index).
+                        @Suppress("UNCHECKED_CAST")
+                        val fuzzy = req.properties[RequirementPropertyKeys.FUZZY_INPUTS] as? List<FuzzyInputGroup<FluidStack>>
+                        if (!fuzzy.isNullOrEmpty()) {
+                            for (group in fuzzy) {
+                                for (cand in group.candidates) {
+                                    map.computeIfAbsent(cand) { mutableSetOf() }.add(recipe)
+                                }
+                            }
+                        }
+
                         // Index each input fluid type
                         for (inputKey in req.inputs) {
                             // The key is already a PMKey<FluidStack>

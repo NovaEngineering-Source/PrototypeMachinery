@@ -27,6 +27,7 @@ import net.minecraft.util.ResourceLocation
 
 public object ItemRequirementSystem : RecipeRequirementSystem.Tickable<ItemRequirementComponent> {
 
+    @Suppress("UNCHECKED_CAST")
     override fun start(process: RecipeProcess, component: ItemRequirementComponent): RequirementTransaction {
         val fuzzyInputs = component.fuzzyInputsOrNull()
         val dynamicInputs = component.dynamicInputsOrNull()

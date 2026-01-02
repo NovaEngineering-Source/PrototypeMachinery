@@ -32,12 +32,6 @@ internal object RenderStats {
         val vboCacheHits: Long = 0,
         val vboCacheMisses: Long = 0,
 
-        // Opaque chunk VBO cache (DEFAULT only)
-        val opaqueChunkCacheHits: Long = 0,
-        val opaqueChunkCacheMisses: Long = 0,
-        val opaqueChunkCacheEvictions: Long = 0,
-        val opaqueChunkCacheUploads: Long = 0,
-        val opaqueChunkCacheUploadBytes: Long = 0,
         val geckoQuads: Long = 0,
         val geckoVertices: Long = 0,
         val geckoBulkQuads: Long = 0,
@@ -87,6 +81,14 @@ internal object RenderStats {
         val geckoQuadLegacyVerticesTimed: Long = 0,
         val geckoQuadLegacyVerticesTimedTotal: Long = 0,
 
+        // Gecko quad bulk timing breakdown (best-effort, debug only)
+        val geckoQuadBulkNormalNanos: Long = 0,
+        val geckoQuadBulkNormalNanosTotal: Long = 0,
+        val geckoQuadBulkPackNanos: Long = 0,
+        val geckoQuadBulkPackNanosTotal: Long = 0,
+        val geckoQuadBulkSubmitNanos: Long = 0,
+        val geckoQuadBulkSubmitNanosTotal: Long = 0,
+
         // Cube pre-bake cache stats
         val geckoCubeCacheHits: Long = 0,
         val geckoCubeCacheMisses: Long = 0,
@@ -95,6 +97,11 @@ internal object RenderStats {
         val textureBinds: Long = 0,
         val dispatcherPending: Long = 0,
         val renderManagerBuckets: Long = 0,
+
+        // Render-build task stats (cumulative totals while HUD is enabled).
+        val renderBuildTasksTotal: Long = 0,
+        val renderBuildTaskErrorsTotal: Long = 0,
+        val renderBuildTaskNanosTotal: Long = 0,
     )
 
     private val drawCalls = AtomicLong(0)
@@ -112,12 +119,6 @@ internal object RenderStats {
 
     private val vboCacheHits = AtomicLong(0)
     private val vboCacheMisses = AtomicLong(0)
-
-    private val opaqueChunkCacheHits = AtomicLong(0)
-    private val opaqueChunkCacheMisses = AtomicLong(0)
-    private val opaqueChunkCacheEvictions = AtomicLong(0)
-    private val opaqueChunkCacheUploads = AtomicLong(0)
-    private val opaqueChunkCacheUploadBytes = AtomicLong(0)
 
     private val geckoQuads = AtomicLong(0)
     private val geckoVertices = AtomicLong(0)
@@ -170,6 +171,13 @@ internal object RenderStats {
     private val geckoQuadLegacyVerticesTimed = AtomicLong(0)
     private val geckoQuadLegacyVerticesTimedTotal = AtomicLong(0)
 
+    private val geckoQuadBulkNormalNanos = AtomicLong(0)
+    private val geckoQuadBulkNormalNanosTotal = AtomicLong(0)
+    private val geckoQuadBulkPackNanos = AtomicLong(0)
+    private val geckoQuadBulkPackNanosTotal = AtomicLong(0)
+    private val geckoQuadBulkSubmitNanos = AtomicLong(0)
+    private val geckoQuadBulkSubmitNanosTotal = AtomicLong(0)
+
     @Volatile
     private var geckoPipelineBackend: String = ""
 
@@ -180,6 +188,11 @@ internal object RenderStats {
 
     private val dispatcherPending = AtomicLong(0)
     private val renderManagerBuckets = AtomicLong(0)
+
+    // Render-build task totals (bake/off-thread). Only updated when [enabled] is true.
+    private val renderBuildTasksTotal = AtomicLong(0)
+    private val renderBuildTaskErrorsTotal = AtomicLong(0)
+    private val renderBuildTaskNanosTotal = AtomicLong(0)
 
     @Volatile
     private var lastFrame: Snapshot = Snapshot()
@@ -199,11 +212,6 @@ internal object RenderStats {
         vboCacheHits.set(0)
         vboCacheMisses.set(0)
 
-        opaqueChunkCacheHits.set(0)
-        opaqueChunkCacheMisses.set(0)
-        opaqueChunkCacheEvictions.set(0)
-        opaqueChunkCacheUploads.set(0)
-        opaqueChunkCacheUploadBytes.set(0)
         geckoQuads.set(0)
         geckoVertices.set(0)
         geckoBulkQuads.set(0)
@@ -227,6 +235,10 @@ internal object RenderStats {
         geckoQuadLegacyNanos.set(0)
         geckoQuadBulkVerticesTimed.set(0)
         geckoQuadLegacyVerticesTimed.set(0)
+
+        geckoQuadBulkNormalNanos.set(0)
+        geckoQuadBulkPackNanos.set(0)
+        geckoQuadBulkSubmitNanos.set(0)
         textureBinds.set(0)
         dispatcherPending.set(0)
         renderManagerBuckets.set(0)
@@ -251,12 +263,6 @@ internal object RenderStats {
             vboUploadBytes = vboUploadBytes.get(),
             vboCacheHits = vboCacheHits.get(),
             vboCacheMisses = vboCacheMisses.get(),
-
-            opaqueChunkCacheHits = opaqueChunkCacheHits.get(),
-            opaqueChunkCacheMisses = opaqueChunkCacheMisses.get(),
-            opaqueChunkCacheEvictions = opaqueChunkCacheEvictions.get(),
-            opaqueChunkCacheUploads = opaqueChunkCacheUploads.get(),
-            opaqueChunkCacheUploadBytes = opaqueChunkCacheUploadBytes.get(),
             geckoQuads = geckoQuads.get(),
             geckoVertices = geckoVertices.get(),
             geckoBulkQuads = geckoBulkQuads.get(),
@@ -303,6 +309,13 @@ internal object RenderStats {
             geckoQuadLegacyVerticesTimed = geckoQuadLegacyVerticesTimed.get(),
             geckoQuadLegacyVerticesTimedTotal = geckoQuadLegacyVerticesTimedTotal.get(),
 
+            geckoQuadBulkNormalNanos = geckoQuadBulkNormalNanos.get(),
+            geckoQuadBulkNormalNanosTotal = geckoQuadBulkNormalNanosTotal.get(),
+            geckoQuadBulkPackNanos = geckoQuadBulkPackNanos.get(),
+            geckoQuadBulkPackNanosTotal = geckoQuadBulkPackNanosTotal.get(),
+            geckoQuadBulkSubmitNanos = geckoQuadBulkSubmitNanos.get(),
+            geckoQuadBulkSubmitNanosTotal = geckoQuadBulkSubmitNanosTotal.get(),
+
             geckoCubeCacheHits = github.kasuminova.prototypemachinery.client.impl.render.gecko.BakedCubeCache.cacheHits,
             geckoCubeCacheMisses = github.kasuminova.prototypemachinery.client.impl.render.gecko.BakedCubeCache.cacheMisses,
             geckoCubeCacheSize = github.kasuminova.prototypemachinery.client.impl.render.gecko.BakedCubeCache.cacheSize,
@@ -310,9 +323,24 @@ internal object RenderStats {
             textureBinds = textureBinds.get(),
             dispatcherPending = dispatcherPending.get(),
             renderManagerBuckets = renderManagerBuckets.get(),
+
+            renderBuildTasksTotal = renderBuildTasksTotal.get(),
+            renderBuildTaskErrorsTotal = renderBuildTaskErrorsTotal.get(),
+            renderBuildTaskNanosTotal = renderBuildTaskNanosTotal.get(),
         )
         lastFrame = snap
         return snap
+    }
+
+    internal fun addRenderBuildTaskNanos(nanos: Long, success: Boolean) {
+        if (!enabled) return
+        if (nanos > 0) {
+            renderBuildTaskNanosTotal.addAndGet(nanos)
+        }
+        renderBuildTasksTotal.incrementAndGet()
+        if (!success) {
+            renderBuildTaskErrorsTotal.incrementAndGet()
+        }
     }
 
     internal fun getLastFrame(): Snapshot = lastFrame
@@ -358,27 +386,6 @@ internal object RenderStats {
     internal fun addVboCacheMiss() {
         if (!enabled) return
         vboCacheMisses.incrementAndGet()
-    }
-
-    internal fun addOpaqueChunkCacheHit() {
-        if (!enabled) return
-        opaqueChunkCacheHits.incrementAndGet()
-    }
-
-    internal fun addOpaqueChunkCacheMiss() {
-        if (!enabled) return
-        opaqueChunkCacheMisses.incrementAndGet()
-    }
-
-    internal fun addOpaqueChunkCacheEviction() {
-        if (!enabled) return
-        opaqueChunkCacheEvictions.incrementAndGet()
-    }
-
-    internal fun addOpaqueChunkCacheUpload(bytes: Int) {
-        if (!enabled) return
-        opaqueChunkCacheUploads.incrementAndGet()
-        if (bytes > 0) opaqueChunkCacheUploadBytes.addAndGet(bytes.toLong())
     }
 
     internal fun addGeckoBulkQuad() {
@@ -505,6 +512,22 @@ internal object RenderStats {
         if (vertices > 0) {
             geckoQuadLegacyVerticesTimed.addAndGet(vertices.toLong())
             geckoQuadLegacyVerticesTimedTotal.addAndGet(vertices.toLong())
+        }
+    }
+
+    internal fun addGeckoQuadBulkStageNanos(normalNanos: Long, packNanos: Long, submitNanos: Long) {
+        if (!enabled) return
+        if (normalNanos > 0L) {
+            geckoQuadBulkNormalNanos.addAndGet(normalNanos)
+            geckoQuadBulkNormalNanosTotal.addAndGet(normalNanos)
+        }
+        if (packNanos > 0L) {
+            geckoQuadBulkPackNanos.addAndGet(packNanos)
+            geckoQuadBulkPackNanosTotal.addAndGet(packNanos)
+        }
+        if (submitNanos > 0L) {
+            geckoQuadBulkSubmitNanos.addAndGet(submitNanos)
+            geckoQuadBulkSubmitNanosTotal.addAndGet(submitNanos)
         }
     }
 

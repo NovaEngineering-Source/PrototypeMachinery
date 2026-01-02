@@ -19,7 +19,6 @@ import net.minecraft.util.ResourceLocation
  * - ENERGY -> EnergyRequirementSystem
  *
  * ## Related Classes / 相关类
- * - [RecipeRequirement] - Requirement instances referencing this type
  * - [RecipeRequirementComponent] - Component bound to a machine to satisfy this type
  * - [RecipeRequirementSystem] - System that executes requirements of this type
  */

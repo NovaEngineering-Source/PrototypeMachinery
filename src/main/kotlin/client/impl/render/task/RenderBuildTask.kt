@@ -1,6 +1,7 @@
 package github.kasuminova.prototypemachinery.client.impl.render.task
 
 import github.kasuminova.prototypemachinery.client.api.render.RenderKey
+import github.kasuminova.prototypemachinery.client.impl.render.RenderStats
 import java.util.concurrent.RecursiveAction
 
 /**
@@ -39,16 +40,28 @@ internal abstract class RenderBuildTask(
     }
 
     override fun compute() {
+        val timing = RenderStats.enabled
+        val t0 = if (timing) System.nanoTime() else 0L
         try {
             val key = currentKey()
             val result = build(key)
             builtForKey = key
             built = result
+
+            if (timing) {
+                val dt = System.nanoTime() - t0
+                RenderStats.addRenderBuildTaskNanos(dt, success = true)
+            }
         } catch (t: Throwable) {
             t.printStackTrace()
             lastError = t
             built = null
             builtForKey = null
+
+            if (timing) {
+                val dt = System.nanoTime() - t0
+                RenderStats.addRenderBuildTaskNanos(dt, success = false)
+            }
         }
     }
 

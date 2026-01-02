@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery.client.impl.render.task
 
 import github.kasuminova.prototypemachinery.client.api.render.RenderPass
 import github.kasuminova.prototypemachinery.client.util.BufferBuilderPool
+import github.kasuminova.prototypemachinery.client.util.DirectByteBufferPool
 import net.minecraft.client.renderer.BufferBuilder
 
 /**
@@ -11,8 +12,10 @@ import net.minecraft.client.renderer.BufferBuilder
  */
 internal data class BuiltBuffers(
     internal val byPass: Map<RenderPass, BufferBuilder> = emptyMap(),
+    internal val packedByPass: Map<RenderPass, PackedBucketBatch> = emptyMap(),
+    internal val gpuByPass: Map<RenderPass, GpuBucketDraw> = emptyMap(),
 ) {
-    internal fun isEmpty(): Boolean = byPass.isEmpty()
+    internal fun isEmpty(): Boolean = byPass.isEmpty() && packedByPass.isEmpty() && gpuByPass.isEmpty()
 
     /**
      * Recycle all contained [BufferBuilder] instances back to the global pool.
@@ -20,9 +23,32 @@ internal data class BuiltBuffers(
      * IMPORTANT: Only call this when these buffers will no longer be drawn.
      */
     internal fun disposeToPool() {
-        if (byPass.isEmpty()) return
-        for (b in byPass.values) {
-            BufferBuilderPool.recycle(b)
+        if (byPass.isNotEmpty()) {
+            for (b in byPass.values) {
+                BufferBuilderPool.recycle(b)
+            }
+        }
+
+        if (packedByPass.isNotEmpty()) {
+            for (batch in packedByPass.values) {
+                for (p in batch.parts) {
+                    try {
+                        DirectByteBufferPool.recycle(p.data)
+                    } catch (_: Throwable) {
+                        // ignore
+                    }
+                }
+            }
+        }
+
+        if (gpuByPass.isNotEmpty()) {
+            for (d in gpuByPass.values) {
+                try {
+                    d.dispose?.invoke()
+                } catch (_: Throwable) {
+                    // ignore
+                }
+            }
         }
     }
 }

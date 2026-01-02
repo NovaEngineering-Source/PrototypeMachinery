@@ -81,4 +81,19 @@ public interface StructureRegistry {
      */
     public fun contains(id: String): Boolean
 
+    /**
+     * Clear all registered structures and internal caches.
+     *
+     * Intended for in-game hot reload / 开发期热重载。
+     */
+    public fun clearAll()
+
+    /**
+     * Replace the entire registry contents and clear internal caches.
+     *
+     * This is preferred over calling [clearAll] + repeated [register] because it allows
+     * the implementation to perform an atomic-ish swap.
+     */
+    public fun replaceAll(structures: Collection<MachineStructure>)
+
 }

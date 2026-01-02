@@ -20,11 +20,15 @@ import stanhebben.zenscript.annotations.ZenGetter
 @ApiStatus.Experimental
 public class ZenStructureMatchContext internal constructor(
     private val ctx: StructureMatchContext,
+    /** World-space origin passed by the matcher (currently `offsetOrigin`). */
     private val offset: BlockPos
 ) {
 
+    private val controllerPos: BlockPos
+        get() = ctx.machine.blockEntity.pos
+
     private val absolutePos: BlockPos
-        get() = ctx.machine.blockEntity.pos.add(offset)
+        get() = offset
 
     /**
      * Get the world this structure is being validated in.
@@ -80,27 +84,27 @@ public class ZenStructureMatchContext internal constructor(
      * 获取相对方块位置（仅偏移）。
      */
     @ZenGetter("relativePos")
-    public fun getRelativePos(): IBlockPos = CraftTweakerMC.getIBlockPos(offset)
+    public fun getRelativePos(): IBlockPos = CraftTweakerMC.getIBlockPos(absolutePos.subtract(controllerPos))
 
     /**
      * Get the X offset from structure origin.
      * 获取相对于结构原点的 X 偏移。
      */
     @ZenGetter("offsetX")
-    public fun getOffsetX(): Int = offset.x
+    public fun getOffsetX(): Int = absolutePos.x - controllerPos.x
 
     /**
      * Get the Y offset from structure origin.
      * 获取相对于结构原点的 Y 偏移。
      */
     @ZenGetter("offsetY")
-    public fun getOffsetY(): Int = offset.y
+    public fun getOffsetY(): Int = absolutePos.y - controllerPos.y
 
     /**
      * Get the Z offset from structure origin.
      * 获取相对于结构原点的 Z 偏移。
      */
     @ZenGetter("offsetZ")
-    public fun getOffsetZ(): Int = offset.z
+    public fun getOffsetZ(): Int = absolutePos.z - controllerPos.z
 
 }

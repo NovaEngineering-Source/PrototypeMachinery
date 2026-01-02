@@ -86,7 +86,7 @@ internal object ProjectionHudRenderer {
         return when (req) {
             is ExactBlockStateRequirement -> {
                 val block = Block.REGISTRY.getObject(req.blockId)
-                if (block != null && block != Blocks.AIR) {
+                if (block != Blocks.AIR) {
                     val stack = ItemStackDisplayUtil.stackForBlock(block, req.meta, 1)
                     val name = try {
                         stack?.displayName ?: req.blockId.toString()

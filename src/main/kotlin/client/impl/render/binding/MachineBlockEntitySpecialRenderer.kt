@@ -133,7 +133,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                     val binding = structureBindings[anchor.structure.id] ?: continue
                     val list = collectStructureBound(te, binding, anchor, resourcesRoot)
                     if (list.isNotEmpty()) {
-                        MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData(chunkX, chunkZ) })
+                        MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData() })
                     }
                 }
                 return
@@ -159,7 +159,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         if (machineBinding != null) {
             val list = collectLegacy(te, machineBinding, resourcesRoot, bindingKey = te.machine.type.id)
             if (list.isNotEmpty()) {
-                MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData(chunkX, chunkZ) })
+                MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData() })
             }
         }
 
@@ -169,7 +169,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                 if (!te.machine.componentMap.containsComponentTypeId(componentTypeId)) continue
                 val list = collectLegacy(te, binding, resourcesRoot, bindingKey = componentTypeId)
                 if (list.isNotEmpty()) {
-                    MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData(chunkX, chunkZ) })
+                    MachineRenderDispatcher.submitAll(list.map { it.toPendingRenderData() })
                 }
             }
         }
@@ -181,14 +181,12 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
     private data class CollectedRenderData(
         val texture: ResourceLocation,
         val combinedLight: Int,
-        val built: BuiltBuffers,
+        val built: BuiltBuffers
     ) {
-        fun toPendingRenderData(chunkX: Int, chunkZ: Int): MachineRenderDispatcher.PendingRenderData {
+        fun toPendingRenderData(): MachineRenderDispatcher.PendingRenderData {
             return MachineRenderDispatcher.PendingRenderData(
                 texture = texture,
                 combinedLight = combinedLight,
-                chunkX = chunkX,
-                chunkZ = chunkZ,
                 built = built,
             )
         }

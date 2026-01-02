@@ -3,7 +3,7 @@ package github.kasuminova.prototypemachinery.impl.recipe.requirement
 import github.kasuminova.prototypemachinery.api.key.PMKey
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
-import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
+import github.kasuminova.prototypemachinery.api.recipe.requirement.component.IdentifiedRecipeRequirementComponent
 import net.minecraft.item.ItemStack
 
 /**
@@ -18,7 +18,7 @@ import net.minecraft.item.ItemStack
  */
 public data class ItemRequirementComponent(
     /** Stable id within the recipe. / 配方内稳定 id */
-    public val id: String,
+    override val id: String,
 
     /** Items to consume at start(). / start 阶段需要消耗的物品列表 */
     public val inputs: List<PMKey<ItemStack>> = emptyList(),
@@ -27,7 +27,7 @@ public data class ItemRequirementComponent(
     public val outputs: List<PMKey<ItemStack>> = emptyList(),
 
     override val properties: Map<String, Any> = emptyMap(),
-) : RecipeRequirementComponent {
+) : IdentifiedRecipeRequirementComponent {
 
     override val type: RecipeRequirementType<*>
         get() = RecipeRequirementTypes.ITEM

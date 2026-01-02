@@ -3,22 +3,33 @@ package github.kasuminova.prototypemachinery.impl.recipe
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.RecipeManager
 import net.minecraft.util.ResourceLocation
+import java.util.concurrent.ConcurrentHashMap
 
-// TODO Replace with registry.
+/**
+ * In-memory recipe registry implementation.
+ *
+ * 这是一个轻量的内存“注册表”实现：支持按 id 查询、按 group 查询，以及注册时维护 group 索引。
+ */
 public object RecipeManagerImpl : RecipeManager {
-    private val recipes: MutableMap<String, MachineRecipe> = mutableMapOf()
-    private val recipesByGroup: MutableMap<ResourceLocation, MutableSet<MachineRecipe>> = mutableMapOf()
+    private val recipes: MutableMap<String, MachineRecipe> = ConcurrentHashMap()
+    private val recipesByGroup: MutableMap<ResourceLocation, MutableSet<MachineRecipe>> = ConcurrentHashMap()
 
     override fun get(id: String): MachineRecipe? = recipes[id]
     override fun getAll(): Collection<MachineRecipe> = recipes.values
     override fun register(recipe: MachineRecipe) {
-        recipes[recipe.id] = recipe
+        val previous = recipes.put(recipe.id, recipe)
 
         // Update group index.
-        // We do not attempt to remove stale entries on overwrite, as recipes are expected to be registered once.
-        // If overwrite happens, the group index may contain both; tests can clear/restore.
+        // Recipes are expected to be registered once during init. If overwrite happens, we try to remove the
+        // previous recipe from its old groups as a best-effort cleanup.
+        if (previous != null && previous !== recipe) {
+            for (g in previous.recipeGroups) {
+                recipesByGroup[g]?.remove(previous)
+            }
+        }
         for (group in recipe.recipeGroups) {
-            recipesByGroup.computeIfAbsent(group) { linkedSetOf() }.add(recipe)
+            val set = recipesByGroup.computeIfAbsent(group) { ConcurrentHashMap.newKeySet() }
+            set.add(recipe)
         }
     }
 

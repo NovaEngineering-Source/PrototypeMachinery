@@ -21,7 +21,6 @@ import net.minecraftforge.common.MinecraftForge
 import net.minecraftforge.fluids.FluidRegistry
 import net.minecraftforge.fluids.FluidStack
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler
-import net.minecraftforge.fluids.capability.IFluidHandlerItem
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent
 import net.minecraftforge.fml.common.gameevent.TickEvent
 import net.minecraftforge.items.CapabilityItemHandler
@@ -408,7 +407,7 @@ internal object BuildInstrumentTaskManager {
 
             val drained = handler.drain(FluidStack(fluid, kotlin.math.min(remaining, simulated.amount)), true) ?: return 0
             val got = drained.amount
-            if (got > 0 && handler is IFluidHandlerItem) {
+            if (got > 0) {
                 player.inventory.setInventorySlotContents(invSlot, handler.container)
             }
             return got
@@ -441,7 +440,7 @@ internal object BuildInstrumentTaskManager {
                 val gotInner = drained.amount
                 if (gotInner > 0) {
                     remaining -= gotInner
-                    if (fh is IFluidHandlerItem && itemHandler is IItemHandlerModifiable) {
+                    if (itemHandler is IItemHandlerModifiable) {
                         // Put the updated container back.
                         itemHandler.setStackInSlot(slot, fh.container)
                     }

@@ -1,6 +1,7 @@
 package github.kasuminova.prototypemachinery.impl.recipe.requirement.component
 
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
+import github.kasuminova.prototypemachinery.api.recipe.requirement.component.IdentifiedRecipeRequirementComponent
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.SelectiveRequirements
 import org.jetbrains.annotations.ApiStatus
@@ -27,7 +28,7 @@ import org.jetbrains.annotations.ApiStatus
 @ApiStatus.Experimental
 public data class SelectiveRequirementComponent(
     /** Stable identifier within a recipe (used for per-process state). / 配方内的稳定标识（用于进程状态）。 */
-    public val id: String,
+    override val id: String,
     /** Candidate requirement components to try in order. / 依次尝试的候选需求列表。 */
     public val candidates: List<RecipeRequirementComponent>,
     /**
@@ -35,7 +36,7 @@ public data class SelectiveRequirementComponent(
      * 选择被 commit 后可选触发的修改器 id 列表。
      */
     public val modifierIds: List<String> = emptyList(),
-) : RecipeRequirementComponent {
+) : IdentifiedRecipeRequirementComponent {
 
     override val type: RecipeRequirementType<*> = SelectiveRequirements.SELECTIVE_TYPE
 }

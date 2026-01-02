@@ -1,10 +1,12 @@
 package github.kasuminova.prototypemachinery.impl.recipe.requirement.component.system
 
+import github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachineAttributes
 import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RequirementTransaction
+import github.kasuminova.prototypemachinery.impl.recipe.process.component.ProcessUnscaledProgressComponentType
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.component.CheckpointRequirementComponent
 
 /**
@@ -45,13 +47,24 @@ public object CheckpointRequirementSystem : RecipeRequirementSystem.Tickable<Che
         process: RecipeProcess,
         component: CheckpointRequirementComponent
     ): RequirementTransaction {
-        val currentTick = process.status.progress.toInt()
+        val target = component.time.toFloat()
 
-        // TODO: Implement scaling logic using component.scaleWithProcess
-        // For now we use raw time
-        val targetTime = component.time
+        val (current, next) = if (component.scaleWithProcess) {
+            // Scaled timeline: progress advances by PROCESS_SPEED.
+            // Use a threshold-crossing check to avoid missing the checkpoint when speed > 1.
+            val speed = (process.attributeMap.attributes[StandardMachineAttributes.PROCESS_SPEED]?.value ?: 1.0).toFloat()
+            val delta = speed.coerceAtLeast(0.0f)
+            val cur = process.status.progress
+            cur to (cur + delta)
+        } else {
+            // Unscaled timeline: +1 per successful tick.
+            // This is tracked by ProcessUnscaledProgressComponent (maintained by the processor).
+            val cur = (process[ProcessUnscaledProgressComponentType]?.ticks ?: 0.0f)
+            cur to (cur + 1.0f)
+        }
 
-        if (currentTick == targetTime) {
+        // Trigger when crossing the target tick.
+        if (current < target && next >= target) {
             return executeFullLifecycle(process, component.requirement)
         }
 

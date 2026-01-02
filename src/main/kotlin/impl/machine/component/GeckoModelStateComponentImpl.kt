@@ -2,7 +2,7 @@ package github.kasuminova.prototypemachinery.impl.machine.component
 
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentType
-import github.kasuminova.prototypemachinery.api.machine.component.base.SynchronizableComponent
+import github.kasuminova.prototypemachinery.api.machine.component.base.DirtySynchronizableComponent
 import github.kasuminova.prototypemachinery.api.machine.component.type.GeckoModelStateComponent
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.nbt.NBTTagList
@@ -17,7 +17,7 @@ import net.minecraft.nbt.NBTTagString
 public class GeckoModelStateComponentImpl(
     override val owner: MachineInstance,
     override val type: MachineComponentType<*>
-) : GeckoModelStateComponent, SynchronizableComponent {
+) : GeckoModelStateComponent, DirtySynchronizableComponent() {
 
     override val provider: Any? = null
 
@@ -28,8 +28,6 @@ public class GeckoModelStateComponentImpl(
 
     override val animationName: String?
         get() = layersMutable.firstOrNull()
-
-    private var dirty: Boolean = false
 
     override var stateVersion: Int = 0
         private set
@@ -67,8 +65,7 @@ public class GeckoModelStateComponentImpl(
 
     private fun bumpAndSync() {
         stateVersion++
-        dirty = true
-        sync()
+        markDirty()
     }
 
     // ========== Serializable ==========
@@ -90,35 +87,9 @@ public class GeckoModelStateComponentImpl(
     }
 
     // ========== SynchronizableComponent ==========
-
-    override fun writeFullSyncData(nbt: NBTTagCompound) {
-        // Always include version + full layers
-        nbt.setInteger(KEY_STATE_VERSION, stateVersion)
-        nbt.setTag(KEY_LAYERS, writeLayersNBT())
-    }
-
-    override fun writeIncrementalSyncData(nbt: NBTTagCompound): Boolean {
-        if (!dirty) return false
-        dirty = false
-
-        nbt.setInteger(KEY_STATE_VERSION, stateVersion)
-        nbt.setTag(KEY_LAYERS, writeLayersNBT())
-        return true
-    }
-
-    override fun readFullSyncData(nbt: NBTTagCompound) {
-        readNBT(nbt)
-    }
-
-    override fun readIncrementalSyncData(nbt: NBTTagCompound) {
-        // Same schema as full sync; keys are optional.
-        if (nbt.hasKey(KEY_STATE_VERSION)) {
-            stateVersion = nbt.getInteger(KEY_STATE_VERSION)
-        }
-        if (nbt.hasKey(KEY_LAYERS)) {
-            readLayersNBT(nbt.getTagList(KEY_LAYERS, 8))
-        }
-    }
+    // Uses DirtySynchronizableComponent defaults:
+    // - incremental sync == full sync when dirty
+    // - incremental read == full read
 
     private fun writeLayersNBT(): NBTTagList {
         val list = NBTTagList()

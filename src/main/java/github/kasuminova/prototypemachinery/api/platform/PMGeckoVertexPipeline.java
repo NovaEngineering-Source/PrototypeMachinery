@@ -44,6 +44,37 @@ public interface PMGeckoVertexPipeline {
             int outIntOffset
     );
 
+        /**
+         * Optional: transform and pack into a direct {@link java.nio.IntBuffer}.
+         *
+         * <p>This enables call sites to write directly into a pre-allocated native target, e.g.:
+         * <ul>
+         *   <li>a pooled direct ByteBuffer (via {@code asIntBuffer()})</li>
+         *   <li>a mapped VBO range (via {@code glMapBufferRange})</li>
+         * </ul>
+         *
+         * <p>Default returns {@code false} so legacy implementations don't need to care.
+         */
+        default boolean transformThenPackIntBuffer(
+            boolean forceScalar,
+            float[] xs,
+            float[] ys,
+            float[] zs,
+            float[] us,
+            float[] vs,
+            int[] colors,
+            int[] normals,
+            int vertexOffset,
+            int count,
+            float m00, float m01, float m02, float m03,
+            float m10, float m11, float m12, float m13,
+            float m20, float m21, float m22, float m23,
+            java.nio.IntBuffer out,
+            int outIntOffset
+        ) {
+        return false;
+        }
+
     /**
      * Optional: transform SoA positions in-place.
      *

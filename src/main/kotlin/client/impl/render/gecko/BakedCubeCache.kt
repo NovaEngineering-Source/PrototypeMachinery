@@ -116,9 +116,7 @@ internal object BakedCubeCache {
         }
 
         // Seed local cache for subsequent queries on this thread.
-        if (published != null) {
-            local[cube] = published
-        }
+        local[cube] = published
 
         return published
     }

@@ -19,7 +19,7 @@ import net.minecraft.util.math.BlockPos
  *
  * Sync strategy:
  * - FULL: send current snapshot (for chunk load)
- * - INCREMENTAL: send only changes (for periodic structure refresh)
+ * - INCREMENTAL: when dirty, send a snapshot with the same schema as FULL (simplified)
  */
 public object StructureRenderDataComponentType : MachineComponentType<StructureRenderDataComponent> {
 

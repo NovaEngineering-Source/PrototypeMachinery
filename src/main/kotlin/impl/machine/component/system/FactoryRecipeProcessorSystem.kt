@@ -11,6 +11,8 @@ import github.kasuminova.prototypemachinery.api.recipe.process.component.RecipeP
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RecipeRequirementSystem
 import github.kasuminova.prototypemachinery.api.recipe.requirement.component.system.RequirementTransaction
+import github.kasuminova.prototypemachinery.impl.recipe.process.component.ProcessUnscaledProgressComponent
+import github.kasuminova.prototypemachinery.impl.recipe.process.component.ProcessUnscaledProgressComponentType
 import github.kasuminova.prototypemachinery.impl.recipe.process.component.RecipeLifecycleStateProcessComponent
 import github.kasuminova.prototypemachinery.impl.recipe.process.component.RecipeLifecycleStateProcessComponentType
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.overlay.RecipeRequirementOverlay
@@ -79,6 +81,12 @@ public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcesso
                         // Advance progress only when all tick transactions succeeded.
                         val speed = (process.attributeMap.attributes[StandardMachineAttributes.PROCESS_SPEED]?.value ?: 1.0).toFloat()
                         val delta = speed.coerceAtLeast(0.0f)
+
+                        // Also advance unscaled tick counter (+1 per successful machine tick).
+                        // This is used by some requirement components that want an unscaled timeline.
+                        val unscaled = getOrCreateUnscaledProgress(process)
+                        unscaled.ticks += 1.0f
+
                         process.status = process.status.copy(
                             progress = process.status.progress + delta,
                             message = "Processing",
@@ -163,6 +171,15 @@ public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcesso
 
         val created = RecipeLifecycleStateProcessComponentType.createComponent(process)
         process.components.addTail(RecipeLifecycleStateProcessComponentType, created)
+        return created
+    }
+
+    private fun getOrCreateUnscaledProgress(process: RecipeProcess): ProcessUnscaledProgressComponent {
+        val existing = process[ProcessUnscaledProgressComponentType]
+        if (existing != null) return existing
+
+        val created = ProcessUnscaledProgressComponentType.createComponent(process)
+        process.components.addTail(ProcessUnscaledProgressComponentType, created)
         return created
     }
 

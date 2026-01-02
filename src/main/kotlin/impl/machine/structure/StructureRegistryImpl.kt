@@ -63,4 +63,19 @@ public object StructureRegistryImpl : StructureRegistry {
 
     override fun contains(id: String): Boolean = structures.containsKey(id)
 
+    override fun clearAll() {
+        structures.clear()
+        cache.clear()
+    }
+
+    override fun replaceAll(structures: Collection<MachineStructure>) {
+        // Best-effort atomic swap: clear maps first, then repopulate.
+        // ConcurrentHashMap operations are thread-safe but not transactional.
+        this.structures.clear()
+        for (s in structures) {
+            this.structures[s.id] = s
+        }
+        cache.clear()
+    }
+
 }

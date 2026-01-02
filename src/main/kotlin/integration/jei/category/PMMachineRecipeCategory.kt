@@ -46,6 +46,7 @@ public class PMMachineRecipeCategory(
 
     override fun getBackground(): IDrawable = background
 
+    @Suppress("UNCHECKED_CAST")
     override fun setRecipe(
         recipeLayout: IRecipeLayout,
         recipeWrapper: PMMachineRecipeWrapper,

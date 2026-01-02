@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery.modernbackend.platform
 
 import github.kasuminova.prototypemachinery.api.platform.PMGeckoVertexPipeline
 import github.kasuminova.prototypemachinery.modernbackend.accel.BatchedVertexPipeline
+import java.nio.IntBuffer
 
 internal class ModernBackendGeckoVertexPipeline : PMGeckoVertexPipeline {
 
@@ -45,6 +46,50 @@ internal class ModernBackendGeckoVertexPipeline : PMGeckoVertexPipeline {
         return try {
             val p = if (forceScalar) scalar else selected
             p.transformThenPackIntArray(
+                xs, ys, zs,
+                us, vs,
+                colors, normals,
+                vertexOffset, count,
+                m00, m01, m02, m03,
+                m10, m11, m12, m13,
+                m20, m21, m22, m23,
+                out, outIntOffset
+            )
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    override fun transformThenPackIntBuffer(
+        forceScalar: Boolean,
+        xs: FloatArray,
+        ys: FloatArray,
+        zs: FloatArray,
+        us: FloatArray,
+        vs: FloatArray,
+        colors: IntArray,
+        normals: IntArray,
+        vertexOffset: Int,
+        count: Int,
+        m00: Float,
+        m01: Float,
+        m02: Float,
+        m03: Float,
+        m10: Float,
+        m11: Float,
+        m12: Float,
+        m13: Float,
+        m20: Float,
+        m21: Float,
+        m22: Float,
+        m23: Float,
+        out: IntBuffer,
+        outIntOffset: Int
+    ): Boolean {
+        return try {
+            val p = if (forceScalar) scalar else selected
+            p.transformThenPackIntBuffer(
                 xs, ys, zs,
                 us, vs,
                 colors, normals,

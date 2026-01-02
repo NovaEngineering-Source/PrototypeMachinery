@@ -151,16 +151,17 @@ private class CraftTweakerMachineTypeImpl(
      * Lazily loaded structure instance.
      * 延迟加载的结构实例。
      */
-    override val structure: MachineStructure by lazy {
-        try {
-            structureProvider()
-        } catch (e: Throwable) {
-            throw IllegalStateException(
-                "Failed to resolve structure for machine type '$id': ${e.message}",
-                e
-            )
+    override val structure: MachineStructure
+        get() {
+            try {
+                return structureProvider()
+            } catch (e: Throwable) {
+                throw IllegalStateException(
+                    "Failed to resolve structure for machine type '$id': ${e.message}",
+                    e
+                )
+            }
         }
-    }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

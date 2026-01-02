@@ -54,15 +54,11 @@ public class FactoryRecipeScanningSystem(
 
         val index = IRecipeIndexRegistry.INSTANCE.getIndex(machine.type)
         if (index != null) {
-            // Index is available: use it to filter recipes first
-            val indexedCandidates = index.lookup(machine)
-            if (indexedCandidates.isNotEmpty()) {
-                // Index provided filtered results
-                candidates = indexedCandidates.filter { it.recipeGroups.any(groups::contains) }
-            } else {
-                // Index returned empty set (no recipes match)
-                candidates = emptyList()
-            }
+            // Index is available: use it to filter recipes first.
+            // If the index has no opinion (e.g. machine has no enumerable ports for indexed types), fall back
+            // to the group-limited scan for correctness.
+            val indexedCandidates = index.lookupOrNull(machine)
+            candidates = indexedCandidates ?: recipeManager.getByGroups(groups)
         } else {
             // No index for this machine type, use full recipe scan
             candidates = recipeManager.getByGroups(groups)

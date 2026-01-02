@@ -24,7 +24,7 @@ English translation (rough): [`PROJECT_OVERVIEW.en.md`](./PROJECT_OVERVIEW.en.md
    - 代码入口：`client/impl/render/MachineRenderDispatcher.kt`、`client/impl/render/binding/MachineBlockEntitySpecialRenderer.kt`、`mixin/minecraft/MixinRenderGlobal.java`
 
 - **客户端渲染性能与可观测性（HUD + RenderTuning + 多级缓存）**：围绕“减少构建抖动 / 减少 VBO 上传 / 降低 direct buffer churn / 降低 HashMap hot path”等目标，新增/强化了渲染侧缓存、BufferBuilder 复用与 HUD 指标。
-   - 关键点：`RenderDebugHud`（/pm_render_hud）、`RenderTuning`（Forge config + /pm_config）、`BufferBuilderPool`、`BufferBuilderVboCache`、（实验性）`OpaqueChunkVboCache`。
+   - 关键点：`RenderDebugHud`（/pm_render_hud）、`RenderTuning`（Forge config + /pm_config）、`BufferBuilderPool`、`BufferBuilderVboCache`、`ReusableVboUploader`（合并上传：orphaning / 可选 mapRange）。
    - 详见：[`docs/RenderingPerformance.md`](./docs/RenderingPerformance.md)
 
 - **结构渲染数据组件化 + 增量同步（避免渲染线程结构匹配）**：把“渲染/隐藏所需的结构派生数据”（bounds + sliceCounts）迁移到系统组件 `StructureRenderDataComponent`，由服务器计算并通过 FULL/INCREMENTAL NBT 同步到客户端。

@@ -59,15 +59,20 @@ overlay 允许每个 `RecipeProcess` 在机器基线基础上叠加额外修改�
 
 不保证反序列化后仍是原始对象。
 
-## TODO：属性注册表仍为临时实现
+## 属性注册表（已实现）
 
-当前反序列化解析 `MachineAttributeType` 主要依赖 `StandardMachineAttributes.getById(...)`。
+目前属性类型的全局注册表已落地：
 
-这是一种临时“注册表”方案：
+- `MachineAttributeRegistry`（`src/main/kotlin/api/machine/attribute/MachineAttributeRegistry.kt`）
+- 内置属性集合 `StandardMachineAttributes` 会在初始化时注册到该注册表中。
 
-- 仅覆盖内置属性
-- 第三方属性 roundtrip 时会退化为 `UnknownMachineAttributeType(id)`（仍能计算/显示 id，但不保证能与原 type instance 完全一致）
+反序列化行为（以当前代码为准）：
 
-后续应提供一个真正的全局属性注册表，以支持第三方属性注册与稳定反序列化。
+- NBT 反序列化会通过 `MachineAttributeRegistry.require(id)` 解析类型。
+- 若遇到未知 id：会直接报错（不做“未知类型占位”回退）。
+
+第三方扩展建议：
+
+- 在 mod 初始化阶段调用 `MachineAttributeRegistry.register(...)` 注册自定义属性类型。
 
 另见：[本地化（Localization / i18n）](./Localization.md)

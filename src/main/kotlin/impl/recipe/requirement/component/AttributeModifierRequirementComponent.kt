@@ -3,7 +3,7 @@ package github.kasuminova.prototypemachinery.impl.recipe.requirement.component
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeModifier
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
-import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
+import github.kasuminova.prototypemachinery.api.recipe.requirement.component.IdentifiedRecipeRequirementComponent
 import net.minecraft.util.ResourceLocation
 
 /**
@@ -17,7 +17,7 @@ import net.minecraft.util.ResourceLocation
  */
 public data class AttributeModifierRequirementComponent(
     /** Stable id within the recipe (used to form deterministic modifier ids). */
-    public val id: String,
+    override val id: String,
 
     /** Attribute to modify (by id to avoid requiring a full attribute registry right now). */
     public val attributeId: ResourceLocation,
@@ -30,7 +30,7 @@ public data class AttributeModifierRequirementComponent(
 
     /** Whether to remove at onEnd(). / 是否在 onEnd() 阶段撤销 */
     public val removeAtEnd: Boolean = true,
-) : RecipeRequirementComponent {
+) : IdentifiedRecipeRequirementComponent {
 
     override val type: RecipeRequirementType<*> = RecipeRequirementTypes.ATTRIBUTE_MODIFIER
 }

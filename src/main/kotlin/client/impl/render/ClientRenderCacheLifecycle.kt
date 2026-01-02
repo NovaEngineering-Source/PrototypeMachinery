@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package github.kasuminova.prototypemachinery.client.impl.render
 
 import github.kasuminova.prototypemachinery.PrototypeMachinery

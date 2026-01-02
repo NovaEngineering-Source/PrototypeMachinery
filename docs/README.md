@@ -42,7 +42,7 @@
 
 - **客户端集成（Client Integrations）**
   - [渲染系统（机器控制器 / 透明与 Bloom 顺序 / 集中式 flush）](./RenderingSystem_SecureAssets.md)
-  - [渲染性能与调优（HUD / RenderTuning / VBO 缓存 / Chunk 缓存）](./RenderingPerformance.md)
+  - [渲染性能与调优（HUD / RenderTuning / VBO 缓存 / 合并上传优化）](./RenderingPerformance.md)
   - [结构渲染数据同步（StructureRenderDataComponent：FULL/INCREMENTAL）](./StructureRenderDataSync.md)
   - [Modern Backend（Cleanroom / Java 21+ / Vector API）](./ModernBackend.md)
   - [JEI / HEI 集成（配方索引 + 默认 UI + Addon 扩展）](./JEI.md)

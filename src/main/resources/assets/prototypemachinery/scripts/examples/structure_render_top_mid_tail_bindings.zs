@@ -32,28 +32,9 @@ RenderBindings.bindGeckoToStructure(
         .geo("prototypemachinery:geo/test_mid.geo.json")
         .texture("prototypemachinery:textures/geo/test_mid.png")
     .animation("prototypemachinery:geo/animation/test_mid.animation.json")
-    .modelOffset(0.0, 0.0, 0.0)
-);
-
-// MID repeats 3 times in the example structure (mid, mid_2, mid_3).
-// Bind the same MID model to all three so they render as a continuous tube.
-RenderBindings.bindGeckoToStructure(
-    machineId,
-    "example_structure_render_top_mid_tail_mid_2",
-    RenderBindings.gecko()
-        .geo("prototypemachinery:geo/test_mid.geo.json")
-        .texture("prototypemachinery:textures/geo/test_mid.png")
-    .animation("prototypemachinery:geo/animation/test_mid.animation.json")
-    .modelOffset(0.0, 0.0, 0.0)
-);
-
-RenderBindings.bindGeckoToStructure(
-    machineId,
-    "example_structure_render_top_mid_tail_mid_3",
-    RenderBindings.gecko()
-        .geo("prototypemachinery:geo/test_mid.geo.json")
-        .texture("prototypemachinery:textures/geo/test_mid.png")
-    .animation("prototypemachinery:geo/animation/test_mid.animation.json")
+    // MID is a SliceStructure in this example.
+    // We want it to render once per slice layer.
+    .sliceMode("per_slice")
     .modelOffset(0.0, 0.0, 0.0)
 );
 

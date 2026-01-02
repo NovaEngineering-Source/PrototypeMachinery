@@ -246,6 +246,27 @@ assert(basicMachine.children[0] === energyHatch)
 
 - `StructureData.validators` 已支持：loader 会把字符串按 `ResourceLocation` 解析，并通过 `StructureValidatorRegistry` 创建 `StructureValidator`。
   - 无效 / 未注册的 validator 会被跳过，并输出 warn。
+
+内置 validators（无参数）：
+
+- `prototypemachinery:overworld_only`：仅允许主世界（dimension == 0）
+- `prototypemachinery:nether_only`：仅允许下界（dimension == -1）
+- `prototypemachinery:end_only`：仅允许末地（dimension == 1）
+- `prototypemachinery:day_only`：仅允许白天
+- `prototypemachinery:night_only`：仅允许夜晚
+- `prototypemachinery:clear_weather_only`：仅允许晴天（不下雨/不打雷）
+
+示例：
+
+```json
+{
+  "validators": [
+    "prototypemachinery:overworld_only",
+    "prototypemachinery:clear_weather_only"
+  ]
+}
+```
+
 - `StructurePatternElementData.nbt` 已支持：当元素带 `nbt` 时，会使用 `StatedBlockNbtPredicate`。
   - 限制：当 `alternatives` 中存在 NBT 约束时，目前不会对“多个候选 + NBT”做完整匹配；loader 会 warn 并回退为仅使用 base option。
 

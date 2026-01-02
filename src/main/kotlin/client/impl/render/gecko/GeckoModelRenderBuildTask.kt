@@ -1,5 +1,6 @@
 package github.kasuminova.prototypemachinery.client.impl.render.gecko
 
+import github.kasuminova.prototypemachinery.api.tuning.RenderTuning
 import github.kasuminova.prototypemachinery.client.api.render.RenderKey
 import github.kasuminova.prototypemachinery.client.api.render.RenderPass
 import github.kasuminova.prototypemachinery.client.impl.render.RenderFrameClock
@@ -9,16 +10,23 @@ import github.kasuminova.prototypemachinery.client.impl.render.assets.MinecraftA
 import github.kasuminova.prototypemachinery.client.impl.render.assets.MountedDirectoryAssetResolver
 import github.kasuminova.prototypemachinery.client.impl.render.assets.ResolverBackedResourceManager
 import github.kasuminova.prototypemachinery.client.impl.render.task.BuiltBuffers
+import github.kasuminova.prototypemachinery.client.impl.render.task.GpuBucketDraw
+import github.kasuminova.prototypemachinery.client.impl.render.task.MappedVboWriteCache
+import github.kasuminova.prototypemachinery.client.impl.render.task.PackedBucketBatch
+import github.kasuminova.prototypemachinery.client.impl.render.task.PooledDirectVertexWriteTarget
 import github.kasuminova.prototypemachinery.client.impl.render.task.RenderBuildTask
 import github.kasuminova.prototypemachinery.client.util.BufferBuilderPool
-import github.kasuminova.prototypemachinery.client.util.MmceMatrixStack
+import github.kasuminova.prototypemachinery.client.util.ClientMainThread
+import github.kasuminova.prototypemachinery.client.util.MatrixStack
 import github.kasuminova.prototypemachinery.common.util.OrientationMath
 import net.minecraft.client.renderer.BufferBuilder
+import net.minecraft.client.renderer.OpenGlHelper
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.ResourceLocation
 import org.lwjgl.opengl.GL11
 import software.bernie.geckolib3.file.GeoModelLoader
+import java.nio.IntBuffer
 import java.nio.file.Path
 
 internal data class GeckoRenderSnapshot(
@@ -116,9 +124,14 @@ internal class GeckoModelRenderBuildTask(
         val forcedPass = snapshot.pass.takeIf { it != RenderPass.DEFAULT }
 
         val buildersByPass = linkedMapOf<RenderPass, BufferBuilder>()
+        val packedByPass = linkedMapOf<RenderPass, PackedBucketBatch>()
+        val gpuByPass = linkedMapOf<RenderPass, GpuBucketDraw>()
 
         // Filled after we compute active/potential animated bones (see below).
         var estimatedBytesByPass: Map<RenderPass, Int> = emptyMap()
+
+        // Assigned after estimateRoutedFilteredVertexCounts; used by packed/mapped-vbo heuristics.
+        var totalEstimatedBytes = 0
 
         fun getOrCreate(pass: RenderPass): BufferBuilder {
             return buildersByPass.getOrPut(pass) {
@@ -130,7 +143,96 @@ internal class GeckoModelRenderBuildTask(
             }
         }
 
-        val ms = MmceMatrixStack()
+        abstract class GeckoPackedSink {
+            abstract val pass: RenderPass
+            abstract val writer: GeckoModelBaker.PackedVertexDataWriter
+            abstract fun finish(packedOut: MutableMap<RenderPass, PackedBucketBatch>, gpuOut: MutableMap<RenderPass, GpuBucketDraw>)
+        }
+
+        data class PooledPackedSink(
+            override val pass: RenderPass,
+            val target: PooledDirectVertexWriteTarget,
+        ) : GeckoPackedSink() {
+            private val intBuffer: IntBuffer get() = target.intBuffer
+
+            override val writer: GeckoModelBaker.PackedVertexDataWriter = GeckoModelBaker.PackedVertexDataWriter { src, offsetInts, lengthInts ->
+                intBuffer.put(src, offsetInts, lengthInts)
+            }
+
+            override fun finish(packedOut: MutableMap<RenderPass, PackedBucketBatch>, gpuOut: MutableMap<RenderPass, GpuBucketDraw>) {
+                val batch = target.sealToPackedBucketBatch(
+                    format = DefaultVertexFormats.POSITION_TEX_COLOR_NORMAL,
+                    drawMode = GL11.GL_QUADS,
+                )
+                if (batch != null) packedOut[pass] = batch
+            }
+        }
+
+        data class MappedVboSink(
+            override val pass: RenderPass,
+            val ticket: MappedVboWriteCache.Ticket,
+        ) : GeckoPackedSink() {
+            private val intBuffer: IntBuffer get() = ticket.intView
+
+            override val writer: GeckoModelBaker.PackedVertexDataWriter = GeckoModelBaker.PackedVertexDataWriter { src, offsetInts, lengthInts ->
+                intBuffer.put(src, offsetInts, lengthInts)
+            }
+
+            override fun finish(packedOut: MutableMap<RenderPass, PackedBucketBatch>, gpuOut: MutableMap<RenderPass, GpuBucketDraw>) {
+                val ints = intBuffer.position()
+                if (ints <= 0) {
+                    // still unmap to avoid leaving the buffer mapped
+                    ClientMainThread.call { MappedVboWriteCache.finishWrite(ticket, 0, 0) }
+                    return
+                }
+                val bytes = ints * 4
+                val vertexCount = bytes / DefaultVertexFormats.POSITION_TEX_COLOR_NORMAL.size
+                val draw = ClientMainThread.call { MappedVboWriteCache.finishWrite(ticket, bytes, vertexCount) }
+                if (draw != null && draw.vertexCount > 0) {
+                    gpuOut[pass] = draw
+                }
+            }
+        }
+
+        val sinksByPass: MutableMap<RenderPass, GeckoPackedSink> = linkedMapOf()
+
+        // We only attempt mapped-VBO direct write when:
+        // - Gecko packed path is active
+        // - VBOs are enabled
+        // - and tuning explicitly enabled
+        val allowMappedVbo =
+            RenderTuning.geckoDirectMappedVboEnabled &&
+                OpenGlHelper.useVbo() &&
+                snapshot.bakeMode == GeckoModelBaker.BakeMode.ANIMATED_ONLY
+
+        fun getOrCreateSink(pass: RenderPass): GeckoPackedSink {
+            return sinksByPass.getOrPut(pass) create@{
+                val want = estimatedBytesByPass[pass] ?: 0
+                val minCap = maxOf(32 * 1024, want)
+
+                val total = totalEstimatedBytes
+                val mappedOk = allowMappedVbo && (RenderTuning.geckoDirectMappedVboMinBytes <= 0 || total >= RenderTuning.geckoDirectMappedVboMinBytes)
+
+                if (mappedOk) {
+                    val key = MappedVboWriteCache.Key(
+                        ownerKey = snapshot.ownerKey,
+                        pass = pass,
+                        format = DefaultVertexFormats.POSITION_TEX_COLOR_NORMAL,
+                        drawMode = GL11.GL_QUADS,
+                    )
+
+                    val ticket = ClientMainThread.call { MappedVboWriteCache.tryMapForWrite(key, minCap) }
+                    if (ticket != null) {
+                        return@create MappedVboSink(pass, ticket)
+                    }
+                }
+
+                val target = PooledDirectVertexWriteTarget.borrow(minCap, tag = "GeckoModelRenderBuildTask.packed.$pass")
+                PooledPackedSink(pass, target)
+            }
+        }
+
+        val ms = MatrixStack()
         ms.push()
 
         // World-space placement (RenderManager already translates to camera origin).
@@ -207,35 +309,78 @@ internal class GeckoModelRenderBuildTask(
             estimatedBytesByPass = m
         }
 
-        GeckoModelBaker.bakeRoutedFiltered(
-            model = model,
-            matrixStack = ms,
-            activeAnimatedBones = activeAnimatedBones,
-            mode = snapshot.bakeMode,
-            potentialAnimatedBones = potentialAnimatedBones,
-            bufferSelector = { bloom, transparent ->
-                val pass = forcedPass ?: when {
-                    bloom && transparent -> RenderPass.BLOOM_TRANSPARENT
-                    bloom -> RenderPass.BLOOM
-                    transparent -> RenderPass.TRANSPARENT
-                    else -> RenderPass.DEFAULT
-                }
-                getOrCreate(pass)
-            },
-        )
+        totalEstimatedBytes = estimatedBytesByPass.values.fold(0) { acc, v ->
+            val sum = acc.toLong() + v.toLong()
+            if (sum > Int.MAX_VALUE.toLong()) Int.MAX_VALUE else sum.toInt()
+        }
+
+        val usePacked =
+            snapshot.bakeMode == GeckoModelBaker.BakeMode.ANIMATED_ONLY &&
+                (RenderTuning.geckoDirectPackedBuffersMinBytes <= 0 || totalEstimatedBytes >= RenderTuning.geckoDirectPackedBuffersMinBytes)
+
+        if (usePacked) {
+            GeckoModelBaker.bakeRoutedFilteredPacked(
+                model = model,
+                matrixStack = ms,
+                activeAnimatedBones = activeAnimatedBones,
+                mode = snapshot.bakeMode,
+                potentialAnimatedBones = potentialAnimatedBones,
+                writerSelector = { bloom, transparent ->
+                    val pass = forcedPass ?: when {
+                        bloom && transparent -> RenderPass.BLOOM_TRANSPARENT
+                        bloom -> RenderPass.BLOOM
+                        transparent -> RenderPass.TRANSPARENT
+                        else -> RenderPass.DEFAULT
+                    }
+                    getOrCreateSink(pass).writer
+                },
+            )
+        } else {
+            GeckoModelBaker.bakeRoutedFiltered(
+                model = model,
+                matrixStack = ms,
+                activeAnimatedBones = activeAnimatedBones,
+                mode = snapshot.bakeMode,
+                potentialAnimatedBones = potentialAnimatedBones,
+                bufferSelector = { bloom, transparent ->
+                    val pass = forcedPass ?: when {
+                        bloom && transparent -> RenderPass.BLOOM_TRANSPARENT
+                        bloom -> RenderPass.BLOOM
+                        transparent -> RenderPass.TRANSPARENT
+                        else -> RenderPass.DEFAULT
+                    }
+                    getOrCreate(pass)
+                },
+            )
+        }
 
         ms.pop()
 
-        // Finalize all buffers we touched.
-        buildersByPass.values.forEach { it.finishDrawing() }
+        if (usePacked) {
+            // Finalize all sinks.
+            for ((_, sink) in sinksByPass) {
+                try {
+                    sink.finish(packedByPass, gpuByPass)
+                } catch (_: Throwable) {
+                    // If mapped path fails unexpectedly, we simply drop this sink; next frame will rebuild.
+                }
+            }
+        } else {
+            // Finalize all buffers we touched.
+            buildersByPass.values.forEach { it.finishDrawing() }
+        }
 
-        return BuiltBuffers(byPass = buildersByPass)
+        return BuiltBuffers(byPass = buildersByPass, packedByPass = packedByPass, gpuByPass = gpuByPass)
     }
 
 
-    private fun rotateOrientation(ms: MmceMatrixStack, front: EnumFacing, top: EnumFacing) {
+    private fun rotateOrientation(ms: MatrixStack, front: EnumFacing, top: EnumFacing) {
         val steps = OrientationMath.stepsFromBase(front, top)
-        for (step in steps) {
+        // NOTE: OrientationMath.pathsFromBase describes the *effect order* (how a basis vector is rotated step-by-step).
+        // MatrixStack (like OpenGL) post-multiplies matrices, so transforms apply to vertices in reverse call order.
+        // Therefore we must apply steps in reverse here to match the expected (front, top) orientation.
+        for (i in steps.indices.reversed()) {
+            val step = steps[i]
             when (step) {
                 OrientationMath.RotationStep.Y_POS -> ms.rotateY(Math.toRadians(90.0).toFloat())
                 OrientationMath.RotationStep.Y_NEG -> ms.rotateY(Math.toRadians(-90.0).toFloat())
@@ -245,7 +390,7 @@ internal class GeckoModelRenderBuildTask(
         }
     }
 
-    private fun rotateXCentered(ms: MmceMatrixStack, degrees: Double) {
+    private fun rotateXCentered(ms: MatrixStack, degrees: Double) {
         // Rotate around the block center (y=0.5) instead of the block bottom.
         // This avoids pivot-related offsets for UP/DOWN and mixed 24-orientation sequences.
         ms.translate(0.0f, 0.5f, 0.0f)

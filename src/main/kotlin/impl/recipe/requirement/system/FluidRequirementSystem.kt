@@ -27,6 +27,7 @@ public object FluidRequirementSystem : RecipeRequirementSystem.Tickable<FluidReq
 
     private fun fluidNameOf(key: PMKey<FluidStack>): String = key.get().fluid.name
 
+    @Suppress("UNCHECKED_CAST")
     override fun start(
         process: RecipeProcess,
         component: FluidRequirementComponent

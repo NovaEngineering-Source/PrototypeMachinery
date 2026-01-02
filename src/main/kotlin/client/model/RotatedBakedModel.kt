@@ -19,6 +19,7 @@ import javax.vecmath.Vector4f
  *
  * All quads are pre-transformed at construction time for efficiency.
  */
+@Suppress("DEPRECATION")
 @SideOnly(Side.CLIENT)
 internal class RotatedBakedModel(
     private val baseModel: IBakedModel,

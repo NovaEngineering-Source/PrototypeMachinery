@@ -1,14 +1,14 @@
 package github.kasuminova.prototypemachinery.client.impl.render
 
-import github.kasuminova.prototypemachinery.api.tuning.RenderTuning
 import github.kasuminova.prototypemachinery.client.api.render.RenderPass
 import github.kasuminova.prototypemachinery.client.impl.render.assets.ExternalDiskTextureBinder
 import github.kasuminova.prototypemachinery.client.impl.render.bloom.GregTechBloomBridge
 import github.kasuminova.prototypemachinery.client.impl.render.task.BuiltBuffers
-import github.kasuminova.prototypemachinery.client.util.OpaqueChunkVboCache
+import github.kasuminova.prototypemachinery.client.impl.render.task.GpuBucketDraw
+import github.kasuminova.prototypemachinery.client.impl.render.task.MappedVboWriteCache
+import github.kasuminova.prototypemachinery.client.impl.render.task.PackedBucketBatch
 import github.kasuminova.prototypemachinery.client.util.ReusableVboUploader
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap
 import it.unimi.dsi.fastutil.objects.ObjectArrayList
 import net.minecraft.client.Minecraft
@@ -19,7 +19,6 @@ import net.minecraft.client.renderer.texture.TextureMap
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher
 import net.minecraft.util.ResourceLocation
 import org.lwjgl.opengl.GL11
-import java.nio.ByteBuffer
 
 /**
  * Centralized render dispatcher for machine models.
@@ -36,13 +35,13 @@ internal object MachineRenderDispatcher {
 
     private val uploader = ReusableVboUploader()
 
-    private val opaqueChunkVboCache = OpaqueChunkVboCache()
-
     /**
      * Per-frame collected render data from all machine TESRs.
      * Cleared after each flush.
      */
     private val pendingRenders = mutableListOf<PendingRenderData>()
+
+    // async packing and opaque chunk cache removed
 
     /**
      * Data class holding render information for a single machine/sub-structure.
@@ -50,8 +49,6 @@ internal object MachineRenderDispatcher {
     data class PendingRenderData(
         val texture: ResourceLocation,
         val combinedLight: Int,
-        val chunkX: Int,
-        val chunkZ: Int,
         val built: BuiltBuffers,
     )
 
@@ -74,10 +71,6 @@ internal object MachineRenderDispatcher {
      */
     fun hasPendingWork(): Boolean = pendingRenders.isNotEmpty()
 
-    internal fun opaqueChunkCacheStats(): OpaqueChunkVboCache.StatsSnapshot {
-        return opaqueChunkVboCache.statsSnapshot()
-    }
-
     /**
      * Clear all pending render data and release any reusable GL resources.
      *
@@ -86,7 +79,7 @@ internal object MachineRenderDispatcher {
     fun clearAll() {
         pendingRenders.clear()
         uploader.dispose()
-        opaqueChunkVboCache.clearAll("dispatcher_clearAll")
+        runCatching { MappedVboWriteCache.clearAll("MachineRenderDispatcher.clearAll") }
     }
 
     /**
@@ -104,10 +97,6 @@ internal object MachineRenderDispatcher {
         pendingRenders.clear()
 
         RenderStats.noteDispatcherPending(dataList.size)
-
-        if (opaqueChunkVboCache.enabled()) {
-            opaqueChunkVboCache.nextFrame()
-        }
 
         val deferBloomToPost = GregTechBloomBridge.isEnabled
 
@@ -140,9 +129,23 @@ internal object MachineRenderDispatcher {
                         data.built.byPass[RenderPass.BLOOM]?.let { buffer ->
                             RenderManager.addBuffer(RenderPass.BLOOM, data.texture, -1, buffer)
                         }
+                        data.built.packedByPass[RenderPass.BLOOM]?.let { batch ->
+                            RenderManager.addPacked(RenderPass.BLOOM, data.texture, -1, batch)
+                        }
+                        data.built.gpuByPass[RenderPass.BLOOM]?.let { draw ->
+                            RenderManager.addGpu(RenderPass.BLOOM, data.texture, -1, draw)
+                        }
+                        
                         data.built.byPass[RenderPass.BLOOM_TRANSPARENT]?.let { buffer ->
                             RenderManager.addBuffer(RenderPass.BLOOM_TRANSPARENT, data.texture, -1, buffer)
                         }
+                        data.built.packedByPass[RenderPass.BLOOM_TRANSPARENT]?.let { batch ->
+                            RenderManager.addPacked(RenderPass.BLOOM_TRANSPARENT, data.texture, -1, batch)
+                        }
+                        data.built.gpuByPass[RenderPass.BLOOM_TRANSPARENT]?.let { draw ->
+                            RenderManager.addGpu(RenderPass.BLOOM_TRANSPARENT, data.texture, -1, draw)
+                        }
+                        
                     }
                 } else {
                     // No GT bloom: render directly
@@ -170,14 +173,16 @@ internal object MachineRenderDispatcher {
     private fun renderPassBatched(dataList: List<PendingRenderData>, pass: RenderPass, applyLightmap: Boolean) {
         if (dataList.isEmpty()) return
 
-        // Experimental: chunk-group VBO cache for DEFAULT only.
-        if (pass == RenderPass.DEFAULT && applyLightmap && opaqueChunkVboCache.enabled()) {
-            renderOpaquePassChunkCached(dataList)
-            return
-        }
-
         // Texture -> Light -> Buffers
         val buckets: MutableMap<ResourceLocation, Int2ObjectOpenHashMap<MutableList<BufferBuilder>>> =
+            Object2ObjectOpenHashMap()
+
+        // Texture -> Light -> Packed batches
+        val packedBuckets: MutableMap<ResourceLocation, Int2ObjectOpenHashMap<MutableList<PackedBucketBatch>>> =
+            Object2ObjectOpenHashMap()
+
+        // Texture -> Light -> GPU VBO draws
+        val gpuBuckets: MutableMap<ResourceLocation, Int2ObjectOpenHashMap<MutableList<GpuBucketDraw>>> =
             Object2ObjectOpenHashMap()
 
         for (data in dataList) {
@@ -189,7 +194,25 @@ internal object MachineRenderDispatcher {
                 .add(buffer)
         }
 
-        if (buckets.isEmpty()) return
+        for (data in dataList) {
+            val batch = data.built.packedByPass[pass] ?: continue
+            val light = if (applyLightmap) data.combinedLight else -1
+            packedBuckets
+                .computeIfAbsent(data.texture) { Int2ObjectOpenHashMap() }
+                .computeIfAbsent(light) { ObjectArrayList() }
+                .add(batch)
+        }
+
+        for (data in dataList) {
+            val draw = data.built.gpuByPass[pass] ?: continue
+            val light = if (applyLightmap) data.combinedLight else -1
+            gpuBuckets
+                .computeIfAbsent(data.texture) { Int2ObjectOpenHashMap() }
+                .computeIfAbsent(light) { ObjectArrayList() }
+                .add(draw)
+        }
+
+        if (buckets.isEmpty() && packedBuckets.isEmpty() && gpuBuckets.isEmpty()) return
 
         buckets.forEach { (texture, lightMap) ->
             RenderStats.addTextureBind()
@@ -202,197 +225,77 @@ internal object MachineRenderDispatcher {
                 uploader.drawMultiple(bufferList)
             }
         }
-    }
 
-    /**
-        * Opaque-only batched renderer with chunk-group VBO cache.
-        *
-        * Buckets by texture -> combinedLight -> chunkGroupKey.
-        */
-    private fun renderOpaquePassChunkCached(dataList: List<PendingRenderData>) {
-        // Texture -> Light -> ChunkGroup -> Buffers
-        val buckets: MutableMap<ResourceLocation, Int2ObjectOpenHashMap<Long2ObjectOpenHashMap<MutableList<BufferBuilder>>>> =
-            Object2ObjectOpenHashMap()
-
-        for (data in dataList) {
-            val buffer = data.built.byPass[RenderPass.DEFAULT] ?: continue
-            val light = data.combinedLight
-            val chunkGroupKey = computeChunkGroupKey(data.chunkX, data.chunkZ)
-
-            val lightMap = buckets[data.texture] ?: run {
-                val created: Int2ObjectOpenHashMap<Long2ObjectOpenHashMap<MutableList<BufferBuilder>>> = Int2ObjectOpenHashMap()
-                buckets[data.texture] = created
-                created
-            }
-
-            val chunkMap = lightMap.get(light) ?: run {
-                val created: Long2ObjectOpenHashMap<MutableList<BufferBuilder>> = Long2ObjectOpenHashMap()
-                lightMap.put(light, created)
-                created
-            }
-            val existing = chunkMap.get(chunkGroupKey)
-            if (existing != null) {
-                existing.add(buffer)
-            } else {
-                val list: MutableList<BufferBuilder> = ObjectArrayList()
-                list.add(buffer)
-                chunkMap.put(chunkGroupKey, list)
-            }
-        }
-
-        if (buckets.isEmpty()) return
-
-        val minBuffers = RenderTuning.opaqueChunkVboCacheMinBuffers
-        val minBytes = RenderTuning.opaqueChunkVboCacheMinBytes
-
-        buckets.forEach { (texture, lightMap) ->
+        packedBuckets.forEach { (texture, lightMap) ->
             RenderStats.addTextureBind()
             ExternalDiskTextureBinder.bind(texture)
+            lightMap.forEach { (light, batchList) ->
+                if (applyLightmap) {
+                    setLightmapCoords(light)
+                }
+                if (batchList.isEmpty()) return@forEach
 
-            lightMap.forEach { (light, chunkMap) ->
-                setLightmapCoords(light)
+                val first = batchList[0]
+                val format = first.format
+                val drawMode = first.drawMode
 
-                chunkMap.forEach { (chunkGroupKey, bufferList) ->
-                    if (bufferList.isEmpty()) return@forEach
+                var totalBytes = 0
+                var totalVertices = 0
+                val segmentsTmp: MutableList<ReusableVboUploader.ByteBufferSegment> = ArrayList(batchList.size)
 
-                    // Cheap totals + fingerprint.
-                    val first = bufferList[0]
-                    val format = first.vertexFormat
-                    val drawMode = first.drawMode
-                    val vertexSize = format.size
-
-                    var totalVertexCount = 0
-                    var totalBytes = 0
-
-                    // Fingerprint: order-insensitive multiset hash of participating buffers.
-                    // We intentionally avoid BufferBuilder object identity because builders may be pooled/reused,
-                    // and iteration order can vary. Instead, we sample a few ints from each buffer's actual data.
-                    var fpSeed = -3750763034362895579L // random-ish constant
-                    fpSeed = mix64(fpSeed xor chunkGroupKey)
-                    fpSeed = mix64(fpSeed xor light.toLong())
-                    fpSeed = mix64(fpSeed xor drawMode.toLong())
-                    fpSeed = mix64(fpSeed xor vertexSize.toLong())
-
-                    var sum = 0L
-                    var x = 0L
-                    var usedBuffers = 0
-
-                    for (b in bufferList) {
-                        val vc = b.vertexCount
-                        if (vc <= 0) continue
-                        val bytesUsed = vc * vertexSize
-                        if (bytesUsed <= 0) continue
-
-                        totalVertexCount += vc
-                        totalBytes += bytesUsed
-
-                        // Per-buffer hash: sample vertex data + include vertexCount.
-                        val h = mix64(sampleBufferHash(b.byteBuffer, bytesUsed) xor vc.toLong())
-                        sum += h
-                        x = x xor java.lang.Long.rotateLeft(h, 17)
-                        usedBuffers++
-                    }
-
-                    val fp = mix64(fpSeed xor sum xor x xor usedBuffers.toLong() xor totalVertexCount.toLong() xor totalBytes.toLong())
-
-                    if (totalVertexCount <= 0 || totalBytes <= 0) return@forEach
-
-                    RenderStats.noteMergeBucket(bufferList.size)
-
-                    // Heuristic: only use chunk cache for non-trivial buckets.
-                    if (bufferList.size < minBuffers || totalBytes < minBytes) {
-                        uploader.drawMultiple(bufferList)
+                for (b in batchList) {
+                    if (b.format != format || b.drawMode != drawMode) {
+                        // Fallback: draw individually
+                        for (bb in batchList) {
+                            for (p in bb.parts) {
+                                uploader.drawMergedByteBuffer(bb.format, bb.drawMode, p.vertexCount, p.totalBytes, p.data)
+                            }
+                        }
                         return@forEach
                     }
-
-                    val key = OpaqueChunkVboCache.Key(
-                        chunkGroupKey = chunkGroupKey,
-                        texture = texture,
-                        combinedLight = light,
-                    )
-
-                    val entry = opaqueChunkVboCache.getOrRebuildOrNull(
-                        key = key,
-                        format = format,
-                        drawMode = drawMode,
-                        bytesUsed = totalBytes,
-                        vertexCount = totalVertexCount,
-                        fingerprint = fp,
-                    ) { vbo ->
-                        // Rebuild path: merge into scratch + upload to this chunk VBO.
-                        return@getOrRebuildOrNull uploader.withMergedScratch(bufferList) { merge ->
-                            // Track memcpy+merge cost only when we actually rebuild.
-                            RenderStats.addMerge(bufferList.size, merge.totalBytes)
-                            RenderStats.addOpaqueChunkCacheUpload(merge.totalBytes)
-                            // Still counts as a VBO upload in the global stats.
-                            RenderStats.addVboUpload(merge.totalBytes)
-                            vbo.bufferData(merge.data)
-                        }
+                    for (p in b.parts) {
+                        if (p.totalBytes <= 0 || p.vertexCount <= 0) continue
+                        segmentsTmp.add(ReusableVboUploader.ByteBufferSegment(p.data, totalBytes, p.totalBytes))
+                        totalBytes += p.totalBytes
+                        totalVertices += p.vertexCount
                     }
+                }
 
-                    if (entry != null) {
-                        uploader.drawVbo(entry.vbo, entry.format, entry.drawMode, entry.vertexCount)
-                    } else {
-                        // Incompatible builders or merge failure.
-                        uploader.drawMultiple(bufferList)
-                    }
+                if (totalVertices <= 0 || totalBytes <= 0 || segmentsTmp.isEmpty()) return@forEach
+
+                RenderStats.noteMergeBucket(segmentsTmp.size)
+                if (segmentsTmp.size == 1) {
+                    val s = segmentsTmp[0]
+                    uploader.drawMergedByteBuffer(format, drawMode, totalVertices, totalBytes, s.data)
+                } else {
+                    uploader.drawMergedByteBufferSegments(format, drawMode, totalVertices, totalBytes, segmentsTmp.toTypedArray())
                 }
             }
         }
-    }
 
-    private fun sampleBufferHash(buf: ByteBuffer, bytesUsed: Int): Long {
-        if (bytesUsed <= 0) return 0L
-        // Duplicate to avoid touching original position/limit.
-        val dup = buf.duplicate().also {
-            it.clear()
-            it.limit(bytesUsed)
+        gpuBuckets.forEach { (texture, lightMap) ->
+            RenderStats.addTextureBind()
+            ExternalDiskTextureBinder.bind(texture)
+            lightMap.forEach { (light, drawList) ->
+                if (applyLightmap) {
+                    setLightmapCoords(light)
+                }
+                if (drawList.isEmpty()) return@forEach
+                for (d in drawList) {
+                    if (d.vertexCount <= 0) continue
+                    uploader.drawVbo(d.vbo, d.format, d.drawMode, d.vertexCount)
+                }
+            }
         }
 
-        // Work on int view (vertex format here is int-packed hot path; even if not, this is still a stable byte pattern).
-        val ib = dup.asIntBuffer()
-        val n = ib.limit()
-        if (n <= 0) return mix64(bytesUsed.toLong())
-
-        // 0x9E3779B97F4A7C15 as signed long (Kotlin 1.2 has no unsigned literals)
-        var h = -7046029254386353131L
-
-        fun get(i: Int): Long = (ib.get(i).toLong() and 0xFFFF_FFFFL)
-
-        val last = n - 1
-        val mid = last ushr 1
-
-        // Always sample a few stable positions.
-        h = mix64(h xor get(0))
-        if (n > 1) h = mix64(h xor get(1))
-        if (n > 2) h = mix64(h xor get(2))
-        if (n > 3) h = mix64(h xor get(3))
-
-        h = mix64(h xor get(mid))
-        if (last != mid) h = mix64(h xor get(last))
-        if (last - 1 > 3) h = mix64(h xor get(last - 1))
-        if (last - 2 > 3) h = mix64(h xor get(last - 2))
-
-        // Include length to reduce collisions.
-        h = mix64(h xor (bytesUsed.toLong() shl 1) xor n.toLong())
-        return h
+        // no async packing
     }
 
-    // 64-bit mix (avalanche), based on MurmurHash3 finalizer.
-    private fun mix64(z: Long): Long {
-        var x = z
-        x = (x xor (x ushr 33)) * -49064778989728563L
-        x = (x xor (x ushr 33)) * -4265267296055464877L
-        x = x xor (x ushr 33)
-        return x
-    }
-
-    private fun computeChunkGroupKey(chunkX: Int, chunkZ: Int): Long {
-        val size = RenderTuning.opaqueChunkVboCacheChunkSize
-        val gx = Math.floorDiv(chunkX, size)
-        val gz = Math.floorDiv(chunkZ, size)
-        return (gx.toLong() shl 32) xor (gz.toLong() and 0xFFFF_FFFFL)
-    }
+    // NOTE: 旧的 opaque chunk-group VBO cache 与 async bucket packing 已移除；
+    // 目前仅保留：
+    // 1) 同步 batched drawMultiple（BufferBuilder）
+    // 2) pooled packed bucket（PackedBucketBatch）
+    // 3) GPU-resident mapped VBO draw（GpuBucketDraw）
 
     private fun renderPassWithoutState(dataList: List<PendingRenderData>, pass: RenderPass) {
         for (data in dataList) {
@@ -403,6 +306,27 @@ internal object MachineRenderDispatcher {
                     setLightmapCoords(data.combinedLight)
                 }
                 uploader.draw(buffer)
+            }
+
+            data.built.gpuByPass[pass]?.let { draw ->
+                if (draw.vertexCount <= 0) return@let
+                RenderStats.addTextureBind()
+                ExternalDiskTextureBinder.bind(data.texture)
+                if (pass != RenderPass.BLOOM && pass != RenderPass.BLOOM_TRANSPARENT) {
+                    setLightmapCoords(data.combinedLight)
+                }
+                uploader.drawVbo(draw.vbo, draw.format, draw.drawMode, draw.vertexCount)
+            }
+
+            data.built.packedByPass[pass]?.let { batch ->
+                RenderStats.addTextureBind()
+                ExternalDiskTextureBinder.bind(data.texture)
+                if (pass != RenderPass.BLOOM && pass != RenderPass.BLOOM_TRANSPARENT) {
+                    setLightmapCoords(data.combinedLight)
+                }
+                for (p in batch.parts) {
+                    uploader.drawMergedByteBuffer(batch.format, batch.drawMode, p.vertexCount, p.totalBytes, p.data)
+                }
             }
         }
     }

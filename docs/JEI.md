@@ -197,7 +197,8 @@ public object GasRequirementJeiRenderer : PMJeiRequirementRenderer<GasRequiremen
 
     override fun split(ctx: JeiRecipeContext, component: GasRequirementComponent): List<PMJeiRequirementNode<GasRequirementComponent>> {
         // 你可以把一个 component 拆成多个 node（比如多输入），这里略
-        TODO("split")
+        // TODO: implement your split strategy here (e.g. split multi-input into multiple nodes)
+        return listOf(PMJeiRequirementNode.single(component, nodeId = "gas"))
     }
 
     override fun variants(ctx: JeiRecipeContext, node: PMJeiRequirementNode<GasRequirementComponent>): List<PMJeiRendererVariant> {
@@ -278,7 +279,8 @@ public object GasNodeIngredientProvider : PMJeiNodeIngredientProvider<GasRequire
     override fun getDisplayed(ctx: JeiRecipeContext, node: PMJeiRequirementNode<GasRequirementComponent>): List<GasStack> {
         // 返回可索引/可轮换展示的备选项
         // 例如：tag/ore-like gas 输入可返回多个 GasStack
-        TODO("extract displayed gas values")
+        // TODO: extract your displayed variants here
+        return emptyList()
     }
 }
 ```

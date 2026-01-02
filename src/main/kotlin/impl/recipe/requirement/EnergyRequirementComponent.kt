@@ -2,7 +2,7 @@ package github.kasuminova.prototypemachinery.impl.recipe.requirement
 
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
-import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
+import github.kasuminova.prototypemachinery.api.recipe.requirement.component.IdentifiedRecipeRequirementComponent
 
 /**
  * Energy requirement payload.
@@ -22,7 +22,7 @@ import github.kasuminova.prototypemachinery.api.recipe.requirement.component.Rec
  */
 public data class EnergyRequirementComponent(
     /** Stable id within the recipe. / 配方内稳定 id */
-    public val id: String,
+    override val id: String,
 
     /** Energy to consume at start(). / start 阶段需要消耗的能量 */
     public val input: Long = 0L,
@@ -37,7 +37,7 @@ public data class EnergyRequirementComponent(
     public val outputPerTick: Long = 0L,
 
     override val properties: Map<String, Any> = emptyMap(),
-) : RecipeRequirementComponent {
+) : IdentifiedRecipeRequirementComponent {
 
     override val type: RecipeRequirementType<*>
         get() = RecipeRequirementTypes.ENERGY

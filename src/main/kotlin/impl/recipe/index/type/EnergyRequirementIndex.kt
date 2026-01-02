@@ -8,6 +8,7 @@ import github.kasuminova.prototypemachinery.api.recipe.index.RequirementIndexFac
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
 import github.kasuminova.prototypemachinery.impl.machine.component.container.EnergyContainerComponent
+import java.util.Arrays
 
 /**
  * # EnergyRequirementIndex
@@ -20,8 +21,9 @@ import github.kasuminova.prototypemachinery.impl.machine.component.container.Ene
  * 根据机器当前存储的能量过滤配方。
  */
 public class EnergyRequirementIndex(
-    // Map of Recipe -> Required Energy (start cost + per-tick * duration)
-    private val energyRequirements: Map<MachineRecipe, Long>
+    // Sorted by required energy ascending.
+    private val requiredEnergies: LongArray,
+    private val recipesByRequired: Array<MachineRecipe>
 ) : RequirementIndex {
 
     public override fun lookup(machine: MachineInstance): Set<MachineRecipe>? {
@@ -39,23 +41,28 @@ public class EnergyRequirementIndex(
             totalEnergyStored += component.stored
         }
 
-        // 3. Filter recipes by energy requirement
-        val potentialRecipes = mutableSetOf<MachineRecipe>()
-        for ((recipe, required) in energyRequirements) {
-            if (totalEnergyStored >= required) {
-                potentialRecipes.add(recipe)
-            }
+        if (requiredEnergies.isEmpty()) return null
+
+        // 3. Find recipes with required <= totalEnergyStored using binary search.
+        val idx = Arrays.binarySearch(requiredEnergies, totalEnergyStored)
+        val endExclusive = if (idx >= 0) idx + 1 else -idx - 1
+
+        if (endExclusive <= 0) return emptySet()
+
+        val out = LinkedHashSet<MachineRecipe>(endExclusive)
+        for (i in 0 until endExclusive) {
+            out += recipesByRequired[i]
         }
 
-        // If no recipes match, return empty set (hard filter)
-        return if (potentialRecipes.isEmpty()) emptySet() else potentialRecipes
+        return out
     }
 
     public companion object Factory : RequirementIndexFactory {
         override val requirementType: RecipeRequirementType<*> = RecipeRequirementTypes.ENERGY
 
         public override fun create(machineType: MachineType, recipes: List<MachineRecipe>): RequirementIndex? {
-            val reqMap = mutableMapOf<MachineRecipe, Long>()
+            data class Entry(val required: Long, val recipe: MachineRecipe)
+            val entries = ArrayList<Entry>()
 
             for (recipe in recipes) {
                 // Get all EnergyRequirementComponents from this recipe
@@ -78,13 +85,23 @@ public class EnergyRequirementIndex(
                 }
 
                 if (totalEnergyRequired > 0) {
-                    reqMap[recipe] = totalEnergyRequired
+                    entries += Entry(totalEnergyRequired, recipe)
                 }
             }
 
-            if (reqMap.isEmpty()) return null
+            if (entries.isEmpty()) return null
 
-            return EnergyRequirementIndex(reqMap)
+            entries.sortBy { it.required }
+
+            val required = LongArray(entries.size)
+            val byRequired = arrayOfNulls<MachineRecipe>(entries.size)
+            for (i in entries.indices) {
+                required[i] = entries[i].required
+                byRequired[i] = entries[i].recipe
+            }
+
+            @Suppress("UNCHECKED_CAST")
+            return EnergyRequirementIndex(required, byRequired as Array<MachineRecipe>)
         }
     }
 }

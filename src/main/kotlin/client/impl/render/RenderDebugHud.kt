@@ -4,6 +4,7 @@ import github.kasuminova.prototypemachinery.api.tuning.RenderTuning
 import github.kasuminova.prototypemachinery.client.impl.render.task.RenderTaskCache
 import github.kasuminova.prototypemachinery.client.util.BufferBuilderPool
 import github.kasuminova.prototypemachinery.client.util.BufferBuilderVboCache
+import github.kasuminova.prototypemachinery.client.util.DirectByteBufferPool
 import github.kasuminova.prototypemachinery.client.util.NativeBufferStats
 import net.minecraft.client.Minecraft
 import net.minecraftforge.client.event.RenderGameOverlayEvent
@@ -34,6 +35,8 @@ internal object RenderDebugHud {
     // For per-second deltas (cumulative counters -> window rates).
     private var lastNativeTotals: NativeBufferStats.Snapshot? = null
     private var lastTaskCacheTotals: RenderTaskCache.StatsSnapshot? = null
+    private var lastDirectPoolTotals: DirectByteBufferPool.StatsSnapshot? = null
+    private var lastRenderBuildTotals: Triple<Long, Long, Long>? = null // (tasks, errors, nanos)
 
     // Track last-seen per-tag counters so we can estimate per-second rates for top tags.
     private val lastBbReqByTag: MutableMap<String, Pair<Long, Long>> = HashMap() // tag -> (allocs, bytes)
@@ -57,12 +60,6 @@ internal object RenderDebugHud {
         var vboUploadsSum: Long = 0
         var vboUploadBytesSum: Long = 0
 
-        var opaqueChunkHitsSum: Long = 0
-        var opaqueChunkMissesSum: Long = 0
-        var opaqueChunkEvictionsSum: Long = 0
-        var opaqueChunkUploadsSum: Long = 0
-        var opaqueChunkUploadBytesSum: Long = 0
-
         var geckoQuadsSum: Long = 0
         var geckoVerticesSum: Long = 0
 
@@ -84,6 +81,11 @@ internal object RenderDebugHud {
         var quadLegacyNanosSum: Long = 0
         var quadLegacyVerticesSum: Long = 0
 
+        // Detailed quad bulk breakdown (shares quadBulkVerticesSum as denominator)
+        var quadBulkNormalNanosSum: Long = 0
+        var quadBulkPackNanosSum: Long = 0
+        var quadBulkSubmitNanosSum: Long = 0
+
         fun reset() {
             frames = 0
             drawCallsSum = 0
@@ -100,12 +102,6 @@ internal object RenderDebugHud {
 
             vboUploadsSum = 0
             vboUploadBytesSum = 0
-
-            opaqueChunkHitsSum = 0
-            opaqueChunkMissesSum = 0
-            opaqueChunkEvictionsSum = 0
-            opaqueChunkUploadsSum = 0
-            opaqueChunkUploadBytesSum = 0
 
             geckoQuadsSum = 0
             geckoVerticesSum = 0
@@ -124,6 +120,10 @@ internal object RenderDebugHud {
             quadBulkVerticesSum = 0
             quadLegacyNanosSum = 0
             quadLegacyVerticesSum = 0
+
+            quadBulkNormalNanosSum = 0
+            quadBulkPackNanosSum = 0
+            quadBulkSubmitNanosSum = 0
         }
 
         fun addFrame(s: RenderStats.Snapshot) {
@@ -144,12 +144,6 @@ internal object RenderDebugHud {
             vboUploadsSum += s.vboUploads
             vboUploadBytesSum += s.vboUploadBytes
 
-            opaqueChunkHitsSum += s.opaqueChunkCacheHits
-            opaqueChunkMissesSum += s.opaqueChunkCacheMisses
-            opaqueChunkEvictionsSum += s.opaqueChunkCacheEvictions
-            opaqueChunkUploadsSum += s.opaqueChunkCacheUploads
-            opaqueChunkUploadBytesSum += s.opaqueChunkCacheUploadBytes
-
             geckoQuadsSum += s.geckoQuads
             geckoVerticesSum += s.geckoVertices
 
@@ -169,6 +163,11 @@ internal object RenderDebugHud {
             if (s.geckoQuadBulkNanos > 0 && s.geckoQuadBulkVerticesTimed > 0) {
                 quadBulkNanosSum += s.geckoQuadBulkNanos
                 quadBulkVerticesSum += s.geckoQuadBulkVerticesTimed
+
+                // These are only meaningful when bulk vertices are timed in the same window.
+                if (s.geckoQuadBulkNormalNanos > 0) quadBulkNormalNanosSum += s.geckoQuadBulkNormalNanos
+                if (s.geckoQuadBulkPackNanos > 0) quadBulkPackNanosSum += s.geckoQuadBulkPackNanos
+                if (s.geckoQuadBulkSubmitNanos > 0) quadBulkSubmitNanosSum += s.geckoQuadBulkSubmitNanos
             }
             if (s.geckoQuadLegacyNanos > 0 && s.geckoQuadLegacyVerticesTimed > 0) {
                 quadLegacyNanosSum += s.geckoQuadLegacyNanos
@@ -293,6 +292,8 @@ internal object RenderDebugHud {
                         Window1s.reset()
                         lastNativeTotals = null
                         lastTaskCacheTotals = null
+                        lastDirectPoolTotals = null
+                        lastRenderBuildTotals = null
                         lastBbReqByTag.clear()
                         lastBbNewByTag.clear()
                         // Force a quick first update.
@@ -352,7 +353,7 @@ internal object RenderDebugHud {
         val stress = RenderStress.drawMultiplier
         val native = NativeBufferStats.snapshot()
         val taskCache = RenderTaskCache.statsSnapshot()
-        val chunkCache = MachineRenderDispatcher.opaqueChunkCacheStats()
+        val directPool = DirectByteBufferPool.statsSnapshot()
 
         // Animation key status (sampled once per HUD refresh).
         val animKey = RenderFrameClock.currentAnimationTimeKey()
@@ -368,8 +369,12 @@ internal object RenderDebugHud {
         // Compute deltas from last sample.
         val nativePrev = lastNativeTotals
         val taskPrev = lastTaskCacheTotals
+        val directPrev = lastDirectPoolTotals
+        val rbPrev = lastRenderBuildTotals
         lastNativeTotals = native
         lastTaskCacheTotals = taskCache
+        lastDirectPoolTotals = directPool
+        lastRenderBuildTotals = Triple(last.renderBuildTasksTotal, last.renderBuildTaskErrorsTotal, last.renderBuildTaskNanosTotal)
 
         val bbReqPerSec = if (nativePrev != null) perSec(native.bufferBuilderRequests - nativePrev.bufferBuilderRequests) else 0L
         val bbNewPerSec = if (nativePrev != null) perSec(native.bufferBuilderNew - nativePrev.bufferBuilderNew) else 0L
@@ -382,8 +387,29 @@ internal object RenderDebugHud {
         val taskSubCurPerSec = if (taskPrev != null) perSec(taskCache.submittedCurrent - taskPrev.submittedCurrent) else 0L
         val taskSubNextPerSec = if (taskPrev != null) perSec(taskCache.submittedNext - taskPrev.submittedNext) else 0L
 
+        val directBorrowCallsPerSec = if (directPrev != null) perSec(directPool.borrowCalls - directPrev.borrowCalls) else 0L
+        val directBorrowHitsPerSec = if (directPrev != null) perSec(directPool.borrowHits - directPrev.borrowHits) else 0L
+        val directBorrowMissesPerSec = if (directPrev != null) perSec(directPool.borrowMisses - directPrev.borrowMisses) else 0L
+        val directRecyclePerSec = if (directPrev != null) perSec(directPool.recycleCalls - directPrev.recycleCalls) else 0L
+        val directEvictPerSec = if (directPrev != null) perSec(directPool.trimEvictions - directPrev.trimEvictions) else 0L
+
+        val rbDeltaTasks = if (rbPrev != null) (last.renderBuildTasksTotal - rbPrev.first) else 0L
+        val rbDeltaErrors = if (rbPrev != null) (last.renderBuildTaskErrorsTotal - rbPrev.second) else 0L
+        val rbDeltaNanos = if (rbPrev != null) (last.renderBuildTaskNanosTotal - rbPrev.third) else 0L
+
+        val rbDonePerSec = if (rbPrev != null) (rbDeltaTasks.toDouble() * invDt) else 0.0
+        val rbErrPerSec = if (rbPrev != null) (rbDeltaErrors.toDouble() * invDt) else 0.0
+        val rbAvgMsPerTask = if (rbDeltaTasks > 0 && rbDeltaNanos > 0) (rbDeltaNanos.toDouble() / rbDeltaTasks.toDouble() / 1_000_000.0) else Double.NaN
+
+        val animStep = RenderTuning.animStepTicks
+        val animHz = if (animStep > 0.0) (20.0 / animStep) else Double.POSITIVE_INFINITY
+        val recStepTicksFromBuild = if (rbDonePerSec > 0.0) (20.0 / rbDonePerSec) else Double.NaN
+
         val frames = Window1s.frames
         val invFrames = if (frames > 0) (1.0 / frames.toDouble()) else 0.0
+
+        val fps = frames.toDouble() * invDt
+        val msPerFrame = if (frames > 0) (dtMs.toDouble() / frames.toDouble()) else 0.0
 
         fun avgPerFrame(sum: Long): Long {
             if (frames <= 0) return 0L
@@ -401,9 +427,6 @@ internal object RenderDebugHud {
         val vboUploadsAvg = avgPerFrame(Window1s.vboUploadsSum)
         val vboUploadBytesAvg = avgPerFrame(Window1s.vboUploadBytesSum)
 
-        val chunkUploadsAvg = avgPerFrame(Window1s.opaqueChunkUploadsSum)
-        val chunkUploadBytesAvg = avgPerFrame(Window1s.opaqueChunkUploadBytesSum)
-
         val mergeBuckets = Window1s.mergeBucketsSum
         val mergeAvgBucket = if (mergeBuckets > 0) (Window1s.mergeBucketTotalSizeSum.toDouble() / mergeBuckets.toDouble()) else 0.0
         val mergeMaxBucket = Window1s.mergeBucketMaxSizeMax
@@ -413,12 +436,18 @@ internal object RenderDebugHud {
             "  anim: smooth=${RenderTuning.animSmooth} key=$animKey step=${String.format("%.2f", RenderTuning.animStepTicks)} auto=${RenderTuning.animAutoThrottle} maxStress=${RenderTuning.animMaxStressMultiplier} supp=${animSupp ?: "-"}"
         )
         cachedLeftLines.add(
+            "  fps~=${String.format("%.1f", fps)}  ms/f~=${String.format("%.2f", msPerFrame)}  window=${dtMs}ms"
+        )
+        cachedLeftLines.add(
             "  draws~=$drawCallsAvg  batches~=$batchesAvg  verts~=$verticesAvg  tex~=$texBindsAvg  pend~=$pendingAvg"
         )
 
         // Task/build verification lines: if static model is stable, submittedNext/s and bbNew/s should trend to ~0.
         cachedLeftLines.add(
             "  tasks/s: get~=$taskGetPerSec hitR~=$taskHitReadyPerSec hitB~=$taskHitBuildPerSec subC~=$taskSubCurPerSec subN~=$taskSubNextPerSec"
+        )
+        cachedLeftLines.add(
+            "  renderbuild/s: done~=${String.format("%.1f", rbDonePerSec)} err~=${String.format("%.2f", rbErrPerSec)} avg~=${if (rbAvgMsPerTask.isNaN()) "-" else String.format("%.2f", rbAvgMsPerTask)}ms  recStep>=${if (recStepTicksFromBuild.isNaN()) "-" else String.format("%.2f", recStepTicksFromBuild)}t (anim~${String.format("%.2f", animHz)}Hz)"
         )
         cachedLeftLines.add(
             "  bb/s: req~=$bbReqPerSec new~=$bbNewPerSec reqB~=${formatBytes(bbReqBytesPerSec)} newB~=${formatBytes(bbNewBytesPerSec)}"
@@ -486,12 +515,9 @@ internal object RenderDebugHud {
             "  vbo: up~=$vboUploadsAvg bytes~=${formatBytes(vboUploadBytesAvg)} cache(h=${last.vboCacheHits} m=${last.vboCacheMisses})"
         )
 
-        val showChunk = chunkCache.size > 0 || Window1s.opaqueChunkUploadsSum > 0 || Window1s.opaqueChunkHitsSum > 0 || Window1s.opaqueChunkMissesSum > 0
-        if (showChunk) {
-            cachedLeftLines.add(
-                "  chunkVbo: up~=$chunkUploadsAvg bytes~=${formatBytes(chunkUploadBytesAvg)} h=${last.opaqueChunkCacheHits} m=${last.opaqueChunkCacheMisses} ev=${last.opaqueChunkCacheEvictions} size=${chunkCache.size} mem=${formatBytes(chunkCache.bytesHeld)}"
-            )
-        }
+        cachedLeftLines.add(
+            "  dBufPool: ${if (directPool.enabled) "on" else "off"} pooled=${directPool.pooledCount}/${formatBytes(directPool.pooledBytesHeld)} hit/s=$directBorrowHitsPerSec miss/s=$directBorrowMissesPerSec rec/s=$directRecyclePerSec ev/s=$directEvictPerSec"
+        )
 
         if (last.geckoQuadsTotal > 0 || last.geckoVerticesTotal > 0) {
             val framePart = if (Window1s.geckoQuadsSum > 0 || Window1s.geckoVerticesSum > 0) {
@@ -551,6 +577,30 @@ internal object RenderDebugHud {
                 cachedLeftLines.add("  gperf: $pipe $quad")
             }
 
+            if (Window1s.quadBulkVerticesSum > 0L) {
+                val nNs = if (Window1s.quadBulkNormalNanosSum > 0L) {
+                    Window1s.quadBulkNormalNanosSum.toDouble() / Window1s.quadBulkVerticesSum.toDouble()
+                } else {
+                    Double.NaN
+                }
+                val pNs = if (Window1s.quadBulkPackNanosSum > 0L) {
+                    Window1s.quadBulkPackNanosSum.toDouble() / Window1s.quadBulkVerticesSum.toDouble()
+                } else {
+                    Double.NaN
+                }
+                val sNs = if (Window1s.quadBulkSubmitNanosSum > 0L) {
+                    Window1s.quadBulkSubmitNanosSum.toDouble() / Window1s.quadBulkVerticesSum.toDouble()
+                } else {
+                    Double.NaN
+                }
+                if (!nNs.isNaN() || !pNs.isNaN() || !sNs.isNaN()) {
+                    val n = if (!nNs.isNaN()) "n~=${formatNsPerVertexValue(nNs)}" else "n~=na"
+                    val p = if (!pNs.isNaN()) "x~=${formatNsPerVertexValue(pNs)}" else "x~=na"
+                    val sub = if (!sNs.isNaN()) "s~=${formatNsPerVertexValue(sNs)}" else "s~=na"
+                    cachedLeftLines.add("  gquad: $n $p $sub")
+                }
+            }
+
             // Cube pre-bake cache stats
             if (last.geckoCubeCacheSize > 0 || last.geckoCubeCacheHits > 0 || last.geckoCubeCacheMisses > 0) {
                 cachedLeftLines.add(
@@ -560,7 +610,7 @@ internal object RenderDebugHud {
         }
 
         cachedLeftLines.add(
-            "  mem: bbPool=${formatBytes(BufferBuilderPool.estimatedBytesHeld())} bbPooled=${formatBytes(BufferBuilderPool.pooledBytesHeld())} bbBig=${formatBytes(BufferBuilderPool.oversizeBytesHeld())}(${BufferBuilderPool.oversizeCount()} d=${BufferBuilderPool.oversizeDroppedCount()}/${formatBytes(BufferBuilderPool.oversizeDroppedBytes())}) vboCache=${formatBytes(BufferBuilderVboCache.bytesHeld())} chunkVbo=${formatBytes(chunkCache.bytesHeld)}(${chunkCache.size}) direct=${formatBytes(native.directAllocatedBytes)}"
+            "  mem: bbPool=${formatBytes(BufferBuilderPool.estimatedBytesHeld())} bbPooled=${formatBytes(BufferBuilderPool.pooledBytesHeld())} bbBig=${formatBytes(BufferBuilderPool.oversizeBytesHeld())}(${BufferBuilderPool.oversizeCount()} d=${BufferBuilderPool.oversizeDroppedCount()}/${formatBytes(BufferBuilderPool.oversizeDroppedBytes())}) vboCache=${formatBytes(BufferBuilderVboCache.bytesHeld())} direct=${formatBytes(native.directAllocatedBytes)}"
         )
     }
 

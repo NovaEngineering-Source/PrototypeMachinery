@@ -19,6 +19,8 @@ import github.kasuminova.prototypemachinery.client.preview.ui.StructurePreviewUi
 import github.kasuminova.prototypemachinery.client.preview.ui.StructurePreviewUiScreen
 import github.kasuminova.prototypemachinery.client.preview.ui.widget.ScissorGroupWidget
 import github.kasuminova.prototypemachinery.client.util.ItemStackDisplayUtil
+import github.kasuminova.prototypemachinery.common.block.MachineBlock
+import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
 import github.kasuminova.prototypemachinery.common.buildinstrument.BuildInstrumentNbt
 import github.kasuminova.prototypemachinery.common.buildinstrument.BuildInstrumentUi
 import github.kasuminova.prototypemachinery.common.util.times
@@ -493,6 +495,18 @@ internal object BuildInstrumentClientUi {
             defaultTo3DView = true,
             allowLocate = true,
             anchorProvider = { _ -> tagProvider()?.let { BuildInstrumentNbt.readBoundPos(it) } },
+            lockedOrientationProvider = { mc ->
+                val tagNow = tagProvider() ?: return@StructurePreviewUiHostConfig null
+                if (!BuildInstrumentNbt.isBound(tagNow)) return@StructurePreviewUiHostConfig null
+                val pos = BuildInstrumentNbt.readBoundPos(tagNow)
+
+                val world = mc.world ?: return@StructurePreviewUiHostConfig null
+                val state = world.getBlockState(pos)
+                val facing = runCatching { state.getValue(MachineBlock.FACING) }.getOrDefault(EnumFacing.NORTH)
+                val te = world.getTileEntity(pos) as? MachineBlockEntity
+                val top = te?.getTopFacing(facing) ?: EnumFacing.UP
+                StructureOrientation(front = facing, top = top)
+            },
             defaultEnableScan = true,
             materialsMode = StructurePreviewUiHostConfig.MaterialsMode.REMAINING,
             anyOfSelectionProvider = { requirementKey ->
@@ -532,7 +546,7 @@ internal object BuildInstrumentClientUi {
             return null
         }
 
-        @Suppress("DEPRECATION")
-        return ExactBlockStateRequirement(controllerId, 0)
+        // Force formed preview for controller.
+        return ExactBlockStateRequirement(controllerId, 0, properties = mapOf("formed" to "true"))
     }
 }

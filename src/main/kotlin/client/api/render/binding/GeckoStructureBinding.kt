@@ -7,5 +7,5 @@ public data class GeckoStructureBinding(
     public val model: GeckoModelBinding,
 
     /** Behavior for SliceStructure anchoring. Ignored for non-slice structures. */
-    public val sliceRenderMode: SliceRenderMode = SliceRenderMode.STRUCTURE_ONLY,
+    public val sliceRenderMode: SliceRenderMode = SliceRenderMode.PER_SLICE,
 )

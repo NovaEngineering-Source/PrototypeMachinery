@@ -37,6 +37,7 @@ public class PMMachineRecipeWrapper(
     @Volatile
     public var runtime: JeiPanelRuntime? = null
 
+    @Suppress("UNCHECKED_CAST")
     override fun getIngredients(ingredients: IIngredients) {
         // Ensure built-ins exist; wrapper can be queried before the category is instantiated.
         PMJeiBuiltins.ensureRegistered()
@@ -53,11 +54,9 @@ public class PMMachineRecipeWrapper(
             for (component in components) {
                 val nodes = renderer.splitUnsafe(ctx, component)
                 for (node in nodes) {
-                    val provider = getUnsafeProvider(node.type) as? PMJeiNodeIngredientProvider<RecipeRequirementComponent, Any>
-                    if (provider == null) continue
+                    val provider = getUnsafeProvider(node.type) as? PMJeiNodeIngredientProvider<RecipeRequirementComponent, Any> ?: continue
 
-                    val kindHandler = JeiIngredientKindRegistry.get(provider.kind.id) as? PMJeiIngredientKindHandler<Any>
-                    if (kindHandler == null) continue
+                    val kindHandler = JeiIngredientKindRegistry.get(provider.kind.id) as? PMJeiIngredientKindHandler<Any> ?: continue
 
                     val displayed: List<Any> = provider.getDisplayedUnsafe(ctx, node)
                     if (displayed.isEmpty()) continue

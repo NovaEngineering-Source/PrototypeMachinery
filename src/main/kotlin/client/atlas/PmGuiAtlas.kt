@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package github.kasuminova.prototypemachinery.client.atlas
 
 import com.cleanroommc.modularui.drawable.UITexture

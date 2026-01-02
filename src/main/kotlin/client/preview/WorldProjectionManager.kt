@@ -111,6 +111,36 @@ internal object WorldProjectionManager {
         session = null
     }
 
+    /**
+     * Called when structure registry is hot-reloaded.
+     * Clears cached preview models/VBOs and marks the current session dirty.
+     */
+    fun onStructuresReloaded() {
+        // Release GL resources held by caches.
+        for (c in renderCache.values) {
+            for (m in c.meshes) {
+                runCatching { m.vbo.deleteGlBuffers() }
+            }
+        }
+        for (c in blockModelRenderCache.values) {
+            for (m in c.meshes) {
+                runCatching { m.solid?.deleteGlBuffers() }
+                runCatching { m.cutoutMipped?.deleteGlBuffers() }
+                runCatching { m.cutout?.deleteGlBuffers() }
+                runCatching { m.translucent?.deleteGlBuffers() }
+            }
+        }
+
+        modelCache.clear()
+        renderCache.clear()
+        blockModelRenderCache.clear()
+
+        session?.let {
+            it.modelDirty = true
+            it.invalidateEntries()
+        }
+    }
+
     @SubscribeEvent
     fun onKeyInput(event: InputEvent.KeyInputEvent) {
         val s = session ?: return

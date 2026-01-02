@@ -70,19 +70,22 @@ Rules:
 
 It does **not** guarantee a lossless round-trip back to the original object.
 
-## TODO: the attribute registry is a temporary implementation
+## Attribute registry (implemented)
 
-Today, NBT deserialization mostly resolves attribute types via:
+PrototypeMachinery provides an authoritative global registry:
 
-- `StandardMachineAttributes.getById(...)`
+- `MachineAttributeRegistry` (`src/main/kotlin/api/machine/attribute/MachineAttributeRegistry.kt`)
 
-This behaves like a temporary built-in "registry":
+The built-in set in `StandardMachineAttributes` is registered into this registry.
 
-- It only covers built-in attributes.
-- Third-party attributes may round-trip as `UnknownMachineAttributeType(id)`.
-  - The id can still be computed/shown, but you may not get the exact original type instance back.
+Current deserialization behavior:
 
-Future direction: provide a proper global attribute registry for stable third-party registrations and deserialization.
+- NBT deserialization resolves types via `MachineAttributeRegistry.require(id)`.
+- Unknown ids are treated as an error (no placeholder fallback).
+
+Addon recommendation:
+
+- Register your custom attribute types during mod init via `MachineAttributeRegistry.register(...)`.
 
 See also:
 

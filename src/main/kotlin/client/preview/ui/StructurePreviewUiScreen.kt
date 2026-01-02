@@ -16,11 +16,16 @@ import com.cleanroommc.modularui.widgets.TransformWidget
 import com.cleanroommc.modularui.widgets.layout.Column
 import github.kasuminova.prototypemachinery.PrototypeMachinery
 import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
+import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.BlockRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.StructurePreviewModel
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ui.StructurePreviewBomLine
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ui.StructurePreviewEntryStatus
+import github.kasuminova.prototypemachinery.client.api.render.binding.GeckoModelBinding
+import github.kasuminova.prototypemachinery.client.api.render.binding.SliceRenderMode
+import github.kasuminova.prototypemachinery.client.impl.render.binding.ClientRenderBindingRegistryImpl
+import github.kasuminova.prototypemachinery.client.impl.render.binding.ClientStructureRenderAnchors
 import github.kasuminova.prototypemachinery.client.preview.ProjectionRenderMode
 import github.kasuminova.prototypemachinery.client.preview.ProjectionVisualMode
 import github.kasuminova.prototypemachinery.client.preview.StructureProjectionSession
@@ -29,11 +34,13 @@ import github.kasuminova.prototypemachinery.client.preview.scan.StructurePreview
 import github.kasuminova.prototypemachinery.client.preview.ui.widget.ScissorGroupWidget
 import github.kasuminova.prototypemachinery.client.preview.ui.widget.StructurePreview3DWidget
 import github.kasuminova.prototypemachinery.client.util.ClientNextTick
+import github.kasuminova.prototypemachinery.common.util.TwistMath
 import github.kasuminova.prototypemachinery.impl.machine.structure.preview.StructurePreviewBuilder
 import net.minecraft.block.Block
 import net.minecraft.client.Minecraft
 import net.minecraft.client.resources.I18n
 import net.minecraft.init.Blocks
+import net.minecraft.util.EnumFacing
 import net.minecraft.util.ResourceLocation
 import net.minecraft.util.math.BlockPos
 import net.minecraft.util.text.TextComponentTranslation
@@ -49,14 +56,37 @@ import net.minecraft.util.text.TextComponentTranslation
  */
 internal object StructurePreviewUiScreen {
 
+    private data class ControllerRenderInfo(
+        val requirement: ExactBlockStateRequirement,
+        val machineTypeId: ResourceLocation,
+        val geckoBinding: GeckoModelBinding?
+    )
+
+    private data class GeckoPreviewContext(
+        val machineTypeId: ResourceLocation,
+        val orientation: StructureOrientation,
+        val instances: List<StructurePreview3DWidget.GeckoPreviewInstance>
+    )
+
     private data class ResolvedPreview(
         val model: StructurePreviewModel,
         val state: StructurePreviewUiState,
-        val structureName: String
+        val structureName: String,
+        val structure: github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure,
     )
 
     private fun resolvePreview(structureId: String, sliceCountOverride: Int?, host: StructurePreviewUiHostConfig): ResolvedPreview? {
-        val structure = PrototypeMachineryAPI.structureRegistry.get(structureId) ?: return null
+        val baseStructure = PrototypeMachineryAPI.structureRegistry.get(structureId) ?: return null
+
+        // For embedded hosts (e.g. Build Instrument), we may have a real controller orientation.
+        // In that case, build the preview model from the transformed structure so child blocks rotate too.
+        val mc = Minecraft.getMinecraft()
+        val locked: StructureOrientation? = host.lockedOrientationProvider?.invoke(mc)
+        val structure = if (locked != null) {
+            PrototypeMachineryAPI.structureRegistry.get(structureId, locked, locked.front) ?: baseStructure
+        } else {
+            baseStructure
+        }
 
         val model: StructurePreviewModel = StructurePreviewBuilder.build(
             structure = structure,
@@ -73,7 +103,8 @@ internal object StructurePreviewUiScreen {
         return ResolvedPreview(
             model = model,
             state = state,
-            structureName = structure.name
+            structureName = baseStructure.name,
+            structure = structure,
         )
     }
 
@@ -93,29 +124,106 @@ internal object StructurePreviewUiScreen {
      *   `MachineType.structure.id == structureId`.
      * - If multiple machine types share a structure, we pick a deterministic one (min id).
      */
-    private fun resolveControllerRequirement(structureId: String): ExactBlockStateRequirement? {
+    private fun resolveControllerRenderInfo(structureId: String, locked: StructureOrientation?): ControllerRenderInfo? {
         val candidates = PrototypeMachineryAPI.machineTypeRegistry.all()
             .filter { it.structure.id == structureId }
             .sortedBy { it.id.toString() }
 
         val machineType = candidates.firstOrNull() ?: return null
+        val machineTypeId = machineType.id
 
         // Controller block registry name convention: <namespace>:<path>_controller
         val controllerId = ResourceLocation(machineType.id.namespace, machineType.id.path + "_controller")
         val block = Block.REGISTRY.getObject(controllerId)
         if (block === Blocks.AIR) return null
 
-        @Suppress("DEPRECATION")
-        val state = block.defaultState
-
         val id = block.registryName ?: controllerId
-        @Suppress("DEPRECATION")
-        val meta = block.getMetaFromState(state)
-        val props = state.propertyKeys.associate { prop ->
-            val v = state.getValue(prop)
-            prop.name to v.toString()
+
+        // NOTE: Do NOT force formed here.
+        // Formed/unformed should be controlled by the UI "structural forming" toggle.
+        // Here we only reflect facing+twist so the controller model rotates correctly.
+        val facing = locked?.front ?: EnumFacing.NORTH
+        val top = locked?.top ?: EnumFacing.UP
+        val twist = runCatching { TwistMath.getTwistFromTop(facing, top) }.getOrDefault(0)
+        val props = mapOf(
+            "facing" to facing.name.lowercase(),
+            "twist" to twist.toString(),
+        )
+
+        // Prefer structure-bound binding for this root structure; fallback to machine binding.
+        val geckoBinding = ClientRenderBindingRegistryImpl.getStructureBinding(machineTypeId, structureId)?.model
+            ?: ClientRenderBindingRegistryImpl.getMachineBinding(machineTypeId)
+
+        return ControllerRenderInfo(
+            requirement = ExactBlockStateRequirement(id, 0, props),
+            machineTypeId = machineTypeId,
+            geckoBinding = geckoBinding
+        )
+    }
+
+    private fun buildGeckoPreviewContext(
+        machineTypeId: ResourceLocation,
+        transformedStructure: github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure,
+        locked: StructureOrientation?,
+        sliceCountOverride: Int?,
+    ): GeckoPreviewContext {
+        val orientation = locked ?: StructureOrientation(EnumFacing.NORTH, EnumFacing.UP)
+
+        val structureBindings = ClientRenderBindingRegistryImpl.getStructureBindings(machineTypeId)
+        val machineBinding = ClientRenderBindingRegistryImpl.getMachineBinding(machineTypeId)
+
+        // Use maxCount for Slice structures so the formed preview renders a "full" machine.
+        val sliceCountsById = HashMap<String, Int>()
+        fun collectSliceCounts(s: github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure) {
+            val slice = s as? github.kasuminova.prototypemachinery.api.machine.structure.SliceLikeMachineStructure
+            if (slice != null) {
+                sliceCountsById[s.id] = sliceCountOverride ?: slice.minCount
+            }
+            for (c in s.children) collectSliceCounts(c)
         }
-        return ExactBlockStateRequirement(id, meta, props)
+        collectSliceCounts(transformedStructure)
+
+        val anchors = ClientStructureRenderAnchors.collectAnchorsFromSliceCounts(
+            structure = transformedStructure,
+            controllerPos = BlockPos(0, 0, 0),
+            sliceCountsById = sliceCountsById,
+            resolveSliceMode = { st ->
+                structureBindings[st.id]?.sliceRenderMode ?: SliceRenderMode.STRUCTURE_ONLY
+            },
+        )
+
+        val instances = ArrayList<StructurePreview3DWidget.GeckoPreviewInstance>()
+
+        // Structure-bound models (top/mid/tail etc.)
+        for (a in anchors) {
+            val sb = structureBindings[a.structure.id] ?: continue
+            instances.add(
+                StructurePreview3DWidget.GeckoPreviewInstance(
+                    binding = sb.model,
+                    anchorModelPos = a.worldOrigin,
+                    debugStructureId = a.structure.id,
+                    sliceIndex = a.sliceIndex,
+                )
+            )
+        }
+
+        // Legacy machine-type model (controller anchored), used as fallback.
+        if (machineBinding != null) {
+            instances.add(
+                StructurePreview3DWidget.GeckoPreviewInstance(
+                    binding = machineBinding,
+                    anchorModelPos = BlockPos(0, 0, 0),
+                    debugStructureId = null,
+                    sliceIndex = -1,
+                )
+            )
+        }
+
+        return GeckoPreviewContext(
+            machineTypeId = machineTypeId,
+            orientation = orientation,
+            instances = instances,
+        )
     }
 
     internal fun guiTex(path: String): UITexture {
@@ -154,9 +262,11 @@ internal object StructurePreviewUiScreen {
             model = resolved.model,
             structureId = structureId,
             structureName = resolved.structureName,
+            structure = resolved.structure,
             host = host,
             showMaterials = showMaterials,
-            selectedPositionsProvider = selectedPositionsProvider
+            selectedPositionsProvider = selectedPositionsProvider,
+            sliceCountOverride = sliceCountOverride,
         )
         val screen = ModularScreen("prototypemachinery", panel)
         // IMPORTANT: initialise ModularUI context settings before the screen is displayed.
@@ -191,9 +301,11 @@ internal object StructurePreviewUiScreen {
             model = resolved.model,
             structureId = structureId,
             structureName = resolved.structureName,
+            structure = resolved.structure,
             host = host,
             showMaterials = showMaterials,
-            selectedPositionsProvider = selectedPositionsProvider
+            selectedPositionsProvider = selectedPositionsProvider,
+            sliceCountOverride = sliceCountOverride,
         )
     }
 
@@ -215,9 +327,11 @@ internal object StructurePreviewUiScreen {
             model = resolved.model,
             structureId = structureId,
             structureName = resolved.structureName,
+            structure = resolved.structure,
             host = host,
             showMaterials = showMaterials,
-            selectedPositionsProvider = selectedPositionsProvider
+            selectedPositionsProvider = selectedPositionsProvider,
+            sliceCountOverride = sliceCountOverride,
         )
     }
 
@@ -226,9 +340,11 @@ internal object StructurePreviewUiScreen {
         model: StructurePreviewModel,
         structureId: String,
         structureName: String,
+        structure: github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure,
         host: StructurePreviewUiHostConfig,
         showMaterials: Boolean,
-        selectedPositionsProvider: (() -> Set<BlockPos>?)?
+        selectedPositionsProvider: (() -> Set<BlockPos>?)?,
+        sliceCountOverride: Int?,
     ): ModularPanel {
         val panel = ModularPanel.defaultPanel("structure_preview_ui")
             .size(184, 220)
@@ -243,9 +359,11 @@ internal object StructurePreviewUiScreen {
             model = model,
             structureId = structureId,
             structureName = structureName,
+            structure = structure,
             host = host,
             showMaterials = showMaterials,
-            selectedPositionsProvider = selectedPositionsProvider
+            selectedPositionsProvider = selectedPositionsProvider,
+            sliceCountOverride = sliceCountOverride,
         )
 
         panel.child(root)
@@ -257,9 +375,11 @@ internal object StructurePreviewUiScreen {
         model: StructurePreviewModel,
         structureId: String,
         structureName: String,
+        structure: github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure,
         host: StructurePreviewUiHostConfig,
         showMaterials: Boolean,
-        selectedPositionsProvider: (() -> Set<BlockPos>?)?
+        selectedPositionsProvider: (() -> Set<BlockPos>?)?,
+        sliceCountOverride: Int?,
     ): Column {
         // Root container (fixed-position children).
         // IMPORTANT: avoid fluent chaining here; some ModularUI Java APIs return Flow (platform type)
@@ -275,12 +395,49 @@ internal object StructurePreviewUiScreen {
             state.enableScan.boolValue = true
         }
 
-        val controllerReq: ExactBlockStateRequirement? = resolveControllerRequirement(structureId)
+        val locked = host.lockedOrientationProvider?.invoke(mc)
+
+        // In embedded hosts, lockedOrientationProvider may become available slightly later than the initial
+        // resolvePreview() call. If controller is rendered using a locked orientation but the structure model
+        // was built from an unrotated structure, the controller appears rotated while the structure does not.
+        // Re-resolve the transformed structure/model here using the same locked value used for controller.
+        val effectiveStructure = if (locked != null) {
+            PrototypeMachineryAPI.structureRegistry.get(structureId, locked, locked.front) ?: structure
+        } else {
+            structure
+        }
+
+        val effectiveModel: StructurePreviewModel = if (effectiveStructure !== structure) {
+            StructurePreviewBuilder.build(
+                structure = effectiveStructure,
+                options = StructurePreviewBuilder.Options(
+                    sliceCountSelector = { sliceLike ->
+                        sliceCountOverride ?: sliceLike.minCount
+                    }
+                )
+            )
+        } else {
+            model
+        }
+
+        val controllerInfo: ControllerRenderInfo? = resolveControllerRenderInfo(structureId, locked)
+
+        val geckoCtx = controllerInfo?.let { info ->
+            buildGeckoPreviewContext(
+                machineTypeId = info.machineTypeId,
+                transformedStructure = effectiveStructure,
+                locked = locked,
+                sliceCountOverride = sliceCountOverride,
+            )
+        }
+
+        // Structural forming (toggle) - controls whether the preview is "formed".
+        val structuralForming = BoolValue(false)
 
         // --- Bottom layer: render panel (can be covered by all other elements) ---
         // Keep slider range consistent with 3D widget: include origin (0,0,0) in bounds.
-        val minY = kotlin.math.min(model.bounds.min.y, 0)
-        val maxY = kotlin.math.max(model.bounds.max.y, 0)
+        val minY = kotlin.math.min(effectiveModel.bounds.min.y, 0)
+        val maxY = kotlin.math.max(effectiveModel.bounds.max.y, 0)
         val sizeY = (maxY - minY + 1).coerceAtLeast(1)
         val sliceY = IntValue((sizeY / 2).coerceIn(0, sizeY - 1))
         val rt = RootRuntime(sliceY = sliceY)
@@ -299,9 +456,15 @@ internal object StructurePreviewUiScreen {
             }
         }
 
+        val hideWorldBlocks = PrototypeMachineryAPI.structureRegistry.get(structureId)?.hideWorldBlocks == true
+
         val view3d = StructurePreview3DWidget(
-            model = model,
-            controllerRequirement = controllerReq,
+            model = effectiveModel,
+            controllerRequirement = controllerInfo?.requirement,
+            hideWorldBlocks = hideWorldBlocks,
+            formedPreviewProvider = { structuralForming.boolValue },
+            controllerOrientationProvider = { geckoCtx?.orientation ?: (locked ?: StructureOrientation(EnumFacing.NORTH, EnumFacing.UP)) },
+            geckoPreviewInstances = geckoCtx?.instances.orEmpty(),
             statusProvider = { rt.statusSnapshot },
             issuesOnlyProvider = { rt.issuesOnly.boolValue },
             sliceModeProvider = { !state.show3d.boolValue },
@@ -367,10 +530,11 @@ internal object StructurePreviewUiScreen {
             root = root,
             rt = rt,
             state = state,
-            model = model,
+            model = effectiveModel,
             structureId = structureId,
             structureName = structureName,
-            view3d = view3d
+            view3d = view3d,
+            structuralForming = structuralForming
         )
 
         // --- Optional: materials UI ---
@@ -378,7 +542,7 @@ internal object StructurePreviewUiScreen {
             buildMaterialsSection(
                 root = root,
                 host = host,
-                model = model,
+                model = effectiveModel,
                 rt = rt
             )
         } else {
@@ -388,7 +552,7 @@ internal object StructurePreviewUiScreen {
         val layerPreview = BoolValue(false)
         val rightSlider = buildRightLayerSlider(
             root = root,
-            model = model,
+            model = effectiveModel,
             sliceY = sliceY
         )
 
@@ -410,7 +574,7 @@ internal object StructurePreviewUiScreen {
             host = host,
             mc = mc,
             state = state,
-            model = model,
+            model = effectiveModel,
             structureId = structureId,
             showMaterials = showMaterials,
             materials = materials,
@@ -428,7 +592,8 @@ internal object StructurePreviewUiScreen {
         model: StructurePreviewModel,
         structureId: String,
         structureName: String,
-        view3d: StructurePreview3DWidget
+        view3d: StructurePreview3DWidget,
+        structuralForming: BoolValue
     ) {
         // --- Top (clipped): components slide up and get masked within their own rectangles ---
         // NOTE: In the spec, each top component slides up when component_switch is pressed,
@@ -498,8 +663,6 @@ internal object StructurePreviewUiScreen {
         previewResetClip.child(previewResetSlide)
         root.child(previewResetClip)
 
-        // Structural forming (toggle) - base switches off/on
-        val structuralForming = BoolValue(false)
         // structural_forming @ (142,11) base 17x17, trigger height 19, slide Y -15
         val structuralFormingClip = ScissorGroupWidget()
             .pos(141, 10)
@@ -689,12 +852,15 @@ internal object StructurePreviewUiScreen {
             onClick = onClick@{
                 val anchor = host.anchorProvider(mc) ?: mc.player?.position
                 val a = anchor ?: return@onClick
+
+                val locked = host.lockedOrientationProvider?.invoke(mc)
                 WorldProjectionManager.start(
                     StructureProjectionSession(
                         structureId = structureId,
                         anchor = a,
                         sliceCountOverride = null,
-                        followPlayerFacing = true,
+                        followPlayerFacing = locked == null,
+                        lockedOrientation = locked,
                         maxRenderDistance = null,
                         renderMode = ProjectionRenderMode.ALL,
                         visualMode = ProjectionVisualMode.GHOST

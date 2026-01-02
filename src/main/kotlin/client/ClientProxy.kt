@@ -7,6 +7,7 @@ import github.kasuminova.prototypemachinery.client.buildinstrument.BuildInstrume
 import github.kasuminova.prototypemachinery.client.impl.render.ClientRenderCacheLifecycle
 import github.kasuminova.prototypemachinery.client.impl.render.RenderDebugHud
 import github.kasuminova.prototypemachinery.client.impl.render.RenderFrameClock
+import github.kasuminova.prototypemachinery.client.impl.render.ScannerSelectionRenderHandler
 import github.kasuminova.prototypemachinery.client.impl.render.WorldRenderFlushHandler
 import github.kasuminova.prototypemachinery.client.impl.render.binding.MachineBlockEntitySpecialRenderer
 import github.kasuminova.prototypemachinery.client.impl.render.bloom.GregTechBloomBridge
@@ -26,6 +27,7 @@ import github.kasuminova.prototypemachinery.client.preview.StructurePreviewClien
 import github.kasuminova.prototypemachinery.client.preview.WorldProjectionManager
 import github.kasuminova.prototypemachinery.client.preview.ui.StructurePreviewUiClientCommand
 import github.kasuminova.prototypemachinery.client.registry.ModelRegisterer
+import github.kasuminova.prototypemachinery.client.scanner.ScannerInstrumentClientUi
 import github.kasuminova.prototypemachinery.client.util.ClientNextTick
 import github.kasuminova.prototypemachinery.common.CommonProxy
 import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
@@ -46,6 +48,7 @@ internal class ClientProxy : CommonProxy() {
         MinecraftForge.EVENT_BUS.register(RenderFrameClock)
         MinecraftForge.EVENT_BUS.register(RenderDebugHud)
         MinecraftForge.EVENT_BUS.register(ClientRenderCacheLifecycle)
+        MinecraftForge.EVENT_BUS.register(ScannerSelectionRenderHandler)
     }
 
     override fun preInit() {
@@ -104,6 +107,10 @@ internal class ClientProxy : CommonProxy() {
 
     override fun addBuildInstrumentClientWidgets(root: Flow, tagProvider: () -> NBTTagCompound?, syncManager: PanelSyncManager) {
         BuildInstrumentClientUi.addWidgets(root, tagProvider, syncManager)
+    }
+
+    override fun addScannerInstrumentClientWidgets(root: Flow, tagProvider: () -> NBTTagCompound?, syncManager: PanelSyncManager) {
+        ScannerInstrumentClientUi.addWidgets(root, tagProvider, syncManager)
     }
 
 }

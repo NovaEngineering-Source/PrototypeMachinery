@@ -5,18 +5,30 @@ import com.cleanroommc.modularui.api.widget.IGuiAction
 import com.cleanroommc.modularui.screen.viewport.ModularGuiContext
 import com.cleanroommc.modularui.theme.WidgetThemeEntry
 import com.cleanroommc.modularui.widget.Widget
+import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.AnyOfRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.BlockRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.StructurePreviewModel
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ui.StructurePreviewEntryStatus
+import github.kasuminova.prototypemachinery.client.api.render.RenderKey
+import github.kasuminova.prototypemachinery.client.api.render.binding.GeckoModelBinding
+import github.kasuminova.prototypemachinery.client.impl.render.RenderTypeState
+import github.kasuminova.prototypemachinery.client.impl.render.assets.ExternalDiskTextureBinder
+import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelBaker
+import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelRenderBuildTask
+import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoRenderSnapshot
+import github.kasuminova.prototypemachinery.client.impl.render.task.BuiltBuffers
 import github.kasuminova.prototypemachinery.client.preview.ProjectionConfig
 import github.kasuminova.prototypemachinery.client.util.BufferBuilderPool
+import github.kasuminova.prototypemachinery.client.util.ReusableVboUploader
+import github.kasuminova.prototypemachinery.common.util.TwistMath
 import net.minecraft.block.Block
 import net.minecraft.block.material.Material
 import net.minecraft.block.properties.IProperty
 import net.minecraft.block.state.IBlockState
 import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.Gui
 import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.client.renderer.BlockRendererDispatcher
 import net.minecraft.client.renderer.BufferBuilder
@@ -26,6 +38,7 @@ import net.minecraft.client.renderer.RenderHelper
 import net.minecraft.client.renderer.Tessellator
 import net.minecraft.client.renderer.block.model.BakedQuad
 import net.minecraft.client.renderer.texture.TextureMap
+import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats
 import net.minecraft.client.renderer.vertex.VertexBuffer
 import net.minecraft.client.renderer.vertex.VertexFormat
@@ -43,12 +56,14 @@ import org.lwjgl.opengl.GL11
 import org.lwjgl.util.glu.GLU
 import java.nio.ByteOrder
 import java.util.EnumMap
+import java.util.concurrent.ForkJoinPool
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * 3D structure preview widget.
@@ -66,6 +81,14 @@ internal class StructurePreview3DWidget(
     private val model: StructurePreviewModel,
     /** Optional controller block requirement to be rendered at (0,0,0). */
     private val controllerRequirement: BlockRequirement? = null,
+    /** Structure flag: hide world blocks when formed (preview-specific behavior controlled by [formedPreviewProvider]). */
+    private val hideWorldBlocks: Boolean = false,
+    /** Whether preview is in "formed" mode (controls controller formed state and hideWorldBlocks behavior). */
+    private val formedPreviewProvider: (() -> Boolean)? = null,
+    /** Controller orientation used for formed-model rendering (Gecko). */
+    private val controllerOrientationProvider: (() -> StructureOrientation)? = null,
+    /** Gecko bindings to render in formed mode (structure-bound + optional machine-bound). */
+    private val geckoPreviewInstances: List<GeckoPreviewInstance> = emptyList(),
     private val statusProvider: (() -> Map<BlockPos, StructurePreviewEntryStatus>)? = null,
     /** When true, only render cubes whose status is not MATCH. */
     private val issuesOnlyProvider: (() -> Boolean)? = null,
@@ -82,8 +105,24 @@ internal class StructurePreview3DWidget(
     /** Optional set of positions (model coords, controller origin = (0,0,0)) to highlight. */
     private val selectedPositionsProvider: (() -> Set<BlockPos>?)? = null,
     /** Optional callback invoked when user clicks a rendered block (model coords). */
-    private val onBlockClicked: ((pos: BlockPos, requirement: BlockRequirement) -> Unit)? = null
+    private val onBlockClicked: ((pos: BlockPos, requirement: BlockRequirement) -> Unit)? = null,
+    /** When false, disable all built-in mouse interactions (rotate/pan/zoom/click-pick). */
+    private val inputEnabledProvider: (() -> Boolean)? = null,
+    /** When false, disable click picking (drag/zoom can still work). */
+    private val clickPickEnabledProvider: (() -> Boolean)? = null,
+    /** When true, render a small compass overlay (N/E/S/W) in the corner of the preview. */
+    private val compassEnabledProvider: (() -> Boolean)? = null
 ) : Widget<StructurePreview3DWidget>() {
+
+    internal data class GeckoPreviewInstance(
+        val binding: GeckoModelBinding,
+        /** Anchor in *model coords* (controller origin = (0,0,0); may be negative). */
+        val anchorModelPos: BlockPos,
+        /** Optional debug info (not rendered in UI yet). */
+        val debugStructureId: String? = null,
+        /** For slice-mode anchors. */
+        val sliceIndex: Int = -1,
+    )
 
     private data class Cube(val x: Int, val y: Int, val z: Int, val keyHash: Int)
 
@@ -97,6 +136,12 @@ internal class StructurePreview3DWidget(
     }
 
     private data class ChunkKey(val cx: Int, val cy: Int, val cz: Int)
+
+    private data class TesrEntry(
+        val relPos: BlockPos,
+        var state: IBlockState,
+        var te: TileEntity? = null,
+    )
 
     private data class BlockModelChunkMesh(
         val key: ChunkKey,
@@ -181,6 +226,9 @@ internal class StructurePreview3DWidget(
     /** Full block state map (structure-local coords) for adjacency queries. */
     private val allBlockStates: MutableMap<BlockPos, IBlockState>
 
+    // ===== TESR cache (best-effort) =====
+    private var tesrEntries: List<TesrEntry> = emptyList()
+
     private val anyOfRequirementKeys: List<String>
     private var lastAnyOfSelectionHash: Int = 0
     private var forceFullRebuildOnce: Boolean = false
@@ -190,7 +238,17 @@ internal class StructurePreview3DWidget(
 
     // ===== Block model VBO cache (built incrementally) =====
 
-    private val blockModelGroups: List<Pair<ChunkKey, List<BlockEntry>>>
+    private val blockModelGroupsAll: List<Pair<ChunkKey, List<BlockEntry>>>
+    private val blockModelGroupsControllerOnly: List<Pair<ChunkKey, List<BlockEntry>>>
+
+    private enum class BlockModelMode {
+        ALL,
+        CONTROLLER_ONLY
+    }
+
+    private var blockModelMode: BlockModelMode = BlockModelMode.ALL
+    private var lastFormedPreview: Boolean = false
+    private val controllerRelPos: BlockPos?
     private val builtBlockModelMeshes: MutableList<BlockModelChunkMesh> = ArrayList()
     private var blockModelBuildCursor: Int = 0
     private var blockModelRenderCursor: Int = 0
@@ -205,7 +263,12 @@ internal class StructurePreview3DWidget(
     private val reqStateCache: LinkedHashMap<String, IBlockState?> = LinkedHashMap(128, 0.75f, true)
 
     /** Target camera state written by input handlers. */
-    private var yawTargetDeg: Float = 35f
+    // Defaults:
+    // - Orbit center is based on controller origin (see computeOrbitCenter)
+    // - Initial pan shifts the orbit center to the *structure* center for a nicer first impression
+    //   (matches the classic MMCE-style angled preview).
+    // Rotate 180° compared to the previous angled preset so the controller side is in front by default.
+    private var yawTargetDeg: Float = -45f
     private var pitchTargetDeg: Float = 25f
     private var zoomTarget: Float = 1.0f
 
@@ -213,6 +276,16 @@ internal class StructurePreview3DWidget(
     private var yawSmoothDeg: Float = yawTargetDeg
     private var pitchSmoothDeg: Float = pitchTargetDeg
     private var zoomSmooth: Float = zoomTarget
+
+    /** Target pan (in preview world units) applied to the orbit center. */
+    private var panTargetX: Float = 0f
+    private var panTargetY: Float = 0f
+    private var panTargetZ: Float = 0f
+
+    /** Smoothed pan applied for rendering. */
+    private var panSmoothX: Float = panTargetX
+    private var panSmoothY: Float = panTargetY
+    private var panSmoothZ: Float = panTargetZ
 
     /** Last frame timestamp for dt-based interpolation (ms). */
     private var lastFrameTimeMs: Long = -1L
@@ -230,9 +303,30 @@ internal class StructurePreview3DWidget(
     private var pendingClickAbsY: Int = 0
     private var pendingClick: Boolean = false
 
+    // ===== Gecko formed-model render cache (best-effort) =====
+    private val geckoUploader: ReusableVboUploader = ReusableVboUploader()
+
+    private data class GeckoCacheEntry(
+        val keyHash: Int,
+        val binding: GeckoModelBinding,
+        val orientation: StructureOrientation,
+        val animationNames: List<String>,
+        var task: GeckoModelRenderBuildTask? = null,
+        var built: BuiltBuffers? = null,
+    )
+
+    private val geckoCache: HashMap<Int, GeckoCacheEntry> = HashMap()
+
     init {
         val cubesMut = buildBoundaryCubes(model).toMutableList()
         val entriesMut = buildBoundaryBlockEntries(model).toMutableList()
+
+        // Keep entriesMut intact for picking/wireframe.
+        controllerRelPos = if (controllerRequirement != null) {
+            BlockPos(0 - min.x, 0 - min.y, 0 - min.z)
+        } else {
+            null
+        }
 
         // Force-add controller origin entry even if it's not part of the boundary set.
         // This makes the origin visible and helps adjacency face-culling look more realistic.
@@ -252,8 +346,20 @@ internal class StructurePreview3DWidget(
         cubes = cubesMut
         blockEntries = entriesMut
         requirementByShiftedPos = blockEntries.associate { it.relPos to it.requirement }
-        blockModelGroups = groupByChunk(blockEntries)
 
+        blockModelGroupsAll = groupByChunk(blockEntries)
+        blockModelGroupsControllerOnly = if (controllerRequirement != null && controllerRelPos != null) {
+            val e = blockEntries.firstOrNull { it.relPos == controllerRelPos }
+            if (e != null) groupByChunk(listOf(e)) else emptyList()
+        } else {
+            emptyList()
+        }
+
+        // Initial mode.
+        lastFormedPreview = formedPreviewProvider?.invoke() == true
+        blockModelMode = resolveBlockModelMode(lastFormedPreview)
+
+        // NOTE: keep init going; helper methods are defined below.
         anyOfRequirementKeys = model.blocks.values
             .asSequence()
             .filterIsInstance<AnyOfRequirement>()
@@ -269,23 +375,147 @@ internal class StructurePreview3DWidget(
             val oy = 0 - min.y
             val oz = 0 - min.z
             val rel = BlockPos(ox, oy, oz)
-            val st = stateFromRequirementCached(controllerRequirement) ?: Blocks.AIR.defaultState
+            val base = stateFromRequirementCached(controllerRequirement) ?: Blocks.AIR.defaultState
+            val st = applyFormedPropertyIfPresent(base, lastFormedPreview)
             statesMut[rel] = st
         }
         allBlockStates = statesMut
         blockAccess = StructureBlockAccess(allBlockStates, ProjectionConfig.FULLBRIGHT_LIGHTMAP_UV)
 
+        tesrEntries = buildTesrEntries()
+
         dims = computeStructureDims()
         sizeY = dims.sizeY
+
+        // Opening the screen should lock camera origin to the controller.
+        // (resetView() may choose to center the whole structure depending on tuning.)
+        resetViewToController()
+    }
+
+    private fun computeMmceLikeZoomTarget(dims: StructureDims): Float {
+        // MMCE uses a radius like: 3.5 * sqrt(maxDim)
+        // This widget uses: cameraDist = (2.6 * maxDim) * zoom
+        // => zoom = (3.5 * sqrt(maxDim)) / (2.6 * maxDim)
+        val maxDim = dims.maxDim.toFloat().coerceAtLeast(1f)
+        val targetDist = 3.5f * sqrt(maxDim)
+        val baseDist = 2.6f * maxDim
+        val z = (targetDist / baseDist)
+        return z.coerceIn(0.25f, 8.0f)
+    }
+
+    private fun resolveBlockModelMode(formedPreview: Boolean): BlockModelMode {
+        return if (hideWorldBlocks && formedPreview && blockModelGroupsControllerOnly.isNotEmpty()) {
+            BlockModelMode.CONTROLLER_ONLY
+        } else {
+            BlockModelMode.ALL
+        }
+    }
+
+    /**
+     * Orbit center in shifted preview coords.
+     * Default to controller position (model origin = (0,0,0)).
+     */
+    private fun computeOrbitCenter(dims: StructureDims): Triple<Float, Float, Float> {
+        // Model origin (0,0,0) in shifted coords.
+        val ox = (0 - min.x).toFloat() + 0.5f
+        val oy = (0 - min.y).toFloat() + 0.5f
+        val oz = (0 - min.z).toFloat() + 0.5f
+
+        val baseX = if (ox.isFinite()) ox else dims.centerX.toFloat()
+        val baseY = if (oy.isFinite()) oy else dims.centerY.toFloat()
+        val baseZ = if (oz.isFinite()) oz else dims.centerZ.toFloat()
+
+        return Triple(baseX + panSmoothX, baseY + panSmoothY, baseZ + panSmoothZ)
+    }
+
+    private fun refreshFormedModeIfChanged() {
+        val formedNow = formedPreviewProvider?.invoke() == true
+        if (formedNow == lastFormedPreview) return
+        lastFormedPreview = formedNow
+
+        // Update controller state (formed property) and rebuild VBOs.
+        if (controllerRequirement != null && controllerRelPos != null) {
+            val base = stateFromRequirementCached(controllerRequirement) ?: Blocks.AIR.defaultState
+            val st = applyFormedPropertyIfPresent(base, formedNow)
+            allBlockStates[controllerRelPos] = st
+        }
+
+        // Switch block-model mode if needed.
+        val newMode = resolveBlockModelMode(formedNow)
+        if (newMode != blockModelMode) {
+            blockModelMode = newMode
+        }
+
+        invalidateBlockModelMeshes()
+        forceFullRebuildOnce = true
+    }
+
+    private fun applyFormedPropertyIfPresent(state: IBlockState, formed: Boolean): IBlockState {
+        val prop = state.propertyKeys.firstOrNull { it.name == "formed" } ?: return state
+        return try {
+            @Suppress("UNCHECKED_CAST")
+            val p = prop as IProperty<Comparable<Any>>
+            val parsed = p.parseValue(if (formed) "true" else "false")
+            if (parsed.isPresent) {
+                @Suppress("UNCHECKED_CAST")
+                state.withProperty(p as IProperty<Comparable<Any>>, parsed.get() as Comparable<Any>)
+            } else {
+                state
+            }
+        } catch (_: Throwable) {
+            state
+        }
     }
 
     fun resetView() {
-        yawTargetDeg = 35f
+        // Angled default view (close to MMCE's legacy preview feel).
+        yawTargetDeg = -45f
         pitchTargetDeg = 25f
-        zoomTarget = 1.0f
+        zoomTarget = computeMmceLikeZoomTarget(dims)
         yawSmoothDeg = yawTargetDeg
         pitchSmoothDeg = pitchTargetDeg
         zoomSmooth = zoomTarget
+
+        // Keep controller as the semantic origin, but default orbit center should show the whole structure.
+        // Our base orbit center (without pan) is controller origin in shifted coords:
+        //   base = (0 - min) + 0.5
+        // We want initial orbit center ~= structure bounds center:
+        //   target = dims.center
+        // So pan = target - base.
+        val baseX = (0 - min.x).toFloat() + 0.5f
+        val baseY = (0 - min.y).toFloat() + 0.5f
+        val baseZ = (0 - min.z).toFloat() + 0.5f
+        panTargetX = dims.centerX.toFloat() - baseX
+        panTargetY = dims.centerY.toFloat() - baseY
+        panTargetZ = dims.centerZ.toFloat() - baseZ
+        panSmoothX = panTargetX
+        panSmoothY = panTargetY
+        panSmoothZ = panTargetZ
+
+        lastFrameTimeMs = -1L
+        dragging = false
+        dragButton = -1
+    }
+
+    /**
+     * Reset camera while keeping the orbit center locked to the controller (model origin).
+     * This is used as the initial view when opening the UI.
+     */
+    fun resetViewToController() {
+        yawTargetDeg = -45f
+        pitchTargetDeg = 25f
+        zoomTarget = computeMmceLikeZoomTarget(dims)
+        yawSmoothDeg = yawTargetDeg
+        pitchSmoothDeg = pitchTargetDeg
+        zoomSmooth = zoomTarget
+
+        panTargetX = 0f
+        panTargetY = 0f
+        panTargetZ = 0f
+        panSmoothX = panTargetX
+        panSmoothY = panTargetY
+        panSmoothZ = panTargetZ
+
         lastFrameTimeMs = -1L
         dragging = false
         dragButton = -1
@@ -324,6 +554,39 @@ internal class StructurePreview3DWidget(
             }
         }
         builtBlockModelMeshes.clear()
+
+        // If background builds are still running when UI closes, ensure their buffers are recycled.
+        for (e in geckoCache.values) {
+            val task = e.task
+            if (task != null && !task.isDone) {
+                Thread({
+                    try {
+                        task.join()
+                    } catch (_: Throwable) {
+                        // ignore
+                    }
+                    try {
+                        task.takeBuilt()?.disposeToPool()
+                    } catch (_: Throwable) {
+                        // ignore
+                    }
+                }, "PM-PreviewGeckoDispose").start()
+            }
+
+            try {
+                e.built?.disposeToPool()
+            } catch (_: Throwable) {
+                // ignore
+            }
+            e.built = null
+            e.task = null
+        }
+        geckoCache.clear()
+        try {
+            geckoUploader.dispose()
+        } catch (_: Throwable) {
+            // ignore
+        }
         super.dispose()
     }
 
@@ -364,6 +627,7 @@ internal class StructurePreview3DWidget(
         // Mouse press: start dragging when clicked inside widget.
         listenGuiAction(object : IGuiAction.MousePressed {
             override fun press(mouseButton: Int): Boolean {
+                if (inputEnabledProvider?.invoke() == false) return false
                 val ctx = context
                 if (!ctx.isMouseAbove(this@StructurePreview3DWidget)) return false
                 dragging = true
@@ -379,6 +643,12 @@ internal class StructurePreview3DWidget(
         // Mouse release: stop drag.
         listenGuiAction(object : IGuiAction.MouseReleased {
             override fun release(mouseButton: Int): Boolean {
+                if (inputEnabledProvider?.invoke() == false) {
+                    // Ensure we don't get stuck in a drag state if host toggles input at runtime.
+                    dragging = false
+                    dragButton = -1
+                    return false
+                }
                 if (!dragging) return false
                 if (mouseButton != dragButton) return false
 
@@ -388,7 +658,8 @@ internal class StructurePreview3DWidget(
 
                 // Treat as click if mouse barely moved.
                 // We do NOT pick immediately here because GL matrices/viewport are set in draw().
-                if (mouseButton == 0 && dxTotal <= 3 && dyTotal <= 3) {
+                val clickPickEnabled = clickPickEnabledProvider?.invoke() != false
+                if (clickPickEnabled && onBlockClicked != null && mouseButton == 0 && dxTotal <= 3 && dyTotal <= 3) {
                     pendingClickAbsX = ctx.absMouseX
                     pendingClickAbsY = ctx.absMouseY
                     pendingClick = true
@@ -403,6 +674,7 @@ internal class StructurePreview3DWidget(
         // Mouse drag: rotate camera.
         listenGuiAction(object : IGuiAction.MouseDrag {
             override fun drag(mouseButton: Int, timeSinceClick: Long): Boolean {
+                if (inputEnabledProvider?.invoke() == false) return false
                 if (!dragging) return false
                 if (mouseButton != dragButton) return false
 
@@ -417,11 +689,65 @@ internal class StructurePreview3DWidget(
                     return true
                 }
 
-                // Drive targets; rendering uses smoothed values.
-                yawTargetDeg += dx * 0.65f
-                pitchTargetDeg += dy * 0.65f
-                if (pitchTargetDeg < -89f) pitchTargetDeg = -89f
-                if (pitchTargetDeg > 89f) pitchTargetDeg = 89f
+                if (mouseButton == 0) {
+                    // Left drag: rotate.
+                    // Drive targets; rendering uses smoothed values.
+                    yawTargetDeg += dx * 0.65f
+                    pitchTargetDeg += dy * 0.65f
+                    if (pitchTargetDeg < -89f) pitchTargetDeg = -89f
+                    if (pitchTargetDeg > 89f) pitchTargetDeg = 89f
+                } else if (mouseButton == 1) {
+                    // Right drag: pan (translate orbit center) in camera screen-space.
+                    //
+                    // Derive right/up vectors directly from the camera rotation matrix inverse.
+                    // Camera rotation is Rx(pitch) * Ry(yaw), so its inverse is Ry(-yaw) * Rx(-pitch).
+                    // The eye coordinate axes in world coords are the columns of the inverse rotation matrix.
+
+                    val yawRad = Math.toRadians(yawSmoothDeg.toDouble())
+                    val pitchRad = Math.toRadians(pitchSmoothDeg.toDouble())
+                    val cosPitch = cos(pitchRad)
+                    val sinPitch = sin(pitchRad)
+                    val sinYaw = sin(yawRad)
+                    val cosYaw = cos(yawRad)
+
+                    // Screen-right (eye +X in world coords): first column of Ry(-yaw) * Rx(-pitch)
+                    val rightX = cosYaw
+                    val rightY = 0.0
+                    val rightZ = sinYaw
+
+                    // Screen-up (eye +Y in world coords): second column of Ry(-yaw) * Rx(-pitch)
+                    val upX = sinYaw * sinPitch
+                    val upY = cosPitch
+                    val upZ = -cosYaw * sinPitch
+
+                    // Convert mouse pixels to world units at the orbit distance.
+                    val fovYRad = Math.toRadians(45.0)
+                    val maxDim = dims.maxDim.toDouble().coerceAtLeast(1.0)
+                    val baseDistance = maxDim * 2.6
+                    val cameraDist = baseDistance * zoomSmooth.toDouble()
+
+                    val worldPerPixel = (2.0 * cameraDist * kotlin.math.tan(fovYRad / 2.0)) / area.h().toDouble()
+                    val tuned = worldPerPixel * 0.25
+
+                    // "Grab scene" semantics: scene follows the mouse.
+                    // The orbit center is subtracted in applyCameraTransform: translate(-orbitX, -orbitY, -orbitZ).
+                    // Increasing orbitCenter along +right makes the world move along -right in eye space,
+                    // which means the scene appears to move LEFT on screen.
+                    // So to make scene follow the mouse (drag right → scene moves right), we need:
+                    //   orbitCenter change = -right * dx
+                    // Vertical: drag down (dy > 0) should move the scene down.
+                    // Empirically for this widget's GUI input space, using +dy here matches expected feel.
+                    val deltaRight = -dx.toDouble() * tuned
+                    val deltaUp = dy.toDouble() * tuned
+
+                    val motionX = rightX * deltaRight + upX * deltaUp
+                    val motionY = rightY * deltaRight + upY * deltaUp
+                    val motionZ = rightZ * deltaRight + upZ * deltaUp
+
+                    panTargetX += motionX.toFloat()
+                    panTargetY += motionY.toFloat()
+                    panTargetZ += motionZ.toFloat()
+                }
 
                 lastDragAbsX = ctx.absMouseX
                 lastDragAbsY = ctx.absMouseY
@@ -432,6 +758,7 @@ internal class StructurePreview3DWidget(
         // Scroll: zoom.
         listenGuiAction(object : IGuiAction.MouseScroll {
             override fun scroll(direction: UpOrDown, amount: Int): Boolean {
+                if (inputEnabledProvider?.invoke() == false) return false
                 val ctx = context
                 if (!ctx.isMouseAbove(this@StructurePreview3DWidget)) return false
 
@@ -501,6 +828,12 @@ internal class StructurePreview3DWidget(
         // Textured block models (performance path: VBO, built incrementally).
         drawBlockModels(context, sliceMode)
 
+        // Formed machine model (Gecko bindings) and TESR blocks are only meaningful in 3D (non-slice) mode.
+        if (!sliceMode) {
+            drawGeckoPreviewInstancesIfNeeded()
+            drawTesrBlocksIfNeeded(mc)
+        }
+
         // Provider results are potentially non-trivial (e.g. allocations in providers).
         // Evaluate at most once per frame.
         val selectedNow = selectedPositionsProvider?.invoke()
@@ -531,12 +864,89 @@ internal class StructurePreview3DWidget(
         // Restore full-screen viewport for the rest of the GUI.
         GL11.glViewport(0, 0, mc.displayWidth, mc.displayHeight)
 
+        // 2D overlays (e.g. compass) should be drawn in GUI mode.
+        drawCompassOverlay(context, mc, vp)
+
         GL11.glDisable(GL11.GL_SCISSOR_TEST)
         GlStateManager.popAttrib()
         GlStateManager.popMatrix()
 
         // Let base class handle hover timers etc.
         super.draw(context, widgetTheme)
+    }
+
+    private fun drawCompassOverlay(context: ModularGuiContext, mc: Minecraft, vp: ViewportRect) {
+        if (compassEnabledProvider?.invoke() != true) return
+
+        // Clip to widget area so overlay never leaks outside preview.
+        GL11.glEnable(GL11.GL_SCISSOR_TEST)
+        GL11.glScissor(vp.x, vp.y, vp.w, vp.h)
+
+        GlStateManager.pushMatrix()
+        try {
+            // Ensure GUI-friendly state.
+            GlStateManager.enableBlend()
+            GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0)
+            GlStateManager.enableTexture2D()
+            GlStateManager.disableLighting()
+            GlStateManager.disableDepth()
+
+            val pad = 4
+            val box = 34
+            val x0 = pad
+            val y0 = pad
+            val x1 = x0 + box
+            val y1 = y0 + box
+
+            // Semi-transparent backdrop for readability.
+            Gui.drawRect(x0, y0, x1, y1, 0x66000000)
+
+            val cx = x0 + box / 2f
+            val cy = y0 + box / 2f
+            val radius = (box / 2f - 6f).coerceAtLeast(6f)
+
+            // Project cardinal directions into screen-space using the same camera basis as panning.
+            val yawRad = Math.toRadians(yawSmoothDeg.toDouble())
+            val pitchRad = Math.toRadians(pitchSmoothDeg.toDouble())
+            val sinYaw = sin(yawRad)
+            val cosYaw = cos(yawRad)
+            val sinPitch = sin(pitchRad)
+
+            // Screen-right (eye +X in world coords)
+            val rightX = cosYaw
+            val rightZ = sinYaw
+            // Screen-up (eye +Y in world coords)
+            val upX = sinYaw * sinPitch
+            val upZ = -cosYaw * sinPitch
+
+            val fr = mc.fontRenderer
+
+            fun drawLabel(label: String, dirX: Double, dirZ: Double, color: Int) {
+                val sx = (dirX * rightX + dirZ * rightZ).toFloat()
+                val sy = (dirX * upX + dirZ * upZ).toFloat()
+                val px = cx + sx * radius
+                val py = cy - sy * radius
+                fr.drawStringWithShadow(
+                    label,
+                    px - fr.getStringWidth(label) / 2f,
+                    py - fr.FONT_HEIGHT / 2f,
+                    color
+                )
+            }
+
+            // Minecraft coords: +X=East, -X=West, +Z=South, -Z=North.
+            drawLabel("北", 0.0, -1.0, 0xFFFF5555.toInt())
+            drawLabel("东", 1.0, 0.0, 0xFFECECEC.toInt())
+            drawLabel("南", 0.0, 1.0, 0xFFECECEC.toInt())
+            drawLabel("西", -1.0, 0.0, 0xFFECECEC.toInt())
+
+            // Center mark.
+            fr.drawStringWithShadow("+", cx - fr.getStringWidth("+") / 2f, cy - fr.FONT_HEIGHT / 2f, 0xFFAAAAAA.toInt())
+        } finally {
+            GlStateManager.enableDepth()
+            GlStateManager.popMatrix()
+            GL11.glDisable(GL11.GL_SCISSOR_TEST)
+        }
     }
 
     private fun drawWireframeOverlays(
@@ -588,6 +998,10 @@ internal class StructurePreview3DWidget(
         yawSmoothDeg += (yawTargetDeg - yawSmoothDeg) * alpha
         pitchSmoothDeg += (pitchTargetDeg - pitchSmoothDeg) * alpha
         zoomSmooth += (zoomTarget - zoomSmooth) * alpha
+
+        panSmoothX += (panTargetX - panSmoothX) * alpha
+        panSmoothY += (panTargetY - panSmoothY) * alpha
+        panSmoothZ += (panTargetZ - panSmoothZ) * alpha
     }
 
     private fun computeViewport(context: ModularGuiContext, mc: Minecraft): ViewportRect {
@@ -608,10 +1022,13 @@ internal class StructurePreview3DWidget(
     }
 
     private fun handlePendingClick(mc: Minecraft, vp: ViewportRect) {
-        val cb = onBlockClicked ?: return
         if (!pendingClick) return
-
+        // Always clear pendingClick even if click picking is disabled, to avoid sticky state.
         pendingClick = false
+
+        val clickPickEnabled = clickPickEnabledProvider?.invoke() != false
+        if (!clickPickEnabled) return
+        val cb = onBlockClicked ?: return
         pickBlockAtScreen(
             mc = mc,
             guiScale = vp.guiScale,
@@ -636,6 +1053,8 @@ internal class StructurePreview3DWidget(
     private fun applyCameraTransform(dims: StructureDims) {
         val maxDim = dims.maxDim.toFloat()
 
+        val (orbitX, orbitY, orbitZ) = computeOrbitCenter(dims)
+
         // Place camera.
         val baseDistance = maxDim * 2.6f
         val cameraDist = baseDistance * zoomSmooth
@@ -643,8 +1062,8 @@ internal class StructurePreview3DWidget(
         GlStateManager.rotate(pitchSmoothDeg, 1f, 0f, 0f)
         GlStateManager.rotate(yawSmoothDeg, 0f, 1f, 0f)
 
-        // Center structure around origin.
-        GlStateManager.translate(-dims.centerX.toFloat(), -dims.centerY.toFloat(), -dims.centerZ.toFloat())
+        // Center orbit target around origin.
+        GlStateManager.translate(-orbitX, -orbitY, -orbitZ)
     }
 
     private fun drawVbo(vbo: VertexBuffer) {
@@ -677,9 +1096,10 @@ internal class StructurePreview3DWidget(
         val sinYaw = sin(yawRad)
         val cosYaw = cos(yawRad)
 
-        val cx = dims.centerX
-        val cy = dims.centerY
-        val cz = dims.centerZ
+        val (ox, oy, oz) = computeOrbitCenter(dims)
+        val cx = ox.toDouble()
+        val cy = oy.toDouble()
+        val cz = oz.toDouble()
 
         val camX = cx - cameraDist * cosPitch * sinYaw
         val camY = cy - cameraDist * sinPitch
@@ -779,6 +1199,9 @@ internal class StructurePreview3DWidget(
         if (!vboAvailable) return
         if (blockEntries.isEmpty()) return
 
+        // formed/unformed toggle can change controller state and hideWorldBlocks behavior.
+        refreshFormedModeIfChanged()
+
         // Slice mode is primarily for debugging layer-by-layer; keeping VBOs static avoids costly rebuilds.
         // We therefore skip block models when slice mode is enabled and rely on wireframe overlays.
         if (sliceMode) return
@@ -854,6 +1277,261 @@ internal class StructurePreview3DWidget(
         GlStateManager.disableAlpha()
         GlStateManager.enableCull()
         GlStateManager.popMatrix()
+    }
+
+    private fun drawGeckoPreviewInstancesIfNeeded() {
+        val formed = formedPreviewProvider?.invoke() == true
+        if (!formed) return
+        if (geckoPreviewInstances.isEmpty()) return
+
+        val orientation = controllerOrientationProvider?.invoke() ?: StructureOrientation(EnumFacing.NORTH, EnumFacing.UP)
+        val mc = Minecraft.getMinecraft()
+
+        GlStateManager.pushMatrix()
+        GlStateManager.enableTexture2D()
+        GlStateManager.enableDepth()
+        GlStateManager.disableCull()
+        RenderHelper.disableStandardItemLighting()
+
+        // Reduce z-fighting with block models.
+        GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL)
+        GL11.glPolygonOffset(ProjectionConfig.POLYGON_OFFSET_FACTOR, ProjectionConfig.POLYGON_OFFSET_UNITS)
+
+        val lastX = OpenGlHelper.lastBrightnessX
+        val lastY = OpenGlHelper.lastBrightnessY
+        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240.0f, 240.0f)
+
+        try {
+            GlStateManager.color(1f, 1f, 1f, 1f)
+
+            // Deterministic pass order.
+            val order = arrayOf(
+                github.kasuminova.prototypemachinery.client.api.render.RenderPass.DEFAULT,
+                github.kasuminova.prototypemachinery.client.api.render.RenderPass.BLOOM,
+                github.kasuminova.prototypemachinery.client.api.render.RenderPass.TRANSPARENT,
+                github.kasuminova.prototypemachinery.client.api.render.RenderPass.BLOOM_TRANSPARENT,
+            )
+
+            // Render each bound model at its anchor.
+            for (inst in geckoPreviewInstances) {
+                val binding = inst.binding
+                val keyHash = computeGeckoKeyHash(binding, orientation)
+                val entry = ensureGeckoEntry(binding, orientation, keyHash)
+                val built = entry.built
+                if (built == null || built.isEmpty()) continue
+
+                // Convert model coords -> widget-local rel coords.
+                val rx = inst.anchorModelPos.x - min.x
+                val ry = inst.anchorModelPos.y - min.y
+                val rz = inst.anchorModelPos.z - min.z
+
+                GlStateManager.pushMatrix()
+                GlStateManager.translate(rx.toDouble(), ry.toDouble(), rz.toDouble())
+
+                try {
+                    // Use external disk binder (safe for normal assets too).
+                    ExternalDiskTextureBinder.bind(binding.texture)
+
+                    for (pass in order) {
+                        RenderTypeState.pre(pass)
+                        try {
+                            built.byPass[pass]?.let { buf ->
+                                geckoUploader.draw(buf)
+                            }
+                            built.packedByPass[pass]?.let { batch ->
+                                for (p in batch.parts) {
+                                    geckoUploader.drawMergedByteBuffer(batch.format, batch.drawMode, p.vertexCount, p.totalBytes, p.data)
+                                }
+                            }
+                        } finally {
+                            RenderTypeState.post(pass)
+                        }
+                    }
+                } finally {
+                    GlStateManager.popMatrix()
+                }
+            }
+        } finally {
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, lastX, lastY)
+            GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL)
+            GlStateManager.enableCull()
+            GlStateManager.popMatrix()
+        }
+    }
+
+    private fun ensureGeckoEntry(binding: GeckoModelBinding, orientation: StructureOrientation, keyHash: Int): GeckoCacheEntry {
+        val existing = geckoCache[keyHash]
+        if (existing != null) {
+            // Poll completion.
+            val t = existing.task
+            if (existing.built == null && t != null && t.isDone) {
+                existing.built = t.takeBuilt()
+            }
+            return existing
+        }
+
+        val animationNames = resolveBindingAnimationNames(binding)
+
+        val twist = runCatching { TwistMath.getTwistFromTop(orientation.front, orientation.top) }.getOrDefault(0)
+        val rk = RenderKey(
+            modelId = binding.geo,
+            textureId = binding.texture,
+            variant = keyHash,
+            // MVP: preview uses static bake. (Animation support can be layered later.)
+            animationStateHash = 0,
+            secureVersion = 0,
+            flags = 0,
+            // Keep encoding consistent with the contract in RenderKey (and world render paths).
+            orientationHash = orientation.front.ordinal * 24 + orientation.top.ordinal * 4 + (twist and 3),
+        )
+
+        val resourcesRoot = Minecraft.getMinecraft().gameDir.toPath().resolve("resources")
+        val snapshot = GeckoRenderSnapshot(
+            ownerKey = this,
+            renderKey = rk,
+            pass = binding.pass,
+            geoLocation = binding.geo,
+            textureLocation = binding.texture,
+            animationLocation = binding.animation,
+            animationNames = animationNames,
+            bakeMode = GeckoModelBaker.BakeMode.ALL,
+            // Bake around origin; we translate to the anchor at draw time.
+            x = 0.0,
+            y = 0.0,
+            z = 0.0,
+            modelOffsetX = binding.modelOffsetX,
+            modelOffsetY = binding.modelOffsetY,
+            modelOffsetZ = binding.modelOffsetZ,
+            front = orientation.front,
+            top = orientation.top,
+            resourcesRoot = resourcesRoot,
+            yOffset = binding.yOffset,
+        )
+
+        val task = GeckoModelRenderBuildTask(snapshot)
+        val entry = GeckoCacheEntry(
+            keyHash = keyHash,
+            binding = binding,
+            orientation = orientation,
+            animationNames = animationNames,
+            task = task,
+            built = null,
+        )
+        geckoCache[keyHash] = entry
+
+        ForkJoinPool.commonPool().execute(task)
+        return entry
+    }
+
+    private fun resolveBindingAnimationNames(binding: GeckoModelBinding): List<String> {
+        if (binding.animation == null) return emptyList()
+
+        if (binding.animationLayers.isNotEmpty()) {
+            return binding.animationLayers
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+        }
+
+        return listOfNotNull(binding.defaultAnimationName?.trim()?.takeIf { it.isNotEmpty() })
+    }
+
+    private fun computeGeckoKeyHash(binding: GeckoModelBinding, orientation: StructureOrientation): Int {
+        var h = 1
+        h = 31 * h + binding.geo.hashCode()
+        h = 31 * h + binding.texture.hashCode()
+        h = 31 * h + (binding.animation?.hashCode() ?: 0)
+        h = 31 * h + binding.pass.hashCode()
+        h = 31 * h + orientation.front.ordinal
+        h = 31 * h + orientation.top.ordinal
+        // Keep cache stable across cases where twist is tracked separately from top.
+        h = 31 * h + runCatching { TwistMath.getTwistFromTop(orientation.front, orientation.top) }.getOrDefault(0)
+        h = 31 * h + (binding.defaultAnimationName?.hashCode() ?: 0)
+        h = 31 * h + binding.animationLayers.hashCode()
+        // Include offsets so cache invalidates when config changes.
+        h = 31 * h + binding.modelOffsetX.toBits().hashCode()
+        h = 31 * h + binding.modelOffsetY.toBits().hashCode()
+        h = 31 * h + binding.modelOffsetZ.toBits().hashCode()
+        h = 31 * h + binding.yOffset.toBits().hashCode()
+        return h
+    }
+
+    private fun drawTesrBlocksIfNeeded(mc: Minecraft) {
+        // Best-effort only: without a real world, TESR is not meaningful.
+        val world = mc.world ?: return
+        if (tesrEntries.isEmpty()) return
+
+        GlStateManager.pushMatrix()
+        GlStateManager.enableTexture2D()
+        GlStateManager.enableDepth()
+        GlStateManager.disableCull()
+        RenderHelper.disableStandardItemLighting()
+
+        val lastX = OpenGlHelper.lastBrightnessX
+        val lastY = OpenGlHelper.lastBrightnessY
+        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240.0f, 240.0f)
+
+        try {
+            val dispatcher = TileEntityRendererDispatcher.instance
+            val partial = mc.renderPartialTicks
+            for (e in tesrEntries) {
+                val st = allBlockStates[e.relPos] ?: continue
+                e.state = st
+                val te = ensureTileEntityForTesrEntry(world, e) ?: continue
+
+                // Render at structure-local position.
+                try {
+                    dispatcher.render(te, e.relPos.x.toDouble(), e.relPos.y.toDouble(), e.relPos.z.toDouble(), partial, -1, 1.0f)
+                } catch (_: Throwable) {
+                    // Some TESRs rely on world/chunk state we don't have; ignore to keep UI stable.
+                }
+            }
+        } finally {
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, lastX, lastY)
+            GlStateManager.enableCull()
+            GlStateManager.popMatrix()
+        }
+    }
+
+    private fun ensureTileEntityForTesrEntry(world: net.minecraft.world.World, entry: TesrEntry): TileEntity? {
+        val existing = entry.te
+        if (existing != null) {
+            try {
+                existing.setWorld(world)
+            } catch (_: Throwable) {
+                // ignore
+            }
+            try {
+                existing.setPos(BlockPos(entry.relPos))
+            } catch (_: Throwable) {
+                // ignore
+            }
+            return existing
+        }
+
+        val block = entry.state.block
+        val te = try {
+            if (block.hasTileEntity(entry.state)) {
+                block.createTileEntity(world, entry.state)
+            } else {
+                null
+            }
+        } catch (_: Throwable) {
+            null
+        } ?: return null
+
+        try {
+            te.setWorld(world)
+        } catch (_: Throwable) {
+            // ignore
+        }
+        try {
+            te.setPos(BlockPos(entry.relPos))
+        } catch (_: Throwable) {
+            // ignore
+        }
+
+        entry.te = te
+        return te
     }
 
     private inline fun renderChunkLayer(
@@ -990,12 +1668,17 @@ internal class StructurePreview3DWidget(
         GL11.glDisableClientState(GL11.GL_COLOR_ARRAY)
     }
 
+    @Suppress("DEPRECATION")
     private fun buildSomeBlockModelMeshesPerFrame() {
         if (!vboAvailable) return
-        if (blockModelBuildCursor >= blockModelGroups.size) return
+        val groups = when (blockModelMode) {
+            BlockModelMode.ALL -> blockModelGroupsAll
+            BlockModelMode.CONTROLLER_ONLY -> blockModelGroupsControllerOnly
+        }
+        if (blockModelBuildCursor >= groups.size) return
 
         // Budget: build a small number of chunk meshes per frame to avoid UI hitching.
-        val maxBuildThisFrame = if (forceFullRebuildOnce || blockModelGroups.size <= 12) Int.MAX_VALUE else 2
+        val maxBuildThisFrame = if (forceFullRebuildOnce || groups.size <= 12) Int.MAX_VALUE else 2
         forceFullRebuildOnce = false
 
         val mc = Minecraft.getMinecraft()
@@ -1009,8 +1692,8 @@ internal class StructurePreview3DWidget(
         )
 
         var built = 0
-        while (built < maxBuildThisFrame && blockModelBuildCursor < blockModelGroups.size) {
-            val (ck, entries) = blockModelGroups[blockModelBuildCursor]
+        while (built < maxBuildThisFrame && blockModelBuildCursor < groups.size) {
+            val (ck, entries) = groups[blockModelBuildCursor]
             blockModelBuildCursor++
 
             val bounds = computeAabb(entries)
@@ -1029,11 +1712,16 @@ internal class StructurePreview3DWidget(
                 for (e in entries) {
                     // Use the full state map so neighbor face-culling sees the complete structure.
                     val rawState = allBlockStates[e.relPos] ?: continue
-                    val state = try {
+                    var state = try {
                         rawState.block.getActualState(rawState, blockAccess, e.relPos)
                     } catch (_: Throwable) {
                         rawState
                     }
+                    // Some blocks (notably our controller) derive TE-backed properties (e.g. twist/formed)
+                    // in getActualState(). In preview we usually have no TE, so that logic would reset
+                    // explicitly configured state properties back to defaults.
+                    state = copyPropertyByName(rawState, state, "twist")
+                    state = copyPropertyByName(rawState, state, "formed")
                     val block = state.block
 
                     for (layer in layers) {
@@ -1070,6 +1758,23 @@ internal class StructurePreview3DWidget(
             )
 
             built++
+        }
+    }
+
+    private fun copyPropertyByName(raw: IBlockState, actual: IBlockState, name: String): IBlockState {
+        val rawProp = raw.propertyKeys.firstOrNull { it.name == name } ?: return actual
+        val actualProp = actual.propertyKeys.firstOrNull { it.name == name } ?: return actual
+        // Only copy if both states expose a property with the same name.
+        @Suppress("UNCHECKED_CAST")
+        val rp = rawProp as IProperty<Comparable<Any>>
+        @Suppress("UNCHECKED_CAST")
+        val ap = actualProp as IProperty<Comparable<Any>>
+        return try {
+            @Suppress("UNCHECKED_CAST")
+            val v = raw.getValue(rp) as Comparable<Any>
+            actual.withProperty(ap, v)
+        } catch (_: Throwable) {
+            actual
         }
     }
 
@@ -1284,6 +1989,9 @@ internal class StructurePreview3DWidget(
         invalidateBlockModelMeshes()
         // Build everything in one go once, so the user sees the choice reflected immediately.
         forceFullRebuildOnce = true
+
+        // TESR cache depends on resolved states.
+        tesrEntries = buildTesrEntries(clearExisting = true)
     }
 
     private fun buildAllBlockStates(model: StructurePreviewModel): MutableMap<BlockPos, IBlockState> {
@@ -1301,6 +2009,34 @@ internal class StructurePreview3DWidget(
             }
             out[rel] = state
         }
+        return out
+    }
+
+    private fun buildTesrEntries(clearExisting: Boolean = false): List<TesrEntry> {
+        if (clearExisting) {
+            for (e in tesrEntries) {
+                e.te = null
+            }
+        }
+
+        if (blockEntries.isEmpty()) return emptyList()
+
+        val out = ArrayList<TesrEntry>()
+        for (e in blockEntries) {
+            val rel = e.relPos
+            val st = allBlockStates[rel] ?: continue
+            val block = st.block
+
+            val hasTe = try {
+                block.hasTileEntity(st)
+            } catch (_: Throwable) {
+                false
+            }
+            if (!hasTe) continue
+
+            out.add(TesrEntry(relPos = rel, state = st, te = null))
+        }
+
         return out
     }
 

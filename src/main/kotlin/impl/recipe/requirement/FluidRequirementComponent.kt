@@ -3,7 +3,7 @@ package github.kasuminova.prototypemachinery.impl.recipe.requirement
 import github.kasuminova.prototypemachinery.api.key.PMKey
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
-import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
+import github.kasuminova.prototypemachinery.api.recipe.requirement.component.IdentifiedRecipeRequirementComponent
 import net.minecraftforge.fluids.FluidStack
 
 /**
@@ -24,7 +24,7 @@ import net.minecraftforge.fluids.FluidStack
  */
 public data class FluidRequirementComponent(
     /** Stable id within the recipe. / 配方内稳定 id */
-    public val id: String,
+    override val id: String,
 
     /** Fluids to consume at start(). / start 阶段需要消耗的流体列表 */
     public val inputs: List<PMKey<FluidStack>> = emptyList(),
@@ -39,7 +39,7 @@ public data class FluidRequirementComponent(
     public val outputsPerTick: List<PMKey<FluidStack>> = emptyList(),
 
     override val properties: Map<String, Any> = emptyMap(),
-) : RecipeRequirementComponent {
+) : IdentifiedRecipeRequirementComponent {
 
     override val type: RecipeRequirementType<*>
         get() = RecipeRequirementTypes.FLUID

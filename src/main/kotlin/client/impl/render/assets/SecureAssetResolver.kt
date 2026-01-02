@@ -18,15 +18,19 @@ internal class SecureAssetResolver(
 ) : AssetResolver {
 
     public override fun open(location: ResourceLocation): InputStream {
-        if (isSecure(location) && !SecureSession.unlocked) {
-            throw IllegalStateException("Secure assets are locked (not in a server session): $location")
+        if (isSecure(location)) {
+            // Security note:
+            // Returning the encrypted-at-rest bytes would be incorrect behavior and can lead to confusing failures.
+            // Until the crypto + key management design is implemented, we explicitly disable secure assets.
+            throw UnsupportedOperationException(
+                "Secure assets (secure/*) are not implemented in this build yet: $location"
+            )
         }
-        // TODO: decrypt here when isSecure(location)
         return delegate.open(location)
     }
 
     public override fun exists(location: ResourceLocation): Boolean {
-        if (isSecure(location) && !SecureSession.unlocked) return false
+        if (isSecure(location)) return false
         return delegate.exists(location)
     }
 

@@ -5,12 +5,15 @@ import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.common.CommonProxy
 import github.kasuminova.prototypemachinery.common.buildinstrument.BuildInstrumentTaskManager
 import github.kasuminova.prototypemachinery.common.command.PmConfigServerCommand
+import github.kasuminova.prototypemachinery.common.command.PmMigrateMmceServerCommand
+import github.kasuminova.prototypemachinery.common.command.PmStructuresServerCommand
 import github.kasuminova.prototypemachinery.common.command.SchedulerServerCommand
 import github.kasuminova.prototypemachinery.common.config.PrototypeMachineryCommonConfig
 import github.kasuminova.prototypemachinery.common.handler.CraftTweakerReloadHandler
 import github.kasuminova.prototypemachinery.common.network.NetworkHandler
 import github.kasuminova.prototypemachinery.common.registry.MachineTypeRegisterer
 import github.kasuminova.prototypemachinery.common.structure.loader.StructureLoader
+import github.kasuminova.prototypemachinery.common.structure.validator.BuiltinStructureValidators
 import github.kasuminova.prototypemachinery.impl.platform.PMPlatformManager
 import github.kasuminova.prototypemachinery.impl.recipe.index.RecipeIndexRegistry
 import github.kasuminova.prototypemachinery.impl.recipe.scanning.DefaultRecipeParallelismConstraints
@@ -74,6 +77,10 @@ public object PrototypeMachinery {
 
         NetworkHandler.init()
 
+        // Register built-in structure validators before StructureLoader resolves JSON validators.
+        // 在 StructureLoader 解析 JSON validators 之前注册内置结构验证器。
+        BuiltinStructureValidators.registerAll()
+
         // Register scan-time parallelism constraints (pluggable extension point for addons).
         DefaultRecipeParallelismConstraints.registerAll()
 
@@ -118,7 +125,8 @@ public object PrototypeMachinery {
 
         // Build recipe indices after all machine types / recipes are registered.
         // 在所有机器类型/配方注册完成后构建配方索引。
-        // TODO: Replace the fallback "accept all" behavior when recipe groups become mandatory.
+        // Note: current indexing uses recipe groups declared by the MachineType.
+        // If a machine type has no groups, we simply skip indexing for it.
         RecipeIndexRegistry.buildIndices(
             machineTypes = PrototypeMachineryAPI.machineTypeRegistry.all(),
             recipeLookup = { type ->
@@ -142,6 +150,12 @@ public object PrototypeMachinery {
 
         // Admin command for in-game config tweaking (hot-apply).
         event.registerServerCommand(PmConfigServerCommand)
+
+        // Best-effort migration helper: MMCE machine JSON -> PM StructureData JSON
+        event.registerServerCommand(PmMigrateMmceServerCommand)
+
+        // Admin command: hot reload structure JSON from disk.
+        event.registerServerCommand(PmStructuresServerCommand)
     }
 
     @Mod.EventHandler

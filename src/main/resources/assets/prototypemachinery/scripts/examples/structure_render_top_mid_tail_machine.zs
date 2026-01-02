@@ -12,11 +12,13 @@ import mods.prototypemachinery.MachineRegistry;
 // This machine uses the bundled structure example:
 // - root id: example_structure_render_top_mid_tail_root
 // - children:
-//   - example_structure_render_top_mid_tail_top  (hollow 5x5 tube, repeats 5)
-//   - example_structure_render_top_mid_tail_mid  (hollow 5x5 tube, repeats 1)
-//   - example_structure_render_top_mid_tail_mid_2 (hollow 5x5 tube, repeats 1)
-//   - example_structure_render_top_mid_tail_mid_3 (hollow 5x5 tube, repeats 1)
-//   - example_structure_render_top_mid_tail_tail (hollow 5x5 tube, repeats 5)
+//   - example_structure_render_top_mid_tail_top  (template, 1x segment)
+//   - example_structure_render_top_mid_tail_mid  (slice, repeats 3)
+//   - example_structure_render_top_mid_tail_tail (template, 1x segment)
+//
+// If you ran an older version of this example before:
+// - delete the stale mid_2/mid_3 JSONs in config/prototypemachinery/structures/
+//   (they are no longer used by the root structure).
 val demo = MachineRegistry.create("prototypemachinery", "structure_render_top_mid_tail_demo");
 
 demo.name("Structure Render Top/Mid/Tail Demo");

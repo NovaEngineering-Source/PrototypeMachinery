@@ -5,7 +5,7 @@ import github.kasuminova.prototypemachinery.client.impl.render.assets.MinecraftA
 import github.kasuminova.prototypemachinery.client.impl.render.assets.MountedDirectoryAssetResolver
 import github.kasuminova.prototypemachinery.client.impl.render.assets.ResolverBackedResourceManager
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelBaker
-import github.kasuminova.prototypemachinery.client.util.MmceMatrixStack
+import github.kasuminova.prototypemachinery.client.util.MatrixStack
 import github.kasuminova.prototypemachinery.client.util.NativeBuffers
 import net.minecraft.client.Minecraft
 import net.minecraft.command.CommandBase
@@ -74,7 +74,7 @@ internal object GeckoBakeBenchClientCommand : CommandBase() {
                 val builder = NativeBuffers.newBufferBuilder(32 * 1024, tag = "GeckoBakeBench")
                 builder.begin(GL11.GL_QUADS, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION_TEX_COLOR_NORMAL)
 
-                val ms = MmceMatrixStack()
+                val ms = MatrixStack()
                 ms.push()
                 // Keep the same baseline as our real build task (no world translation here).
                 ms.translate(0.5f, 0.0f, 0.5f)

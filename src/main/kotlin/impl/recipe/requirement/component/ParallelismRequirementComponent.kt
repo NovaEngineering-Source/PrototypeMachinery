@@ -3,7 +3,7 @@ package github.kasuminova.prototypemachinery.impl.recipe.requirement.component
 import github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachineAttributes
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementType
 import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
-import github.kasuminova.prototypemachinery.api.recipe.requirement.component.RecipeRequirementComponent
+import github.kasuminova.prototypemachinery.api.recipe.requirement.component.IdentifiedRecipeRequirementComponent
 
 /**
  * Convenience requirement that adjusts [StandardMachineAttributes.PROCESS_PARALLELISM] for the running process.
@@ -15,7 +15,7 @@ import github.kasuminova.prototypemachinery.api.recipe.requirement.component.Rec
  */
 public data class ParallelismRequirementComponent(
     /** Stable id within the recipe. / 配方内稳定 id */
-    public val id: String,
+    override val id: String,
 
     /** Target parallelism (>= 1). / 目标并行度（>=1） */
     public val parallelism: Long,
@@ -25,7 +25,7 @@ public data class ParallelismRequirementComponent(
 
     /** Remove at onEnd(). / 是否在 onEnd() 阶段撤销 */
     public val removeAtEnd: Boolean = true,
-) : RecipeRequirementComponent {
+) : IdentifiedRecipeRequirementComponent {
 
     override val type: RecipeRequirementType<*> = RecipeRequirementTypes.PARALLELISM
 }

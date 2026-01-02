@@ -6,7 +6,7 @@ import github.kasuminova.prototypemachinery.client.impl.render.assets.MountedDir
 import github.kasuminova.prototypemachinery.client.impl.render.assets.ResolverBackedResourceManager
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoAnimationDriver
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelBaker
-import github.kasuminova.prototypemachinery.client.util.MmceMatrixStack
+import github.kasuminova.prototypemachinery.client.util.MatrixStack
 import github.kasuminova.prototypemachinery.client.util.NativeBuffers
 import net.minecraft.client.Minecraft
 import net.minecraft.command.CommandBase
@@ -94,7 +94,7 @@ internal object GeckoBakeAnimBenchClientCommand : CommandBase() {
                 val builder = NativeBuffers.newBufferBuilder(32 * 1024, tag = "GeckoBakeAnimBench")
                 builder.begin(GL11.GL_QUADS, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION_TEX_COLOR_NORMAL)
 
-                val ms = MmceMatrixStack()
+                val ms = MatrixStack()
                 ms.push()
                 ms.translate(0.5f, 0.0f, 0.5f)
 

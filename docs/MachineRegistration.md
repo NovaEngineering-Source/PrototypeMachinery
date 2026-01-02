@@ -34,8 +34,6 @@ English translation: [`docs/en/MachineRegistration.md`](./en/MachineRegistration
 
 ## 代码侧示例（Kotlin）
 
-示例可参考：`src/main/kotlin/example/ExampleMachineRegistration.kt`。
-
 核心用法：
 
 ```kotlin

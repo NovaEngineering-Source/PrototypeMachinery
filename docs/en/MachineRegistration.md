@@ -38,8 +38,6 @@ Therefore: MachineTypes must be registered/enqueued in PreInit (or earlier), oth
 
 ## Code-side example (Kotlin)
 
-See: `src/main/kotlin/example/ExampleMachineRegistration.kt`
-
 Core usage:
 
 ```kotlin

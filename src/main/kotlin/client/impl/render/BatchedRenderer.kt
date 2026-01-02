@@ -27,5 +27,21 @@ internal object BatchedRenderer {
             }
             RenderManager.addBuffer(pass, texture, light, buffer)
         }
+
+        built.packedByPass.forEach { (pass, batch) ->
+            val light = when (pass) {
+                RenderPass.BLOOM, RenderPass.BLOOM_TRANSPARENT -> -1
+                else -> renderable.combinedLight
+            }
+            RenderManager.addPacked(pass, texture, light, batch)
+        }
+
+        built.gpuByPass.forEach { (pass, draw) ->
+            val light = when (pass) {
+                RenderPass.BLOOM, RenderPass.BLOOM_TRANSPARENT -> -1
+                else -> renderable.combinedLight
+            }
+            RenderManager.addGpu(pass, texture, light, draw)
+        }
     }
 }

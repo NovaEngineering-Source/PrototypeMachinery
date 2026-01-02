@@ -127,42 +127,6 @@ configurations {
     runtimeOnly.extendsFrom(modRuntimeOnly)
 }
 
-// --- Optional Vector API accel classes (built into the main jar, but loaded reflectively) ---
-// We keep them in a dedicated sourceSet so only those compilation tasks need --add-modules.
-sourceSets {
-    vectorAccel {
-        java {
-            srcDir 'src/vectorAccel/java'
-        }
-        resources {
-            srcDir 'src/vectorAccel/resources'
-        }
-
-        // Allow Vector-accel sources to depend on main outputs and the normal classpath.
-        compileClasspath += sourceSets.main.output + configurations.compileClasspath
-        runtimeClasspath += output + compileClasspath
-    }
-}
-
-// Include vector accel classes/resources into the main jar.
-tasks.named('jar', Jar).configure {
-    from(sourceSets.vectorAccel.output)
-}
-
-// Ensure JMH sourceSet can see the reflectively-loaded backends on its classpath.
-// (JMH runs directly off classpaths, not from the built jar.)
-sourceSets.matching { it.name == 'jmh' }.configureEach {
-    compileClasspath += sourceSets.vectorAccel.output
-    runtimeClasspath += sourceSets.vectorAccel.output
-}
-
-// Ensure the vectorAccel sourceSet inherits normal dependencies.
-configurations {
-    vectorAccelImplementation.extendsFrom(implementation)
-    vectorAccelCompileOnly.extendsFrom(compileOnly)
-    vectorAccelRuntimeOnly.extendsFrom(runtimeOnly)
-}
-
 // Compile against the legacy main mod jar to access PMPlatform SPI.
 // NOTE: This addon is built with a separate Gradle wrapper; it does not "depend" on the main build.
 // You must build the main jar first (in the parent project) so it exists under ../build/libs.
@@ -253,9 +217,7 @@ tasks.withType(JavaCompile).configureEach {
     }
 
     // Vector-accel sources directly reference the incubator module.
-    if (name.toLowerCase().contains('vectoraccel')) {
-        options.compilerArgs += ['--add-modules', 'jdk.incubator.vector']
-    }
+    options.compilerArgs += ['--add-modules', 'jdk.incubator.vector']
 }
 
 // JMH uses separate JavaExec processes for bytecode generation and benchmark runs.

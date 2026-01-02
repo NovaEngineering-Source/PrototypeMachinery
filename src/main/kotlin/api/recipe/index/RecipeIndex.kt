@@ -10,12 +10,12 @@ public class RecipeIndex(
     private val indices: List<RequirementIndex>
 ) {
     /**
-     * Finds potential recipes by intersecting the results of all requirement indices.
+     * Variant of [lookup] that returns `null` when ALL requirement indices have no opinion (all return `null`).
      *
-     * @param machine The machine instance.
-     * @return A set of recipes that satisfy ALL indexed requirements.
+     * This is useful for callers that want to fall back to a broader scan when indexing cannot contribute
+     * (e.g. machine has no enumerable ports for indexed requirement types).
      */
-    public fun lookup(machine: MachineInstance): Set<MachineRecipe> {
+    public fun lookupOrNull(machine: MachineInstance): Set<MachineRecipe>? {
         var potentialRecipes: MutableSet<MachineRecipe>? = null
 
         for (index in indices) {
@@ -27,6 +27,7 @@ public class RecipeIndex(
 
             if (potentialRecipes == null) {
                 // First valid result becomes the base set
+                // Copy since we'll mutate it via retainAll.
                 potentialRecipes = matches.toMutableSet()
             } else {
                 // Intersect with existing results
@@ -39,15 +40,16 @@ public class RecipeIndex(
             }
         }
 
-        // If no indices returned anything (all null), it implies no indexed requirements exist.
-        // In this case, we should probably return ALL recipes or handle it upstream.
-        // However, the contract says "potential recipes".
-        // If potentialRecipes is null here, it means we have no filters.
-        // The caller should probably fall back to full scan or we return empty if we assume indices cover everything.
-        // But usually, indices are for *inputs*. If a machine has no inputs, it might run everything?
-        // For safety, if null, we return empty set to force a fallback or indicate no match found via index.
-        // Better yet, the caller should check if RecipeIndex exists.
+        return potentialRecipes
+    }
 
-        return potentialRecipes ?: emptySet()
+    /**
+     * Finds potential recipes by intersecting the results of all requirement indices.
+     *
+     * @param machine The machine instance.
+     * @return A set of recipes that satisfy ALL indexed requirements.
+     */
+    public fun lookup(machine: MachineInstance): Set<MachineRecipe> {
+        return lookupOrNull(machine) ?: emptySet()
     }
 }

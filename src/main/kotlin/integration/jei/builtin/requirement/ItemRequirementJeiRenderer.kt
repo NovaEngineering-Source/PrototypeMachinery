@@ -50,6 +50,7 @@ public object ItemRequirementJeiRenderer : PMJeiRequirementRenderer<ItemRequirem
     override val type: RecipeRequirementType<ItemRequirementComponent>
         get() = RecipeRequirementTypes.ITEM
 
+    @Suppress("UNCHECKED_CAST")
     override fun split(ctx: JeiRecipeContext, component: ItemRequirementComponent): List<PMJeiRequirementNode<ItemRequirementComponent>> {
         val out = ArrayList<PMJeiRequirementNode<ItemRequirementComponent>>()
 
@@ -117,7 +118,7 @@ public object ItemRequirementJeiRenderer : PMJeiRequirementRenderer<ItemRequirem
             when (JeiRenderOptions.current().candidateSlotRenderMode) {
                 JeiRenderOptions.CandidateSlotRenderMode.EXPANDED -> {
                     dynamic.forEachIndexed { groupIndex, group ->
-                        val shown = if (group.displayedCandidates.isNotEmpty()) group.displayedCandidates else listOf(group.pattern)
+                        val shown = group.displayedCandidates.ifEmpty { listOf(group.pattern) }
                         for (candidateIndex in shown.indices) {
                             out += PMJeiRequirementNode(
                                 nodeId = "${component.id}:dynamic_input:$groupIndex:$candidateIndex",
