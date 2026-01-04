@@ -2,7 +2,6 @@ package github.kasuminova.prototypemachinery.client
 
 import com.cleanroommc.modularui.value.sync.PanelSyncManager
 import com.cleanroommc.modularui.widgets.layout.Flow
-import github.kasuminova.prototypemachinery.client.atlas.PmGuiAtlas
 import github.kasuminova.prototypemachinery.client.buildinstrument.BuildInstrumentClientUi
 import github.kasuminova.prototypemachinery.client.impl.render.ClientRenderCacheLifecycle
 import github.kasuminova.prototypemachinery.client.impl.render.RenderDebugHud
@@ -67,9 +66,6 @@ internal class ClientProxy : CommonProxy() {
 
         // Optional GTCE bloom post-processing integration (reflection-based).
         GregTechBloomBridge.initIfPresent()
-
-        // GUI atlases (TextureMap-based, uses Stitcher internally)
-        PmGuiAtlas.init()
 
         // Clear render caches on resource reload / world unload to avoid leaks.
         ClientRenderCacheLifecycle.init()

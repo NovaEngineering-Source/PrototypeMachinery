@@ -25,6 +25,7 @@ import github.kasuminova.prototypemachinery.common.scanner.ScannerInstrumentUi
 import net.minecraft.block.properties.IProperty
 import net.minecraft.block.state.IBlockState
 import net.minecraft.client.Minecraft
+import net.minecraft.client.resources.I18n
 import net.minecraft.init.Blocks
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.util.EnumFacing
@@ -32,6 +33,8 @@ import net.minecraft.util.ResourceLocation
 import net.minecraft.util.math.BlockPos
 import net.minecraftforge.fml.relauncher.Side
 import net.minecraftforge.fml.relauncher.SideOnly
+import java.util.Locale
+import java.util.Objects
 
 /**
  * Client-side UI widgets for Scanner Instrument.
@@ -46,6 +49,14 @@ internal object ScannerInstrumentClientUi {
         bounds = PreviewBounds(BlockPos(0, 0, 0), BlockPos(0, 0, 0)),
         bom = emptyList()
     )
+
+    private fun tr(key: String, vararg args: Any): String {
+        return try {
+            I18n.format(key, *args)
+        } catch (_: Throwable) {
+            key
+        }
+    }
 
     private fun computeBounds(positions: Collection<BlockPos>): PreviewBounds {
         if (positions.isEmpty()) {
@@ -95,6 +106,39 @@ internal object ScannerInstrumentClientUi {
         return ExactBlockStateRequirement(blockId = id, meta = meta, properties = props)
     }
 
+    private fun rotateState(state: IBlockState, rotation: (EnumFacing) -> EnumFacing): IBlockState {
+        var newState = state
+        for (prop in state.propertyKeys) {
+            // Handle EnumFacing properties
+            if (prop.valueClass === EnumFacing::class.java) {
+                @Suppress("UNCHECKED_CAST")
+                val directionProp = prop as IProperty<EnumFacing>
+                val current = state.getValue(directionProp)
+                val newFacing = rotation(current)
+                if (directionProp.allowedValues.contains(newFacing)) {
+                    newState = newState.withProperty(directionProp, newFacing)
+                }
+            }
+
+            // Handle EnumFacing.Axis properties
+            if (prop.valueClass === EnumFacing.Axis::class.java) {
+                @Suppress("UNCHECKED_CAST")
+                val axisProp = prop as IProperty<EnumFacing.Axis>
+                val currentAxis = state.getValue(axisProp)
+                val sample = when (currentAxis) {
+                    EnumFacing.Axis.X -> EnumFacing.EAST
+                    EnumFacing.Axis.Y -> EnumFacing.UP
+                    EnumFacing.Axis.Z -> EnumFacing.NORTH
+                }
+                val newAxis = rotation(sample).axis
+                if (axisProp.allowedValues.contains(newAxis)) {
+                    newState = newState.withProperty(axisProp, newAxis)
+                }
+            }
+        }
+        return newState
+    }
+
     /**
      * Build a pure preview model from the current world selection.
      *
@@ -106,18 +150,27 @@ internal object ScannerInstrumentClientUi {
         val o = tag?.getCompoundTagOrNull(ScannerInstrumentNbt.TAG_ORIGIN) ?: return EMPTY_PREVIEW_MODEL
         val c = tag.getCompoundTagOrNull(ScannerInstrumentNbt.TAG_CORNER) ?: return EMPTY_PREVIEW_MODEL
 
-        val origin = BlockPos(o.getInteger("x"), o.getInteger("y"), o.getInteger("z"))
-        val corner = BlockPos(c.getInteger("x"), c.getInteger("y"), c.getInteger("z"))
+        val selA = BlockPos(o.getInteger("x"), o.getInteger("y"), o.getInteger("z"))
+        val selB = BlockPos(c.getInteger("x"), c.getInteger("y"), c.getInteger("z"))
+
+        val exportOriginTag = tag.getCompoundTagOrNull(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN)
+        val exportOrigin = if (exportOriginTag != null) {
+            BlockPos(exportOriginTag.getInteger("x"), exportOriginTag.getInteger("y"), exportOriginTag.getInteger("z"))
+        } else {
+            selA
+        }
+
+        val rotation = ScannerInstrumentNbt.worldToTemplateRotationFromPreview(tag)
 
         val mc = Minecraft.getMinecraft()
         val world = mc.world ?: return EMPTY_PREVIEW_MODEL
 
-        val minX = minOf(origin.x, corner.x)
-        val minY = minOf(origin.y, corner.y)
-        val minZ = minOf(origin.z, corner.z)
-        val maxX = maxOf(origin.x, corner.x)
-        val maxY = maxOf(origin.y, corner.y)
-        val maxZ = maxOf(origin.z, corner.z)
+        val minX = minOf(selA.x, selB.x)
+        val minY = minOf(selA.y, selB.y)
+        val minZ = minOf(selA.z, selB.z)
+        val maxX = maxOf(selA.x, selB.x)
+        val maxY = maxOf(selA.y, selB.y)
+        val maxZ = maxOf(selA.z, selB.z)
 
         val sizeX = (maxX - minX + 1).coerceAtLeast(1)
         val sizeY = (maxY - minY + 1).coerceAtLeast(1)
@@ -142,11 +195,13 @@ internal object ScannerInstrumentClientUi {
                     if (boundaryOnly && !isBoundary(x, y, z)) continue
 
                     val wp = BlockPos(x, y, z)
-                    val state = world.getBlockState(wp)
-                    if (state.block == Blocks.AIR) continue
+                    val rawState = world.getBlockState(wp)
+                    if (rawState.block == Blocks.AIR) continue
 
+                    val state = rotateState(rawState, rotation)
                     val req = requirementFromState(state) ?: continue
-                    val rel = BlockPos(x - origin.x, y - origin.y, z - origin.z)
+                    val relWorld = BlockPos(x - exportOrigin.x, y - exportOrigin.y, z - exportOrigin.z)
+                    val rel = github.kasuminova.prototypemachinery.impl.machine.structure.StructureUtils.rotatePos(relWorld, rotation)
                     blocks[rel] = req
 
                     val key = req.stableKey()
@@ -165,6 +220,26 @@ internal object ScannerInstrumentClientUi {
             }
 
         return StructurePreviewModel(blocks = blocks, bounds = bounds, bom = bom)
+    }
+
+    private fun computePreviewKey(tag: NBTTagCompound?): Int {
+        if (tag == null) return 0
+        val o = tag.getCompoundTagOrNull(ScannerInstrumentNbt.TAG_ORIGIN) ?: return 0
+        val c = tag.getCompoundTagOrNull(ScannerInstrumentNbt.TAG_CORNER) ?: return 0
+
+        val exTag = tag.getCompoundTagOrNull(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN)
+        val pf = tag.getInteger(ScannerInstrumentNbt.TAG_PREVIEW_FACING)
+        val pr = tag.getInteger(ScannerInstrumentNbt.TAG_PREVIEW_ROT)
+        val pm = tag.getBoolean(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR)
+
+        return Objects.hash(
+            o.getInteger("x"), o.getInteger("y"), o.getInteger("z"),
+            c.getInteger("x"), c.getInteger("y"), c.getInteger("z"),
+            exTag?.getInteger("x") ?: Int.MIN_VALUE,
+            exTag?.getInteger("y") ?: Int.MIN_VALUE,
+            exTag?.getInteger("z") ?: Int.MIN_VALUE,
+            pf, pr, pm,
+        )
     }
 
     // --- Scanner GUI textures ---
@@ -252,24 +327,26 @@ internal object ScannerInstrumentClientUi {
     @JvmStatic
     fun addWidgets(root: Flow, tagProvider: () -> NBTTagCompound?, syncManager: PanelSyncManager) {
         // ---- 3D structure preview (x:10,y:12,w:171,h:203) ----
-        // Note: this is a purely visual preview; all built-in interactions are disabled.
-        val previewModel = buildSelectionPreviewModel(tagProvider())
-        root.child(
-            StructurePreview3DWidget(
-                model = previewModel,
-                wireframeProvider = { false },
-                autoRotateProvider = { false },
-                // Allow rotate/pan/zoom.
-                inputEnabledProvider = { true },
-                // Keep read-only: disable click picking / selection.
-                clickPickEnabledProvider = { false },
-                // Render a small compass (N/E/S/W) for orientation.
-                compassEnabledProvider = { true }
-            )
-                .pos(10, 12)
-                .size(171, 203)
-                .addTooltipLine("结构预览（只读）")
+        // Note: this is a purely visual preview; keep the widget instance stable and refresh its internal
+        // render caches when the NBT key changes (avoid widget-tree remove/add to prevent "组件丢失").
+        val previewWidget: StructurePreview3DWidget = StructurePreview3DWidget(
+            model = buildSelectionPreviewModel(tagProvider()),
+            wireframeProvider = { false },
+            autoRotateProvider = { false },
+            // Allow rotate/pan/zoom.
+            inputEnabledProvider = { true },
+            // Keep read-only: disable click picking / selection.
+            clickPickEnabledProvider = { false },
+            // Render a small compass (N/E/S/W) for orientation.
+            compassEnabledProvider = { true },
+            dynamicModelKeyProvider = { computePreviewKey(tagProvider()) },
+            dynamicModelProvider = { buildSelectionPreviewModel(tagProvider()) }
         )
+            .pos(10, 12)
+            .size(171, 203)
+            .addTooltipLine(tr("pm.scanner.tooltip.preview"))
+
+        root.child(previewWidget)
 
         // ---- lang/id input boxes ----
         root.child(
@@ -277,7 +354,7 @@ internal object ScannerInstrumentClientUi {
                 .syncHandler("langName", 0)
                 .background(INPUT_BG)
                 .hoverBackground(INPUT_BG)
-                .addTooltipLine("本地化名称：导出结构时的显示名（可留空）")
+                .addTooltipLine(tr("pm.scanner.tooltip.lang_name"))
                 .pos(215, 17)
                 .size(153, 13)
         )
@@ -286,7 +363,7 @@ internal object ScannerInstrumentClientUi {
                 .syncHandler("structureId", 0)
                 .background(INPUT_BG)
                 .hoverBackground(INPUT_BG)
-                .addTooltipLine("结构 ID：用于保存文件名/注册（会自动 sanitize）")
+                .addTooltipLine(tr("pm.scanner.tooltip.structure_id"))
                 .pos(215, 31)
                 .size(153, 13)
         )
@@ -294,7 +371,7 @@ internal object ScannerInstrumentClientUi {
         // ---- expanded setup ----
         root.child(
             smallSwitchToggle()
-                .addTooltipLine("是否启用扩展结构（按数量/间距生成重复切片）")
+                .addTooltipLine(tr("pm.scanner.tooltip.expanded_enabled"))
                 .syncHandler("expandedEnabled", 0)
                 // expanded_setup: X:197 Y:50; expanded_o_f: X:19 Y:3
                 .pos(216, 53)
@@ -307,7 +384,7 @@ internal object ScannerInstrumentClientUi {
                 .setNumbersLong { it.coerceAtLeast(1L) }
                 .background(INPUT_BG)
                 .hoverBackground(INPUT_BG)
-                .addTooltipLine("扩展数量：切片重复次数（最小 1）")
+                .addTooltipLine(tr("pm.scanner.tooltip.expanded_quantity"))
                 // expanded_quantity: X:19 Y:17 W:68 H:13
                 .pos(216, 67)
                 .size(68, 13)
@@ -328,7 +405,7 @@ internal object ScannerInstrumentClientUi {
                 .setNumbersLong { it.coerceAtLeast(0L) }
                 .background(INPUT_BG)
                 .hoverBackground(INPUT_BG)
-                .addTooltipLine("扩展间距：每段切片之间的间隔（最小 0）")
+                .addTooltipLine(tr("pm.scanner.tooltip.expanded_spacing"))
                 // expanded_spacing: X:103 Y:17 W:68 H:13
                 .pos(300, 67)
                 .size(68, 13)
@@ -337,21 +414,21 @@ internal object ScannerInstrumentClientUi {
         // ---- structure setup small switches ----
         root.child(
             smallSwitchToggle()
-                .addTooltipLine("子结构模式：导出时标记为子结构")
+                .addTooltipLine(tr("pm.scanner.tooltip.substructure"))
                 .syncHandler("substructure", 0)
                 .pos(215, 88)
                 .size(20, 13)
         )
         root.child(
             smallSwitchToggle()
-                .addTooltipLine("匹配 NBT：导出时包含 TileEntity NBT 约束")
+                .addTooltipLine(tr("pm.scanner.tooltip.match_nbt"))
                 .syncHandler("matchNbt", 0)
                 .pos(263, 88)
                 .size(20, 13)
         )
         root.child(
             smallSwitchToggle()
-                .addTooltipLine("允许镜像：结构可在镜像后匹配")
+                .addTooltipLine(tr("pm.scanner.tooltip.allow_mirror"))
                 .syncHandler("allowMirror", 0)
                 .pos(306, 88)
                 .size(20, 13)
@@ -365,8 +442,8 @@ internal object ScannerInstrumentClientUi {
                 .background(INPUT_BG)
                 .hoverBackground(INPUT_BG)
                 // NOTE: 与底图中的图标/留白对齐：向右微调。
-                .addTooltipLine("原点 X：可从预览中选取/或手动输入")
-                .pos(219, 110)
+                .addTooltipLine(tr("pm.scanner.tooltip.export_origin_x"))
+                .pos(212, 110)
                 .size(69, 13)
         )
         root.child(
@@ -375,8 +452,8 @@ internal object ScannerInstrumentClientUi {
                 .setNumbersLong { it }
                 .background(INPUT_BG)
                 .hoverBackground(INPUT_BG)
-                .addTooltipLine("原点 Y：可从预览中选取/或手动输入")
-                .pos(219, 124)
+                .addTooltipLine(tr("pm.scanner.tooltip.export_origin_y"))
+                .pos(212, 124)
                 .size(69, 13)
         )
         root.child(
@@ -385,23 +462,24 @@ internal object ScannerInstrumentClientUi {
                 .setNumbersLong { it }
                 .background(INPUT_BG)
                 .hoverBackground(INPUT_BG)
-                .addTooltipLine("原点 Z：可从预览中选取/或手动输入")
-                .pos(219, 138)
+                .addTooltipLine(tr("pm.scanner.tooltip.export_origin_z"))
+                .pos(212, 138)
                 .size(69, 13)
         )
 
         // reset origin (client: just refocuses values from current origin)
         root.child(
             TriStateButton(BTN_RESET_ORIGIN_N, BTN_RESET_ORIGIN_H, BTN_RESET_ORIGIN_P)
-                .pos(200, 154)
+                .pos(200, 152)
                 .size(39, 13)
-                .addTooltipLine("重置原点输入：用当前原点坐标填充 X/Y/Z")
+                .addTooltipLine(tr("pm.scanner.tooltip.reset_origin_input"))
                 .onMousePressed { mouseButton: Int ->
                     if (mouseButton != 0) return@onMousePressed false
                     // We can't directly set TextFieldWidget text reliably here;
                     // instead, set originEdit to current origin via server action.
                     val tag = tagProvider() ?: return@onMousePressed true
-                    val origin = tag.getCompoundTagOrNull(ScannerInstrumentNbt.TAG_ORIGIN)
+                    val origin = tag.getCompoundTagOrNull(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN)
+                        ?: tag.getCompoundTagOrNull(ScannerInstrumentNbt.TAG_ORIGIN)
                     if (origin != null) {
                         ScannerInstrumentUi.callAction(syncManager, ScannerInstrumentUi.Action.SET_ORIGIN_TO) { p ->
                             p.writeInt(origin.getInteger("x"))
@@ -416,9 +494,9 @@ internal object ScannerInstrumentClientUi {
         // set origin from edit buffer
         root.child(
             TriStateButton(BTN_SET_ORIGIN_N, BTN_SET_ORIGIN_H, BTN_SET_ORIGIN_P)
-                .pos(242, 154)
+                .pos(242, 152)
                 .size(39, 13)
-                .addTooltipLine("设定原点：把 X/Y/Z 输入写入为结构原点")
+                .addTooltipLine(tr("pm.scanner.tooltip.set_origin_from_input"))
                 .onMousePressed { mouseButton: Int ->
                     if (mouseButton != 0) return@onMousePressed false
                     ScannerInstrumentUi.callAction(syncManager, ScannerInstrumentUi.Action.SET_ORIGIN_FROM_EDIT)
@@ -429,10 +507,10 @@ internal object ScannerInstrumentClientUi {
         // size preview text
         root.child(
             TextWidget(IKey.dynamic {
-                val tag = tagProvider() ?: return@dynamic "X:---- Y:---- Z:----"
+                val tag = tagProvider() ?: return@dynamic tr("pm.scanner.size_preview.empty")
                 val o = tag.getCompoundTagOrNull(ScannerInstrumentNbt.TAG_ORIGIN)
                 val c = tag.getCompoundTagOrNull(ScannerInstrumentNbt.TAG_CORNER)
-                if (o == null || c == null) return@dynamic "X:---- Y:---- Z:----"
+                if (o == null || c == null) return@dynamic tr("pm.scanner.size_preview.empty")
                 val ox = o.getInteger("x")
                 val oy = o.getInteger("y")
                 val oz = o.getInteger("z")
@@ -442,12 +520,12 @@ internal object ScannerInstrumentClientUi {
                 val sx = kotlin.math.abs(cx - ox) + 1
                 val sy = kotlin.math.abs(cy - oy) + 1
                 val sz = kotlin.math.abs(cz - oz) + 1
-                "X:$sx Y:$sy Z:$sz"
+                tr("pm.scanner.size_preview.value", sx, sy, sz)
             })
                 // origin_set_size_preview: size_preview Y:67 -> 65
-                .pos(221, 172)
+                .pos(214, 175)
                 .size(64, 8)
-                .alignment(Alignment.CenterLeft)
+                .alignment(Alignment.CENTER)
         )
 
         // ---- preview orientation group ----
@@ -455,7 +533,7 @@ internal object ScannerInstrumentClientUi {
             TriStateButton(BTN_RESET_ORIENT_N, BTN_RESET_ORIENT_H, BTN_RESET_ORIENT_P)
                 .pos(306, 132)
                 .size(30, 13)
-                .addTooltipLine("重置预览方向：朝向/旋转/镜像恢复默认")
+                .addTooltipLine(tr("pm.scanner.tooltip.reset_preview_orientation"))
                 .onMousePressed { mouseButton: Int ->
                     if (mouseButton != 0) return@onMousePressed false
                     ScannerInstrumentUi.callAction(syncManager, ScannerInstrumentUi.Action.RESET_PREVIEW_ORIENTATION)
@@ -465,7 +543,7 @@ internal object ScannerInstrumentClientUi {
 
         root.child(
             chooseSwitchToggle()
-                .addTooltipLine("镜像预览：仅影响预览显示，不会修改已选坐标")
+                .addTooltipLine(tr("pm.scanner.tooltip.preview_mirror"))
                 .syncHandler("previewMirror", 0)
                 .pos(356, 133)
                 .size(11, 11)
@@ -490,7 +568,7 @@ internal object ScannerInstrumentClientUi {
             TriStateButton(BTN_DELETE_N, BTN_DELETE_H, BTN_DELETE_P)
                 .pos(197, 191)
                 .size(21, 22)
-                .addTooltipLine("清空：清除已选择的 origin/corner")
+                .addTooltipLine(tr("pm.scanner.tooltip.clear"))
                 .onMousePressed { mouseButton: Int ->
                     if (mouseButton != 0) return@onMousePressed false
                     ScannerInstrumentUi.callAction(syncManager, ScannerInstrumentUi.Action.CLEAR)
@@ -502,7 +580,7 @@ internal object ScannerInstrumentClientUi {
             TriStateButton(BTN_RESET_N, BTN_RESET_H, BTN_RESET_P)
                 .pos(219, 191)
                 .size(21, 22)
-                .addTooltipLine("初始化：重置界面字段并清空选择")
+                .addTooltipLine(tr("pm.scanner.tooltip.reset"))
                 .onMousePressed { mouseButton: Int ->
                     if (mouseButton != 0) return@onMousePressed false
                     ScannerInstrumentUi.callAction(syncManager, ScannerInstrumentUi.Action.RESET)
@@ -514,7 +592,7 @@ internal object ScannerInstrumentClientUi {
             TriStateButton(BTN_OUTPUT_N, BTN_OUTPUT_H, BTN_OUTPUT_P)
                 .pos(241, 191)
                 .size(130, 22)
-                .addTooltipLine("导出：将当前选择导出为结构 JSON（写入 config/.../scanned）")
+                .addTooltipLine(tr("pm.scanner.tooltip.export"))
                 .onMousePressed { mouseButton: Int ->
                     if (mouseButton != 0) return@onMousePressed false
                     ScannerInstrumentUi.callAction(syncManager, ScannerInstrumentUi.Action.EXPORT)
@@ -592,16 +670,8 @@ internal object ScannerInstrumentClientUi {
         }
 
         init {
-            addTooltipLine(
-                when (facing) {
-                    EnumFacing.UP -> "预览朝向：顶 (UP)"
-                    EnumFacing.DOWN -> "预览朝向：底 (DOWN)"
-                    EnumFacing.EAST -> "预览朝向：东 (EAST)"
-                    EnumFacing.WEST -> "预览朝向：西 (WEST)"
-                    EnumFacing.NORTH -> "预览朝向：北 (NORTH)"
-                    EnumFacing.SOUTH -> "预览朝向：南 (SOUTH)"
-                }
-            )
+            val key = "pm.scanner.tooltip.preview_facing." + facing.name.lowercase(Locale.ROOT)
+            addTooltipLine(I18n.format(key))
             onMousePressed { btn ->
                 if (btn != 0) return@onMousePressed false
                 ScannerInstrumentUi.callAction(syncManager, ScannerInstrumentUi.Action.SET_PREVIEW_FACING) { p ->
@@ -630,15 +700,11 @@ internal object ScannerInstrumentClientUi {
         }
 
         init {
-            addTooltipLine(
-                when (rot) {
-                    0 -> "预览旋转：0°"
-                    1 -> "预览旋转：90°"
-                    2 -> "预览旋转：180°"
-                    3 -> "预览旋转：270°"
-                    else -> "预览旋转"
-                }
-            )
+            val key = when (rot) {
+                0, 1, 2, 3 -> "pm.scanner.tooltip.preview_rot.$rot"
+                else -> "pm.scanner.tooltip.preview_rot.other"
+            }
+            addTooltipLine(I18n.format(key))
             onMousePressed { btn ->
                 if (btn != 0) return@onMousePressed false
                 ScannerInstrumentUi.callAction(syncManager, ScannerInstrumentUi.Action.SET_PREVIEW_ROT) { p ->

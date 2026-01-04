@@ -64,16 +64,16 @@ public data class HatchTier(
 
     public companion object {
         public val TIERS: List<HatchTier> = listOf(
-            HatchTier(1, "LV"),
-            HatchTier(2, "MV"),
-            HatchTier(3, "HV"),
-            HatchTier(4, "EV"),
-            HatchTier(5, "IV"),
-            HatchTier(6, "LuV"),
-            HatchTier(7, "ZPM"),
-            HatchTier(8, "UV"),
-            HatchTier(9, "UHV"),
-            HatchTier(10, "UEV")
+            HatchTier(1, "Lv1"),
+            HatchTier(2, "Lv2"),
+            HatchTier(3, "Lv3"),
+            HatchTier(4, "Lv4"),
+            HatchTier(5, "Lv5"),
+            HatchTier(6, "Lv6"),
+            HatchTier(7, "Lv7"),
+            HatchTier(8, "Lv8"),
+            HatchTier(9, "Lv9"),
+            HatchTier(10, "Lv10")
         )
 
         public fun fromTier(tier: Int): HatchTier = TIERS.getOrElse(tier - 1) { TIERS.first() }

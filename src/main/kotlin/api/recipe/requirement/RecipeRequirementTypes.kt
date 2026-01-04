@@ -5,7 +5,6 @@ import github.kasuminova.prototypemachinery.impl.recipe.requirement.type.Attribu
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.type.EnergyRequirementType
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.type.FluidRequirementType
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.type.ItemRequirementType
-import github.kasuminova.prototypemachinery.impl.recipe.requirement.type.ParallelismRequirementType
 import net.minecraft.util.ResourceLocation
 import java.util.concurrent.ConcurrentHashMap
 
@@ -38,9 +37,6 @@ public object RecipeRequirementTypes {
      */
     @JvmField
     public val ATTRIBUTE_MODIFIER: AttributeModifierRequirementType = register(AttributeModifierRequirementType())
-
-    @JvmField
-    public val PARALLELISM: ParallelismRequirementType = register(ParallelismRequirementType())
 
     @JvmStatic
     public fun <C : RecipeRequirementComponent, T : RecipeRequirementType<C>> register(type: T): T {

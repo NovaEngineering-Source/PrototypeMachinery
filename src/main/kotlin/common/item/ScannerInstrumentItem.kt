@@ -19,7 +19,7 @@ import net.minecraft.util.EnumFacing
 import net.minecraft.util.EnumHand
 import net.minecraft.util.ResourceLocation
 import net.minecraft.util.math.BlockPos
-import net.minecraft.util.text.TextComponentString
+import net.minecraft.util.text.TextComponentTranslation
 import net.minecraft.world.World
 
 /**
@@ -28,6 +28,10 @@ import net.minecraft.world.World
  * 用于整合包作者/开发者从世界中“框选并导出”结构 JSON。
  */
 internal class ScannerInstrumentItem : Item(), IGuiHolder<PlayerInventoryGuiData> {
+
+    private fun msg(player: EntityPlayer, key: String, vararg args: Any) {
+        player.sendMessage(TextComponentTranslation(key, *args))
+    }
 
     init {
         registryName = ResourceLocation(PrototypeMachinery.MOD_ID, "scanner_instrument")
@@ -50,6 +54,9 @@ internal class ScannerInstrumentItem : Item(), IGuiHolder<PlayerInventoryGuiData
             // Ensure defaults for better UX (structureId, preview defaults, etc.)
             val data = ScannerInstrumentNbt.getOrCreateData(stack)
             ScannerInstrumentNbt.ensureDefaults(stack, data)
+
+            // Item responsibility: selecting blocks + opening UI.
+            // Export is UI-only.
             PlayerInventoryGuiFactory.INSTANCE.openFromHand(playerIn, handIn)
         }
 
@@ -82,52 +89,25 @@ internal class ScannerInstrumentItem : Item(), IGuiHolder<PlayerInventoryGuiData
 
         val isSneaking = player.isSneaking
 
-        // Sneak + both points set => export.
-        if (isSneaking && origin != null && corner != null) {
-            val sel = computeSelection(origin, corner)
-            if (sel.volume > WARN_EXPORT_VOLUME) {
-                player.sendMessage(TextComponentString("[PM] 注意：选区较大（blocks=${sel.volume}），导出可能耗时/卡服。"))
-            }
+        // New UX: Sneak + right click BLOCK => (re)select origin and clear corner.
+        // Export is UI-only.
+        if (isSneaking) {
+            ScannerInstrumentNbt.writeOrigin(data, pos)
+            data.removeTag(ScannerInstrumentNbt.TAG_CORNER)
 
-            val suggested = stack.displayName
-            val rawId = data.getString(ScannerInstrumentNbt.TAG_STRUCTURE_ID).takeIf { it.isNotBlank() }
-                ?: suggested
-                ?: "scan_${player.name}_${worldIn.totalWorldTime}"
-            val structureId = StructureExportUtil.sanitizeId(rawId)
+            // New selection: reset export/preview overrides to AUTO.
+            data.removeTag(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN)
+            data.setBoolean(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN_AUTO, true)
+            data.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_AUTO, true)
+            data.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_FACING, EnumFacing.NORTH.index)
+            data.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_ROT, 0)
+            data.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR, false)
 
-            val displayName = data.getString(ScannerInstrumentNbt.TAG_LANG_NAME).takeIf { it.isNotBlank() }
-            val includeTileNbtConstraints = data.getBoolean(ScannerInstrumentNbt.TAG_INCLUDE_TILE_NBT)
+            // Cache a suggested id based on current name (anvil rename) for future export.
+            data.setString(ScannerInstrumentNbt.TAG_STRUCTURE_ID, StructureExportUtil.sanitizeId(stack.displayName))
 
-            val structure = StructureExportUtil.exportWorldSelectionAsTemplate(
-                world = worldIn,
-                origin = origin,
-                corner = corner,
-                structureId = structureId,
-                displayName = displayName,
-                includeAir = false,
-                includeTileNbtConstraints = includeTileNbtConstraints,
-            )
-
-            val file = StructureExportUtil.writeStructureJson(
-                data = structure,
-                subDir = "scanned",
-                preferredFileName = structureId,
-            )
-
-            ScannerInstrumentNbt.clearSelection(data)
-            stack.tagCompound = stack.tagCompound // keep
-
-            player.sendMessage(TextComponentString("[PM] 结构已导出: id=$structureId"))
-            player.sendMessage(TextComponentString("[PM] 选区 blocks=${sel.volume} NBT=${if (includeTileNbtConstraints) "ON" else "OFF"}"))
-            player.sendMessage(TextComponentString("[PM] 文件: ${file.absolutePath}"))
-            player.sendMessage(TextComponentString("[PM] 提示: 结构 JSON 需要重启/重载后才会被加载（当前暂无在线重载）。"))
-            return EnumActionResult.SUCCESS
-        }
-
-        // Sneak + only origin set => clear selection.
-        if (isSneaking && origin != null && corner == null) {
-            ScannerInstrumentNbt.clearSelection(data)
-            player.sendMessage(TextComponentString("[PM] 已清空选择（origin/corner）。"))
+            msg(player, "pm.scanner.chat.origin_set_and_corner_cleared", pos.x, pos.y, pos.z)
+            msg(player, "pm.scanner.chat.hint_set_corner_then_export")
             return EnumActionResult.SUCCESS
         }
 
@@ -135,33 +115,65 @@ internal class ScannerInstrumentItem : Item(), IGuiHolder<PlayerInventoryGuiData
         if (origin == null) {
             ScannerInstrumentNbt.writeOrigin(data, pos)
             data.removeTag(ScannerInstrumentNbt.TAG_CORNER)
+
+            // New selection: reset export/preview overrides to AUTO.
+            data.removeTag(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN)
+            data.setBoolean(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN_AUTO, true)
+            data.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_AUTO, true)
+            data.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_FACING, EnumFacing.NORTH.index)
+            data.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_ROT, 0)
+            data.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR, false)
+
             // Cache a suggested id based on current name (anvil rename) for future export.
             data.setString(ScannerInstrumentNbt.TAG_STRUCTURE_ID, StructureExportUtil.sanitizeId(stack.displayName))
 
-            player.sendMessage(TextComponentString("[PM] 已设置 origin: ${pos.x},${pos.y},${pos.z}"))
-            player.sendMessage(TextComponentString("[PM] 再右键一个角点设置范围；潜行右键导出。"))
+            msg(player, "pm.scanner.chat.origin_set", pos.x, pos.y, pos.z)
+            msg(player, "pm.scanner.chat.hint_set_corner_then_export")
             return EnumActionResult.SUCCESS
         }
 
         if (corner == null) {
             ScannerInstrumentNbt.writeCorner(data, pos)
+
+            // Selection completed/changed: allow auto re-detect.
+            data.removeTag(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN)
+            data.setBoolean(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN_AUTO, true)
+            data.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_AUTO, true)
+            data.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_FACING, EnumFacing.NORTH.index)
+            data.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_ROT, 0)
+            data.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR, false)
+
             val sel = computeSelection(origin, pos)
-            player.sendMessage(TextComponentString("[PM] 已设置 corner: ${pos.x},${pos.y},${pos.z}"))
-            player.sendMessage(
-                TextComponentString(
-                    "[PM] 选区: min=${sel.min.x},${sel.min.y},${sel.min.z} max=${sel.max.x},${sel.max.y},${sel.max.z} size=${sel.size.x}x${sel.size.y}x${sel.size.z} blocks=${sel.volume}"
-                )
+
+            msg(player, "pm.scanner.chat.corner_set", pos.x, pos.y, pos.z)
+            msg(
+                player,
+                "pm.scanner.chat.selection",
+                sel.min.x, sel.min.y, sel.min.z,
+                sel.max.x, sel.max.y, sel.max.z,
+                sel.size.x, sel.size.y, sel.size.z,
+                sel.volume
             )
             if (sel.volume > WARN_EXPORT_VOLUME) {
-                player.sendMessage(TextComponentString("[PM] 警告：选区较大（blocks=${sel.volume}），导出可能耗时/卡服。"))
+                msg(player, "pm.scanner.chat.warn_large_selection", sel.volume)
             }
-            player.sendMessage(TextComponentString("[PM] 潜行右键任意方块导出结构 JSON。"))
+
+            msg(player, "pm.scanner.chat.hint_export")
             return EnumActionResult.SUCCESS
         }
 
         // Both points already set and not sneaking: update corner for convenience.
         ScannerInstrumentNbt.writeCorner(data, pos)
-        player.sendMessage(TextComponentString("[PM] 已更新 corner: ${pos.x},${pos.y},${pos.z}（潜行右键导出）"))
+
+        // Selection changed: allow auto re-detect.
+        data.removeTag(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN)
+        data.setBoolean(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN_AUTO, true)
+        data.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_AUTO, true)
+        data.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_FACING, EnumFacing.NORTH.index)
+        data.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_ROT, 0)
+        data.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR, false)
+
+        msg(player, "pm.scanner.chat.corner_updated", pos.x, pos.y, pos.z)
         return EnumActionResult.SUCCESS
     }
 

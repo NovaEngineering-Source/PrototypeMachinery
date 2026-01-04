@@ -218,7 +218,7 @@ lang 文件位置：
 
 - [结构预览（世界投影 / GUI）](./StructurePreview.md)
 
-## GUI 贴图规范与切片/atlas 管线（结构预览相关）
+## GUI 贴图规范（结构预览相关）
 
 结构预览 GUI 的贴图资源与规范文档在资源目录中：
 
@@ -228,9 +228,7 @@ lang 文件位置：
 
 如果需要把大量小贴图 stitch 成 TextureMap（降低纹理 bind 开销），项目还提供：
 
-- 构建期切片工具：`src/main/kotlin/devtools/atlas/GuiSliceGenerator.kt`
-- 切片 manifest：`src/main/resources/assets/prototypemachinery/pm_gui_slices/*.json`
-- 运行时 atlas：`src/main/kotlin/client/atlas/PmGuiAtlas.kt`
+结构预览 UI 当前以“稳定路径的切片 PNG”直接引用为主（不依赖额外的构建期切片工具/运行时 atlas 管线）。
 
 ## GUI 贴图规范（Machine UI / gui_states）
 

@@ -17,9 +17,8 @@ Highlights from the latest large refactors / additions:
   - UI texture spec (layout/interaction/naming):
     - `src/main/resources/assets/prototypemachinery/textures/gui/gui_structure_preview/gui_structure_preview.md`
 
-- **GUI textures (sliced assets + optional runtime atlas)**: migrated preview GUI textures from a monolithic spritesheet to sliced per-component textures with stable paths. Also provides an optional runtime GUI atlas (TextureMap + Stitcher) to reduce bind overhead.
-  - Runtime atlas: `src/main/kotlin/client/atlas/PmGuiAtlas.kt`
-  - Build-time slicer: `src/main/kotlin/devtools/atlas/GuiSliceGenerator.kt` + `src/main/resources/assets/prototypemachinery/pm_gui_slices/*.json`
+- **GUI textures (sliced assets with stable paths)**: migrated preview GUI textures from a monolithic spritesheet to sliced per-component textures with stable, direct references.
+   - Spec doc: `src/main/resources/assets/prototypemachinery/textures/gui/gui_structure_preview/gui_structure_preview.md`
 
 - **Structure match fast-fail**: `StructurePattern` exposes bounds (`minPos`/`maxPos`) and `isAreaLoaded(...)` to avoid matching against unloaded chunks.
 

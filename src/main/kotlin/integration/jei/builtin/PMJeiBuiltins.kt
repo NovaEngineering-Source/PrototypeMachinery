@@ -13,7 +13,6 @@ import github.kasuminova.prototypemachinery.integration.jei.builtin.ingredient.V
 import github.kasuminova.prototypemachinery.integration.jei.builtin.requirement.EnergyRequirementJeiRenderer
 import github.kasuminova.prototypemachinery.integration.jei.builtin.requirement.FluidRequirementJeiRenderer
 import github.kasuminova.prototypemachinery.integration.jei.builtin.requirement.ItemRequirementJeiRenderer
-import github.kasuminova.prototypemachinery.integration.jei.builtin.requirement.ParallelismRequirementJeiRenderer
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiDecoratorRegistry
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiIngredientKindRegistry
 import github.kasuminova.prototypemachinery.integration.jei.registry.JeiNodeIngredientProviderRegistry
@@ -35,7 +34,6 @@ public object PMJeiBuiltins {
         JeiRequirementRendererRegistry.register(RecipeRequirementTypes.ITEM, ItemRequirementJeiRenderer)
         JeiRequirementRendererRegistry.register(RecipeRequirementTypes.FLUID, FluidRequirementJeiRenderer)
         JeiRequirementRendererRegistry.register(RecipeRequirementTypes.ENERGY, EnergyRequirementJeiRenderer)
-        JeiRequirementRendererRegistry.register(RecipeRequirementTypes.PARALLELISM, ParallelismRequirementJeiRenderer)
 
         // Ingredient kinds (JEI indexing + group init/set)
         JeiIngredientKindRegistry.register(VanillaItemKindHandler)

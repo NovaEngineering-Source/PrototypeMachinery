@@ -108,6 +108,22 @@ Limitation:
 
 - NBT constraints on `alternatives` are not fully supported yet; the loader warns and falls back to the base option only.
 
+### Composable predicates (`predicates`) and preview display (`display`)
+
+Pattern elements now support:
+
+- `blockId` can be omitted, but then you must provide `predicates` (otherwise the element is skipped with a warning).
+- `predicates: []`: each entry is parsed into a `BlockPredicate`, and all predicates are AND-composed into `CompositeBlockPredicate`.
+  - unknown predicate ids are skipped with a warning.
+- `display`: the loader wraps the final predicate as `DisplayOverridePredicate(inner, DisplayBlockListRequirement)`.
+  - this is **preview-only** metadata: it does not affect matching, only client preview/BOM.
+
+### Load-time `blockIdRegex` expansion cache
+
+- `prototypemachinery:block_id_regex` expands the regex by scanning `Block.REGISTRY` at load time and caching the resulting `Set<Block>`.
+- matching does not run regex at runtime; it only checks membership.
+- note: the regex uses full-string matching (`Pattern.matcher(id).matches()`).
+
 ### Controller position overlap guard
 
 When `offset == (0,0,0)`, an element at `(0,0,0)` would overlap the controller position. The loader warns and ignores that pattern element.

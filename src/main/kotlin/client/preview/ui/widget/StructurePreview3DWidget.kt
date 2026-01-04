@@ -8,6 +8,7 @@ import com.cleanroommc.modularui.widget.Widget
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.AnyOfRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.BlockRequirement
+import github.kasuminova.prototypemachinery.api.machine.structure.preview.DisplayBlockListRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.StructurePreviewModel
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ui.StructurePreviewEntryStatus
@@ -42,8 +43,11 @@ import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats
 import net.minecraft.client.renderer.vertex.VertexBuffer
 import net.minecraft.client.renderer.vertex.VertexFormat
+import net.minecraft.client.resources.I18n
 import net.minecraft.init.Biomes
 import net.minecraft.init.Blocks
+import net.minecraft.nbt.JsonToNBT
+import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.tileentity.TileEntity
 import net.minecraft.util.BlockRenderLayer
 import net.minecraft.util.EnumFacing
@@ -78,7 +82,7 @@ import kotlin.math.sqrt
  * - Optional per-block status coloring via [statusProvider].
  */
 internal class StructurePreview3DWidget(
-    private val model: StructurePreviewModel,
+    private var model: StructurePreviewModel,
     /** Optional controller block requirement to be rendered at (0,0,0). */
     private val controllerRequirement: BlockRequirement? = null,
     /** Structure flag: hide world blocks when formed (preview-specific behavior controlled by [formedPreviewProvider]). */
@@ -111,7 +115,11 @@ internal class StructurePreview3DWidget(
     /** When false, disable click picking (drag/zoom can still work). */
     private val clickPickEnabledProvider: (() -> Boolean)? = null,
     /** When true, render a small compass overlay (N/E/S/W) in the corner of the preview. */
-    private val compassEnabledProvider: (() -> Boolean)? = null
+    private val compassEnabledProvider: (() -> Boolean)? = null,
+    /** Optional dynamic model key; when it changes, the widget refreshes its internal render caches (no widget-tree mutation). */
+    private val dynamicModelKeyProvider: (() -> Int)? = null,
+    /** Optional dynamic model provider used when [dynamicModelKeyProvider] changes. */
+    private val dynamicModelProvider: (() -> StructurePreviewModel)? = null
 ) : Widget<StructurePreview3DWidget>() {
 
     internal data class GeckoPreviewInstance(
@@ -141,6 +149,7 @@ internal class StructurePreview3DWidget(
         val relPos: BlockPos,
         var state: IBlockState,
         var te: TileEntity? = null,
+        val tileNbt: NBTTagCompound? = null,
     )
 
     private data class BlockModelChunkMesh(
@@ -195,8 +204,8 @@ internal class StructurePreview3DWidget(
         val guiScale: Int
     )
 
-    private val dims: StructureDims
-    private val sizeY: Int
+    private var dims: StructureDims = StructureDims(1, 1, 1)
+    private var sizeY: Int = 1
 
     // Per-frame scratch to reduce allocations.
     private val tmpSelectedChunkMeshes: ArrayList<BlockModelChunkMesh> = ArrayList(64)
@@ -204,42 +213,36 @@ internal class StructurePreview3DWidget(
     private var tmpTranslucentDistSq: DoubleArray = DoubleArray(64)
     private val tmpLookupPos: BlockPos.MutableBlockPos = BlockPos.MutableBlockPos()
 
-    private val cubes: List<Cube>
-    private val blockEntries: List<BlockEntry>
+    private var cubes: List<Cube> = emptyList()
+    private var blockEntries: List<BlockEntry> = emptyList()
 
     /** Fast lookup for click-picking: shifted relPos (within local bounds) -> requirement. */
-    private val requirementByShiftedPos: Map<BlockPos, BlockRequirement>
+    private var requirementByShiftedPos: Map<BlockPos, BlockRequirement> = emptyMap()
     // IMPORTANT: the preview coordinate system uses controller origin = (0,0,0), but most
     // structures do not include the controller in their pattern. Ensure our local bounds always
     // include the origin so rel coords stay non-negative and origin can be rendered.
-    private val min: BlockPos = BlockPos(
-        min(model.bounds.min.x, 0),
-        min(model.bounds.min.y, 0),
-        min(model.bounds.min.z, 0)
-    )
-    private val maxB: BlockPos = BlockPos(
-        max(model.bounds.max.x, 0),
-        max(model.bounds.max.y, 0),
-        max(model.bounds.max.z, 0)
-    )
+    private var min: BlockPos = BlockPos.ORIGIN
+    private var maxB: BlockPos = BlockPos.ORIGIN
 
     /** Full block state map (structure-local coords) for adjacency queries. */
-    private val allBlockStates: MutableMap<BlockPos, IBlockState>
+    private val allBlockStates: MutableMap<BlockPos, IBlockState> = HashMap()
 
     // ===== TESR cache (best-effort) =====
     private var tesrEntries: List<TesrEntry> = emptyList()
 
-    private val anyOfRequirementKeys: List<String>
+    private var anyOfRequirementKeys: List<String> = emptyList()
     private var lastAnyOfSelectionHash: Int = 0
     private var forceFullRebuildOnce: Boolean = false
 
+    private var lastDynamicModelKey: Int? = null
+
     /** Dummy access providing neighbor states + fullbright, for renderBlock face culling. */
-    private val blockAccess: IBlockAccess
+    private val blockAccess: IBlockAccess = StructureBlockAccess(allBlockStates, ProjectionConfig.FULLBRIGHT_LIGHTMAP_UV)
 
     // ===== Block model VBO cache (built incrementally) =====
 
-    private val blockModelGroupsAll: List<Pair<ChunkKey, List<BlockEntry>>>
-    private val blockModelGroupsControllerOnly: List<Pair<ChunkKey, List<BlockEntry>>>
+    private var blockModelGroupsAll: List<Pair<ChunkKey, List<BlockEntry>>> = emptyList()
+    private var blockModelGroupsControllerOnly: List<Pair<ChunkKey, List<BlockEntry>>> = emptyList()
 
     private enum class BlockModelMode {
         ALL,
@@ -248,7 +251,7 @@ internal class StructurePreview3DWidget(
 
     private var blockModelMode: BlockModelMode = BlockModelMode.ALL
     private var lastFormedPreview: Boolean = false
-    private val controllerRelPos: BlockPos?
+    private var controllerRelPos: BlockPos? = null
     private val builtBlockModelMeshes: MutableList<BlockModelChunkMesh> = ArrayList()
     private var blockModelBuildCursor: Int = 0
     private var blockModelRenderCursor: Int = 0
@@ -318,78 +321,8 @@ internal class StructurePreview3DWidget(
     private val geckoCache: HashMap<Int, GeckoCacheEntry> = HashMap()
 
     init {
-        val cubesMut = buildBoundaryCubes(model).toMutableList()
-        val entriesMut = buildBoundaryBlockEntries(model).toMutableList()
-
-        // Keep entriesMut intact for picking/wireframe.
-        controllerRelPos = if (controllerRequirement != null) {
-            BlockPos(0 - min.x, 0 - min.y, 0 - min.z)
-        } else {
-            null
-        }
-
-        // Force-add controller origin entry even if it's not part of the boundary set.
-        // This makes the origin visible and helps adjacency face-culling look more realistic.
-        if (controllerRequirement != null) {
-            val ox = 0 - min.x
-            val oy = 0 - min.y
-            val oz = 0 - min.z
-
-            // Replace any existing origin entry to enforce "origin is controller" semantics.
-            cubesMut.removeAll { it.x == ox && it.y == oy && it.z == oz }
-            cubesMut.add(Cube(ox, oy, oz, controllerRequirement.stableKey().hashCode()))
-
-            entriesMut.removeAll { it.relX == ox && it.relY == oy && it.relZ == oz }
-            entriesMut.add(BlockEntry(ox, oy, oz, controllerRequirement))
-        }
-
-        cubes = cubesMut
-        blockEntries = entriesMut
-        requirementByShiftedPos = blockEntries.associate { it.relPos to it.requirement }
-
-        blockModelGroupsAll = groupByChunk(blockEntries)
-        blockModelGroupsControllerOnly = if (controllerRequirement != null && controllerRelPos != null) {
-            val e = blockEntries.firstOrNull { it.relPos == controllerRelPos }
-            if (e != null) groupByChunk(listOf(e)) else emptyList()
-        } else {
-            emptyList()
-        }
-
-        // Initial mode.
-        lastFormedPreview = formedPreviewProvider?.invoke() == true
-        blockModelMode = resolveBlockModelMode(lastFormedPreview)
-
-        // NOTE: keep init going; helper methods are defined below.
-        anyOfRequirementKeys = model.blocks.values
-            .asSequence()
-            .filterIsInstance<AnyOfRequirement>()
-            .map { it.stableKey() }
-            .distinct()
-            .toList()
-
-        lastAnyOfSelectionHash = computeAnyOfSelectionHash()
-
-        val statesMut = buildAllBlockStates(model)
-        if (controllerRequirement != null) {
-            val ox = 0 - min.x
-            val oy = 0 - min.y
-            val oz = 0 - min.z
-            val rel = BlockPos(ox, oy, oz)
-            val base = stateFromRequirementCached(controllerRequirement) ?: Blocks.AIR.defaultState
-            val st = applyFormedPropertyIfPresent(base, lastFormedPreview)
-            statesMut[rel] = st
-        }
-        allBlockStates = statesMut
-        blockAccess = StructureBlockAccess(allBlockStates, ProjectionConfig.FULLBRIGHT_LIGHTMAP_UV)
-
-        tesrEntries = buildTesrEntries()
-
-        dims = computeStructureDims()
-        sizeY = dims.sizeY
-
-        // Opening the screen should lock camera origin to the controller.
-        // (resetView() may choose to center the whole structure depending on tuning.)
-        resetViewToController()
+        lastDynamicModelKey = dynamicModelKeyProvider?.invoke()
+        rebuildFromModel(model, resetCamera = true)
     }
 
     private fun computeMmceLikeZoomTarget(dims: StructureDims): Float {
@@ -434,10 +367,11 @@ internal class StructurePreview3DWidget(
         lastFormedPreview = formedNow
 
         // Update controller state (formed property) and rebuild VBOs.
-        if (controllerRequirement != null && controllerRelPos != null) {
+        val crp = controllerRelPos
+        if (controllerRequirement != null && crp != null) {
             val base = stateFromRequirementCached(controllerRequirement) ?: Blocks.AIR.defaultState
             val st = applyFormedPropertyIfPresent(base, formedNow)
-            allBlockStates[controllerRelPos] = st
+            allBlockStates[crp] = st
         }
 
         // Switch block-model mode if needed.
@@ -523,9 +457,176 @@ internal class StructurePreview3DWidget(
 
     override fun onUpdate() {
         super.onUpdate()
+        refreshDynamicModelIfChanged()
         if (autoRotateProvider?.invoke() == true) {
             // Write to target so auto-rotate also benefits from smoothing.
             yawTargetDeg += 2.0f
+        }
+    }
+
+    private fun refreshDynamicModelIfChanged() {
+        val keyProvider = dynamicModelKeyProvider ?: return
+        val modelProvider = dynamicModelProvider ?: return
+
+        val newKey = try {
+            keyProvider.invoke()
+        } catch (_: Throwable) {
+            return
+        }
+
+        val lastKey = lastDynamicModelKey
+        if (lastKey != null && newKey == lastKey) return
+
+        val newModel = try {
+            modelProvider.invoke()
+        } catch (_: Throwable) {
+            null
+        } ?: return
+
+        lastDynamicModelKey = newKey
+        rebuildFromModel(newModel, resetCamera = false)
+    }
+
+    private fun rebuildFromModel(newModel: StructurePreviewModel, resetCamera: Boolean) {
+        model = newModel
+
+        // IMPORTANT: the preview coordinate system uses controller origin = (0,0,0), but most
+        // structures do not include the controller in their pattern. Ensure our local bounds always
+        // include the origin so rel coords stay non-negative and origin can be rendered.
+        min = BlockPos(
+            min(newModel.bounds.min.x, 0),
+            min(newModel.bounds.min.y, 0),
+            min(newModel.bounds.min.z, 0)
+        )
+        maxB = BlockPos(
+            max(newModel.bounds.max.x, 0),
+            max(newModel.bounds.max.y, 0),
+            max(newModel.bounds.max.z, 0)
+        )
+
+        val cubesMut = buildBoundaryCubes(newModel).toMutableList()
+        val entriesMut = buildBoundaryBlockEntries(newModel).toMutableList()
+
+        // Keep entriesMut intact for picking/wireframe.
+        controllerRelPos = if (controllerRequirement != null) {
+            BlockPos(0 - min.x, 0 - min.y, 0 - min.z)
+        } else {
+            null
+        }
+
+        // Force-add controller origin entry even if it's not part of the boundary set.
+        // This makes the origin visible and helps adjacency face-culling look more realistic.
+        if (controllerRequirement != null) {
+            val ox = 0 - min.x
+            val oy = 0 - min.y
+            val oz = 0 - min.z
+
+            // Replace any existing origin entry to enforce "origin is controller" semantics.
+            cubesMut.removeAll { it.x == ox && it.y == oy && it.z == oz }
+            cubesMut.add(Cube(ox, oy, oz, controllerRequirement.stableKey().hashCode()))
+
+            entriesMut.removeAll { it.relX == ox && it.relY == oy && it.relZ == oz }
+            entriesMut.add(BlockEntry(ox, oy, oz, controllerRequirement))
+        }
+
+        cubes = cubesMut
+        blockEntries = entriesMut
+        requirementByShiftedPos = blockEntries.associate { it.relPos to it.requirement }
+
+        blockModelGroupsAll = groupByChunk(blockEntries)
+        val crpNow = controllerRelPos
+        blockModelGroupsControllerOnly = if (controllerRequirement != null && crpNow != null) {
+            val e = blockEntries.firstOrNull { it.relPos == crpNow }
+            if (e != null) groupByChunk(listOf(e)) else emptyList()
+        } else {
+            emptyList()
+        }
+
+        // Initial mode.
+        lastFormedPreview = formedPreviewProvider?.invoke() == true
+        blockModelMode = resolveBlockModelMode(lastFormedPreview)
+
+        anyOfRequirementKeys = newModel.blocks.values
+            .asSequence()
+            .filterIsInstance<AnyOfRequirement>()
+            .map { it.stableKey() }
+            .distinct()
+            .toList()
+
+        lastAnyOfSelectionHash = computeAnyOfSelectionHash()
+
+        reqStateCache.clear()
+        val statesMut = buildAllBlockStates(newModel)
+        if (controllerRequirement != null) {
+            val ox = 0 - min.x
+            val oy = 0 - min.y
+            val oz = 0 - min.z
+            val rel = BlockPos(ox, oy, oz)
+            val base = stateFromRequirementCached(controllerRequirement) ?: Blocks.AIR.defaultState
+            val st = applyFormedPropertyIfPresent(base, lastFormedPreview)
+            statesMut[rel] = st
+        }
+
+        // IMPORTANT: don't replace the map instance because [blockAccess] holds a reference to it.
+        allBlockStates.clear()
+        allBlockStates.putAll(statesMut)
+
+        // Any cached tile entities depend on the resolved state map.
+        tesrEntries = buildTesrEntries(clearExisting = true)
+
+        dims = computeStructureDims()
+        sizeY = dims.sizeY
+
+        // Model changes always require a full block-mesh rebuild.
+        invalidateBlockModelMeshes()
+        forceFullRebuildOnce = true
+
+        // Gecko preview buffers may no longer match; dispose best-effort.
+        if (geckoCache.isNotEmpty()) {
+            for (e in geckoCache.values) {
+                val task = e.task
+                if (task != null && !task.isDone) {
+                    Thread({
+                        try {
+                            task.join()
+                        } catch (_: Throwable) {
+                            // ignore
+                        }
+                        try {
+                            task.takeBuilt()?.disposeToPool()
+                        } catch (_: Throwable) {
+                            // ignore
+                        }
+                    }, "PM-PreviewGeckoRebuildDispose").start()
+                }
+
+                try {
+                    e.built?.disposeToPool()
+                } catch (_: Throwable) {
+                    // ignore
+                }
+                e.built = null
+                e.task = null
+            }
+            geckoCache.clear()
+        }
+
+        // Keep interaction stable across rebuilds.
+        pendingClick = false
+        dragging = false
+        dragButton = -1
+
+        if (resetCamera) {
+            resetViewToController()
+        } else {
+            // When the model bounds shift, keep yaw/pitch/zoom but re-lock orbit center to controller origin.
+            panTargetX = 0f
+            panTargetY = 0f
+            panTargetZ = 0f
+            panSmoothX = panTargetX
+            panSmoothY = panTargetY
+            panSmoothZ = panTargetZ
+            lastFrameTimeMs = -1L
         }
     }
 
@@ -935,10 +1036,10 @@ internal class StructurePreview3DWidget(
             }
 
             // Minecraft coords: +X=East, -X=West, +Z=South, -Z=North.
-            drawLabel("北", 0.0, -1.0, 0xFFFF5555.toInt())
-            drawLabel("东", 1.0, 0.0, 0xFFECECEC.toInt())
-            drawLabel("南", 0.0, 1.0, 0xFFECECEC.toInt())
-            drawLabel("西", -1.0, 0.0, 0xFFECECEC.toInt())
+            drawLabel(I18n.format("pm.preview.ui.compass.n"), 0.0, -1.0, 0xFFFF5555.toInt())
+            drawLabel(I18n.format("pm.preview.ui.compass.e"), 1.0, 0.0, 0xFFECECEC.toInt())
+            drawLabel(I18n.format("pm.preview.ui.compass.s"), 0.0, 1.0, 0xFFECECEC.toInt())
+            drawLabel(I18n.format("pm.preview.ui.compass.w"), -1.0, 0.0, 0xFFECECEC.toInt())
 
             // Center mark.
             fr.drawStringWithShadow("+", cx - fr.getStringWidth("+") / 2f, cy - fr.FONT_HEIGHT / 2f, 0xFFAAAAAA.toInt())
@@ -1530,8 +1631,46 @@ internal class StructurePreview3DWidget(
             // ignore
         }
 
+        // Best-effort NBT injection for preview rendering.
+        // Many TESRs rely on TE data; if we have SNBT, try to apply it.
+        val nbt = entry.tileNbt
+        if (nbt != null) {
+            try {
+                // Ensure position exists in tag for vanilla-style TE loaders.
+                nbt.setInteger("x", entry.relPos.x)
+                nbt.setInteger("y", entry.relPos.y)
+                nbt.setInteger("z", entry.relPos.z)
+            } catch (_: Throwable) {
+                // ignore
+            }
+
+            try {
+                te.handleUpdateTag(nbt)
+            } catch (_: Throwable) {
+                try {
+                    te.readFromNBT(nbt)
+                } catch (_: Throwable) {
+                    // ignore
+                }
+            }
+        }
+
         entry.te = te
         return te
+    }
+
+    private fun parseTileNbtForRequirement(req: BlockRequirement): NBTTagCompound? {
+        val snbt: String = when (req) {
+            is DisplayBlockListRequirement -> req.tileNbt ?: return null
+            else -> return null
+        }
+
+        return try {
+            val base = JsonToNBT.getTagFromJson(snbt)
+            base as? NBTTagCompound
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     private inline fun renderChunkLayer(
@@ -1941,6 +2080,7 @@ internal class StructurePreview3DWidget(
         return when (req) {
             is ExactBlockStateRequirement -> req
             is AnyOfRequirement -> resolveAnyOfOption(req)
+            is DisplayBlockListRequirement -> req.options.firstOrNull()
             else -> null
         }
     }
@@ -2034,7 +2174,8 @@ internal class StructurePreview3DWidget(
             }
             if (!hasTe) continue
 
-            out.add(TesrEntry(relPos = rel, state = st, te = null))
+            val tileNbt = parseTileNbtForRequirement(e.requirement)
+            out.add(TesrEntry(relPos = rel, state = st, te = null, tileNbt = tileNbt))
         }
 
         return out

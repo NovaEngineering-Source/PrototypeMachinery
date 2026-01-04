@@ -5,10 +5,12 @@ import github.kasuminova.prototypemachinery.api.PrototypeMachineryAPI
 import github.kasuminova.prototypemachinery.api.machine.MachineInstance
 import github.kasuminova.prototypemachinery.api.machine.MachineType
 import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeMap
+import github.kasuminova.prototypemachinery.api.machine.attribute.MachineTypeAttributeDefaults
 import github.kasuminova.prototypemachinery.api.machine.component.AffinityKeyProvider
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponent
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponent
 import github.kasuminova.prototypemachinery.api.machine.component.StructureComponentProvider
+import github.kasuminova.prototypemachinery.api.machine.component.type.SchedulingModeComponentType
 import github.kasuminova.prototypemachinery.api.machine.component.type.StructureRenderDataComponent
 import github.kasuminova.prototypemachinery.api.machine.component.type.StructureRenderDataComponentType
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
@@ -67,6 +69,17 @@ public class MachineInstanceImpl(
 
     init {
         createComponents()
+        applyTypeAttributeDefaults()
+    }
+
+    private fun applyTypeAttributeDefaults() {
+        val defaultsProvider = type as? MachineTypeAttributeDefaults ?: return
+        val map = attributeMap as? MachineAttributeMapImpl ?: return
+
+        for ((attrType, base) in defaultsProvider.defaultAttributeBases) {
+            // Only applies when absent; will not overwrite saved NBT values.
+            map.getOrCreateAttribute(attrType, defaultBase = base)
+        }
     }
 
     /**
@@ -112,6 +125,18 @@ public class MachineInstanceImpl(
             }.onFailure {
                 PrototypeMachinery.logger.warnWithBlockEntity(
                     "Error while creating system component `${StructureRenderDataComponentType.id}`",
+                    blockEntity,
+                    it
+                )
+            }
+        }
+
+        if (!componentMap.components.containsKey(SchedulingModeComponentType)) {
+            runCatching {
+                componentMap.add(SchedulingModeComponentType.createComponent(this))
+            }.onFailure {
+                PrototypeMachinery.logger.warnWithBlockEntity(
+                    "Error while creating system component `${SchedulingModeComponentType.id}`",
                     blockEntity,
                     it
                 )
@@ -196,9 +221,9 @@ public class MachineInstanceImpl(
     }
 
     override fun getExecutionMode(): ExecutionMode {
-        // Default to concurrent execution for better performance
-        // 默认使用并发执行以获得更好的性能
-        return ExecutionMode.CONCURRENT
+        // Prefer per-instance setting from SchedulingModeComponent.
+        // If missing, default to concurrent execution for better performance.
+        return componentMap.getBy(SchedulingModeComponentType)?.executionMode ?: ExecutionMode.CONCURRENT
     }
 
     override fun getSchedulingAffinityKeys(): Set<Any> {

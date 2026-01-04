@@ -8,12 +8,10 @@ import github.kasuminova.prototypemachinery.api.machine.component.type.FactoryRe
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.RecipeManager
 import github.kasuminova.prototypemachinery.api.recipe.index.IRecipeIndexRegistry
-import github.kasuminova.prototypemachinery.api.recipe.requirement.RecipeRequirementTypes
 import github.kasuminova.prototypemachinery.api.recipe.scanning.RecipeParallelismConstraintRegistry
 import github.kasuminova.prototypemachinery.common.util.warnWithBlockEntity
 import github.kasuminova.prototypemachinery.impl.machine.attribute.OverlayMachineAttributeMapImpl
 import github.kasuminova.prototypemachinery.impl.recipe.process.RecipeProcessImpl
-import github.kasuminova.prototypemachinery.impl.recipe.requirement.component.ParallelismRequirementComponent
 import net.minecraft.util.ResourceLocation
 import kotlin.math.floor
 
@@ -29,20 +27,25 @@ public class FactoryRecipeScanningSystem(
 
     override fun onTick(machine: MachineInstance, component: FactoryRecipeProcessorComponent) {
         if (!machine.isFormed()) return
-        if (component.activeProcesses.size >= component.maxConcurrentProcesses) return
+        val capacity = minOf(component.maxConcurrentProcesses, component.workSlots.size)
+        if (capacity <= 0) return
+        if (component.activeProcesses.size >= capacity) return
 
         val alreadyRunningIds: Set<String> = component.activeProcesses
             .asSequence()
             .map { it.recipe.id }
             .toSet()
 
-        val groups = machine.type.recipeGroups
-        if (groups.isEmpty()) {
-            // No recipe groups configured for this machine type.
+        val allowedGroups: Set<ResourceLocation> = component.workSlots
+            .asSequence()
+            .flatMap { it.allowedRecipeGroups.asSequence() }
+            .toSet()
+
+        if (allowedGroups.isEmpty()) {
             // Avoid scanning the global recipe list as it scales poorly and usually indicates WIP machine definitions.
             if (warnedTypes.add(machine.type.id)) {
                 PrototypeMachinery.logger.warnWithBlockEntity(
-                    "Machine type `${machine.type.id}` has empty recipeGroups; scanning is disabled (set MachineType.recipeGroups to enable recipes).",
+                    "Machine type `${machine.type.id}` has no workSlots.allowedRecipeGroups; scanning is disabled (configure WorkSlotDefinition.allowedRecipeGroups).",
                     machine.blockEntity
                 )
             }
@@ -58,22 +61,27 @@ public class FactoryRecipeScanningSystem(
             // If the index has no opinion (e.g. machine has no enumerable ports for indexed types), fall back
             // to the group-limited scan for correctness.
             val indexedCandidates = index.lookupOrNull(machine)
-            candidates = indexedCandidates ?: recipeManager.getByGroups(groups)
+            candidates = (indexedCandidates ?: recipeManager.getByGroups(allowedGroups))
+                .filter { r -> r.recipeGroups.any { it in allowedGroups } }
         } else {
             // No index for this machine type, use full recipe scan
-            candidates = recipeManager.getByGroups(groups)
+            candidates = recipeManager.getByGroups(allowedGroups)
         }
 
         // Iterate through candidate recipes
         for (recipe in candidates) {
-            if (component.activeProcesses.size >= component.maxConcurrentProcesses) break
+            if (component.activeProcesses.size >= capacity) break
 
             // Minimal de-dupe: avoid spamming the same recipe every tick.
             if (alreadyRunningIds.contains(recipe.id)) continue
 
+            val slot = component.workSlots.firstOrNull { s ->
+                s.process == null && s.allowedRecipeGroups.any { it in recipe.recipeGroups }
+            } ?: continue
+
             val process = RecipeProcessImpl(machine, recipe)
 
-            val limit = parallelLimit(machine, recipe)
+            val limit = parallelLimit(machine)
             val parallels = computeMaxParallelsByConstraints(machine, recipe, limit)
             if (parallels <= 0) {
                 // Cannot satisfy even 1x inputs; skip this recipe.
@@ -84,7 +92,10 @@ public class FactoryRecipeScanningSystem(
             // Requirement systems will scale amounts by this value.
             setProcessParallelism(process, parallels)
 
-            component.startProcess(process)
+            if (!component.startProcessIn(slot, process)) {
+                // Slot may have been occupied concurrently (or capacity changed); try next candidate.
+                continue
+            }
 
             // Small policy: start at most one new process per tick.
             // This prevents O(R) process churn on large recipe sets.
@@ -101,17 +112,9 @@ public class FactoryRecipeScanningSystem(
 
     override fun onPostTick(machine: MachineInstance, component: FactoryRecipeProcessorComponent) {}
 
-    private fun parallelLimit(machine: MachineInstance, recipe: MachineRecipe): Int {
+    private fun parallelLimit(machine: MachineInstance): Int {
         val machineLimitRaw = machine.attributeMap.attributes[StandardMachineAttributes.PROCESS_PARALLELISM]?.value ?: 1.0
-        val machineLimit = floor(machineLimitRaw).toInt().coerceAtLeast(1)
-
-        val recipeCap = recipe.requirements[RecipeRequirementTypes.PARALLELISM]
-            ?.filterIsInstance<ParallelismRequirementComponent>()
-            ?.minOfOrNull { it.parallelism.coerceAtLeast(1L) }
-            ?.coerceAtMost(Int.MAX_VALUE.toLong())
-            ?.toInt()
-
-        return if (recipeCap != null) minOf(machineLimit, recipeCap) else machineLimit
+        return floor(machineLimitRaw).toInt().coerceAtLeast(1)
     }
 
     /**
@@ -128,7 +131,6 @@ public class FactoryRecipeScanningSystem(
 
         // Optional: allow constraints to provide upper bounds and detect unknown requirement types.
         for ((type, comps) in recipe.requirements) {
-            if (type == RecipeRequirementTypes.PARALLELISM) continue
             if (comps.isEmpty()) continue
 
             val constraint = RecipeParallelismConstraintRegistry.get(type.id)
@@ -170,7 +172,6 @@ public class FactoryRecipeScanningSystem(
     private fun canSatisfyAllConstraints(machine: MachineInstance, recipe: MachineRecipe, parallels: Int): Boolean {
         if (parallels <= 0) return false
         for ((type, comps) in recipe.requirements) {
-            if (type == RecipeRequirementTypes.PARALLELISM) continue
             if (comps.isEmpty()) continue
 
             val constraint = RecipeParallelismConstraintRegistry.get(type.id) ?: continue

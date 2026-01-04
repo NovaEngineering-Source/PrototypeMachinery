@@ -6,6 +6,7 @@ import github.kasuminova.prototypemachinery.api.machine.structure.TemplateLikeMa
 import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidator
 import github.kasuminova.prototypemachinery.api.machine.structure.match.StructureMatchContext
 import github.kasuminova.prototypemachinery.api.machine.structure.pattern.StructurePattern
+import github.kasuminova.prototypemachinery.api.machine.structure.pattern.predicate.PreviewRequirementProvider
 import github.kasuminova.prototypemachinery.api.machine.structure.pattern.predicate.PreviewableBlockPredicate
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.BlockRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.LiteralRequirement
@@ -17,6 +18,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class StructurePreviewBuilderTest {
+
+    private class DummyPreviewProvider(private val key: String) : PreviewRequirementProvider {
+        override fun matches(context: StructureMatchContext, pos: BlockPos): Boolean = true
+        override fun transform(rotation: (EnumFacing) -> EnumFacing): PreviewRequirementProvider = this
+        override fun previewRequirement(): BlockRequirement = LiteralRequirement("provider:$key")
+    }
 
     private class DummyPredicate(private val key: String) : PreviewableBlockPredicate {
         override fun matches(context: StructureMatchContext, pos: BlockPos): Boolean = true
@@ -79,6 +86,26 @@ class StructurePreviewBuilderTest {
         val bom = model.bom.associate { it.requirement.stableKey() to it.count }
         assertEquals(1, bom[LiteralRequirement("a").stableKey()])
         assertEquals(1, bom[LiteralRequirement("b").stableKey()])
+    }
+
+    @Test
+    fun `preview requirement provider takes precedence`() {
+        val s = DummyTemplate(
+            id = "t",
+            offset = BlockPos(0, 0, 0),
+            blocks = mapOf(
+                BlockPos(0, 0, 0) to object : PreviewableBlockPredicate, PreviewRequirementProvider {
+                    override fun matches(context: StructureMatchContext, pos: BlockPos): Boolean = true
+                    override fun transform(rotation: (EnumFacing) -> EnumFacing): PreviewableBlockPredicate = this
+                    override fun toRequirement(): BlockRequirement = LiteralRequirement("legacy")
+                    override fun previewRequirement(): BlockRequirement = LiteralRequirement("provider")
+                }
+            )
+        )
+
+        val model = StructurePreviewBuilder.build(s)
+        val req = model.blocks[BlockPos(0, 0, 0)]
+        assertEquals("literal:provider", req?.stableKey())
     }
 
     @Test

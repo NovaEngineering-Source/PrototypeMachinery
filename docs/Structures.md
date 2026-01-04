@@ -57,6 +57,13 @@ English translation: [`docs/en/Structures.md`](./en/Structures.md)
 
 - 预览模型 API：`src/main/kotlin/api/machine/structure/preview/StructurePreviewModel.kt`
 
+预览显示与匹配逻辑是解耦的：
+
+- 匹配依然由 `BlockPredicate.matches(...)` 决定。
+- 预览/BOM 由 `StructurePreviewBuilder` 生成 `BlockRequirement`。
+- predicate 可以通过 `PreviewRequirementProvider` 提供预览用的 requirement（例如 `DisplayBlockListRequirement`），而无需把显示信息“塞进”匹配逻辑里。
+	- JSON 层面对应 `pattern[].display`（见 `StructureJsonGuide.md`）。
+
 客户端投影预览的使用方式与按键说明见：
 
 - [`docs/StructurePreview.md`](./StructurePreview.md)

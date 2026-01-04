@@ -1,5 +1,6 @@
 package github.kasuminova.prototypemachinery.common.scanner
 
+import github.kasuminova.prototypemachinery.common.scanner.ScannerInstrumentNbt.TAG_ORIGIN
 import github.kasuminova.prototypemachinery.common.structure.tools.StructureExportUtil
 import net.minecraft.item.ItemStack
 import net.minecraft.nbt.NBTTagCompound
@@ -19,6 +20,15 @@ internal object ScannerInstrumentNbt {
     // Selection endpoints (world positions)
     const val TAG_ORIGIN: String = "origin"
     const val TAG_CORNER: String = "corner"
+
+    /** Export/template origin (world position). If absent, fall back to [TAG_ORIGIN]. */
+    const val TAG_EXPORT_ORIGIN: String = "exportOrigin"
+
+    /** When true, exportOrigin may be auto-derived from a controller in selection. */
+    const val TAG_EXPORT_ORIGIN_AUTO: String = "exportOriginAuto"
+
+    /** When true, previewFacing/previewRot may be auto-derived from controller orientation. */
+    const val TAG_PREVIEW_AUTO: String = "previewAuto"
 
     // Export metadata
     const val TAG_STRUCTURE_ID: String = "structureId"
@@ -75,6 +85,10 @@ internal object ScannerInstrumentNbt {
         // Default preview orientation
         if (!data.hasKey(TAG_PREVIEW_FACING, 3)) data.setInteger(TAG_PREVIEW_FACING, EnumFacing.NORTH.index)
         if (!data.hasKey(TAG_PREVIEW_ROT, 3)) data.setInteger(TAG_PREVIEW_ROT, 0)
+
+        // Auto flags (default ON)
+        if (!data.hasKey(TAG_EXPORT_ORIGIN_AUTO, 1)) data.setBoolean(TAG_EXPORT_ORIGIN_AUTO, true)
+        if (!data.hasKey(TAG_PREVIEW_AUTO, 1)) data.setBoolean(TAG_PREVIEW_AUTO, true)
     }
 
     fun readOrigin(data: NBTTagCompound): BlockPos? = data.getBlockPosOrNull(TAG_ORIGIN)
@@ -89,6 +103,19 @@ internal object ScannerInstrumentNbt {
         data.setInteger(TAG_ORIGIN_EDIT_Z, pos.z)
     }
 
+    fun readExportOrigin(data: NBTTagCompound): BlockPos? = data.getBlockPosOrNull(TAG_EXPORT_ORIGIN)
+
+    fun writeExportOrigin(data: NBTTagCompound, pos: BlockPos) {
+        data.putBlockPos(TAG_EXPORT_ORIGIN, pos)
+        // Keep edit buffer aligned by default
+        data.setInteger(TAG_ORIGIN_EDIT_X, pos.x)
+        data.setInteger(TAG_ORIGIN_EDIT_Y, pos.y)
+        data.setInteger(TAG_ORIGIN_EDIT_Z, pos.z)
+    }
+
+    /** Effective export origin used for relPos calculation. */
+    fun readEffectiveExportOrigin(data: NBTTagCompound): BlockPos? = readExportOrigin(data) ?: readOrigin(data)
+
     fun writeCorner(data: NBTTagCompound, pos: BlockPos) {
         data.putBlockPos(TAG_CORNER, pos)
     }
@@ -96,6 +123,7 @@ internal object ScannerInstrumentNbt {
     fun clearSelection(data: NBTTagCompound) {
         data.removeTag(TAG_ORIGIN)
         data.removeTag(TAG_CORNER)
+        data.removeTag(TAG_EXPORT_ORIGIN)
     }
 
     fun readPreviewFacing(data: NBTTagCompound): EnumFacing {
@@ -114,6 +142,35 @@ internal object ScannerInstrumentNbt {
 
     fun writePreviewRot(data: NBTTagCompound, rot: Int) {
         data.setInteger(TAG_PREVIEW_ROT, rot.coerceIn(0, 3))
+    }
+
+    /**
+     * Builds a world→template rotation function based on current preview settings.
+     *
+     * Semantics:
+     * - previewFacing/previewRot describe the *world* orientation that should become (NORTH, UP) in the exported/template space.
+     * - returned function maps any world-facing into the corresponding template-facing.
+     */
+    fun worldToTemplateRotationFromPreview(data: NBTTagCompound): (EnumFacing) -> EnumFacing {
+        val frontWorld = readPreviewFacing(data)
+        val rot = readPreviewRot(data)
+        val o = github.kasuminova.prototypemachinery.common.util.TwistMath.toStructureOrientation(frontWorld, rot)
+
+        // Define template basis in world space: (NORTH, UP, EAST) → (front, top, right)
+        val templateToWorld = java.util.EnumMap<EnumFacing, EnumFacing>(EnumFacing::class.java)
+        templateToWorld[EnumFacing.NORTH] = o.front
+        templateToWorld[EnumFacing.UP] = o.top
+        templateToWorld[EnumFacing.EAST] = o.right
+        templateToWorld[EnumFacing.SOUTH] = o.front.opposite
+        templateToWorld[EnumFacing.DOWN] = o.top.opposite
+        templateToWorld[EnumFacing.WEST] = o.right.opposite
+
+        // Invert to get world→template.
+        val worldToTemplate = java.util.EnumMap<EnumFacing, EnumFacing>(EnumFacing::class.java)
+        for ((k, v) in templateToWorld) {
+            worldToTemplate[v] = k
+        }
+        return { worldFacing -> worldToTemplate[worldFacing] ?: worldFacing }
     }
 
     private fun NBTTagCompound.putBlockPos(key: String, pos: BlockPos) {

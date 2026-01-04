@@ -156,7 +156,7 @@ GUI 界面支持可选的客户端世界扫描，用于把 `StructurePreviewMode
 
 ---
 
-## GUI 贴图与资源组织（切片 / 规范 / atlas）
+## GUI 贴图与资源组织（切片 / 规范）
 
 结构预览 GUI 的贴图资源位于：
 
@@ -166,13 +166,4 @@ GUI 界面支持可选的客户端世界扫描，用于把 `StructurePreviewMode
 
 - `.../textures/gui/gui_structure_preview/gui_structure_preview.md`
 
-此外，项目提供了可选的“构建期切片 + 运行时 atlas”管线：
-
-- 构建期切片工具：`src/main/kotlin/devtools/atlas/GuiSliceGenerator.kt`
-  - Manifest：`src/main/resources/assets/prototypemachinery/pm_gui_slices/*.json`
-  - 产物：`build/generated/gui-slices/assets/.../textures/...`
-- 运行时 atlas：`src/main/kotlin/client/atlas/PmGuiAtlas.kt`
-  - 通过 TextureMap（Stitcher）把多个 sprite stitch 到 `textures/gui/pm_gui_atlas.png`
-  - runtime index：`assets/prototypemachinery/pm_gui_atlas/<atlasId>.json`（由构建期工具生成）
-
-> 当前结构预览 UI 的贴图主要以“稳定路径的切片 PNG”直接引用；atlas 管线为大量小图场景提供可选优化与统一管理。
+> 当前结构预览 UI 的贴图以“稳定路径的切片 PNG”直接引用为主。

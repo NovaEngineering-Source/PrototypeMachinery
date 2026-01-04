@@ -13,6 +13,7 @@ import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructu
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidator
 import github.kasuminova.prototypemachinery.api.machine.structure.match.StructureMatchContext
+import github.kasuminova.prototypemachinery.api.machine.workslot.WorkSlot
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeExecutor
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeProcess
@@ -24,12 +25,12 @@ import github.kasuminova.prototypemachinery.impl.machine.component.StructureComp
 import github.kasuminova.prototypemachinery.impl.machine.component.type.FactoryRecipeProcessorComponentType
 import github.kasuminova.prototypemachinery.impl.recipe.RecipeManagerImpl
 import github.kasuminova.prototypemachinery.impl.recipe.index.RecipeIndexRegistry
+import github.kasuminova.prototypemachinery.impl.recipe.scanning.DefaultRecipeParallelismConstraints
 import net.minecraft.tileentity.TileEntity
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.ResourceLocation
 import net.minecraft.util.math.BlockPos
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class FactoryRecipeScanningWiringTest {
@@ -39,6 +40,9 @@ class FactoryRecipeScanningWiringTest {
         val snapshot = RecipeManagerImpl.snapshotForTests()
         try {
             RecipeManagerImpl.clearForTests()
+
+            // Tests do not run mod preInit; register built-in scan-time constraints explicitly.
+            DefaultRecipeParallelismConstraints.registerAll()
 
             // Initialize the recipe index registry for testing
             // This ensures the scanning system can use the index safely
@@ -50,7 +54,7 @@ class FactoryRecipeScanningWiringTest {
             RecipeManagerImpl.register(DummyRecipe(id = "r2", recipeGroups = setOf(group)))
 
             val machine = DummyMachineInstance(formed = true, recipeGroups = setOf(group))
-            val processor = DummyProcessorComponent(machine)
+            val processor = DummyProcessorComponent(machine, allowedRecipeGroupsBySlot = listOf(setOf(group)))
 
             for (sys in FactoryRecipeProcessorComponentType.systems) {
                 sys.onTick(machine, processor)
@@ -59,6 +63,38 @@ class FactoryRecipeScanningWiringTest {
             assertEquals(1, processor.activeProcesses.size, "scanning should start at most one process per tick")
             val only = processor.activeProcesses.first()
             assertEquals("r1", only.recipe.id, "should follow recipe iteration order (insertion order)")
+        } finally {
+            RecipeManagerImpl.restoreForTests(snapshot)
+        }
+    }
+
+    @Test
+    fun `scanning respects slot allowedRecipeGroups`() {
+        val snapshot = RecipeManagerImpl.snapshotForTests()
+        try {
+            RecipeManagerImpl.clearForTests()
+            DefaultRecipeParallelismConstraints.registerAll()
+            RecipeIndexRegistry.initializeForTests()
+
+            val groupA = ResourceLocation("test", "group_a")
+            val groupB = ResourceLocation("test", "group_b")
+
+            // Only one recipe in groupB.
+            RecipeManagerImpl.register(DummyRecipe(id = "rb", recipeGroups = setOf(groupB)))
+
+            val machine = DummyMachineInstance(formed = true, recipeGroups = setOf(groupA, groupB))
+            val processor = DummyProcessorComponent(
+                machine,
+                allowedRecipeGroupsBySlot = listOf(setOf(groupA), setOf(groupB))
+            )
+
+            for (sys in FactoryRecipeProcessorComponentType.systems) {
+                sys.onTick(machine, processor)
+            }
+
+            assertEquals(1, processor.activeProcesses.size)
+            assertEquals(null, processor.workSlots[0].process, "slot0 should stay empty as it does not allow groupB")
+            assertEquals("rb", processor.workSlots[1].process?.recipe?.id)
         } finally {
             RecipeManagerImpl.restoreForTests(snapshot)
         }
@@ -73,7 +109,16 @@ class FactoryRecipeScanningWiringTest {
 
     private class DummyProcessorComponent(
         override val owner: MachineInstance,
+        allowedRecipeGroupsBySlot: List<Set<ResourceLocation>>,
     ) : FactoryRecipeProcessorComponent {
+
+        private class DummyWorkSlot(
+            override val name: String,
+            override val allowedRecipeGroups: Set<ResourceLocation>,
+        ) : WorkSlot {
+            override var process: RecipeProcess? = null
+            override var statusText: String? = null
+        }
 
         override val provider: Any? = null
 
@@ -85,6 +130,13 @@ class FactoryRecipeScanningWiringTest {
 
         override val activeProcesses: MutableCollection<RecipeProcess> = ArrayList()
 
+        override val workSlots: MutableList<WorkSlot> = allowedRecipeGroupsBySlot
+            .mapIndexed { idx, groups ->
+                val name = if (idx == 0) "main" else "slot$idx"
+                DummyWorkSlot(name, groups)
+            }
+            .toMutableList()
+
         override val maxConcurrentProcesses: Int = 1
 
         override val executors: MutableList<RecipeExecutor> = ArrayList()
@@ -95,6 +147,14 @@ class FactoryRecipeScanningWiringTest {
 
         override fun stopProcess(process: RecipeProcess) {
             activeProcesses.remove(process)
+        }
+
+        override fun startProcessIn(slot: WorkSlot, process: RecipeProcess): Boolean {
+            // Tests here only cover "start at most one" behavior; slot routing is tested elsewhere.
+            if (slot.process != null) return false
+            if (!startProcess(process)) return false
+            slot.process = process
+            return true
         }
 
         override fun tickProcesses() {}
@@ -151,7 +211,7 @@ class FactoryRecipeScanningWiringTest {
         override fun isFormed(): Boolean = formed
 
         override fun syncComponent(component: MachineComponent.Synchronizable) {
-            assertTrue(true)
+            // no-op for tests
         }
     }
 }

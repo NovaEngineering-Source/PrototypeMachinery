@@ -32,6 +32,31 @@ public sealed interface BlockRequirement {
 }
 
 /**
+ * Preview-only requirement: provides a list of candidate block-states to render as a placeholder.
+ *
+ * This is intentionally decoupled from matching logic; it may represent blocks that are
+ * *suggested* for UI rendering, not necessarily a strict requirement.
+ */
+public data class DisplayBlockListRequirement(
+    /** Stable identifier for grouping/caching. Prefer something semantic like "controller". */
+    public val key: String,
+    /** Candidate exact states to display (first match is used; fallback handled by renderer). */
+    public val options: List<ExactBlockStateRequirement> = emptyList(),
+    /** Optional TileEntity SNBT for preview rendering (best-effort). */
+    public val tileNbt: String? = null,
+) : BlockRequirement {
+    override fun stableKey(): String {
+        // Keep stable key compact and deterministic.
+        val optsPart = if (options.isEmpty()) "" else {
+            options.asSequence().map { it.stableKey() }.sorted().joinToString("|")
+                .let { ":$it" }
+        }
+        val nbtPart = tileNbt?.let { ":nbt#${it.hashCode()}" } ?: ""
+        return "display:$key$optsPart$nbtPart"
+    }
+}
+
+/**
  * A requirement that can be satisfied by any one of the provided exact block-state options.
  *
  * 用于表达“多种方块任选其一”的需求（例如 钻石块/金块 选其一）。

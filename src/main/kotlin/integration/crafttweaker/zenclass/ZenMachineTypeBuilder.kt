@@ -112,6 +112,55 @@ public class ZenMachineTypeBuilder(
     }
 
     /**
+     * Set maximum number of concurrently running recipe processes.
+     *
+     * 设置该机器“同时运行的配方进程数量”上限。
+     *
+     * Example / 示例:
+     * - builder.maxConcurrentProcesses(2);
+     */
+    @ZenMethod
+    public fun maxConcurrentProcesses(max: Int): ZenMachineTypeBuilder {
+        builder.maxConcurrentProcesses(max)
+        return this
+    }
+
+    /**
+     * Alias for [maxConcurrentProcesses].
+     * “最大并行数”常被口头用于描述“同时跑几个进程”，因此提供别名便于整合包脚本阅读。
+     */
+    @ZenMethod
+    public fun maxParallelProcesses(max: Int): ZenMachineTypeBuilder {
+        return maxConcurrentProcesses(max)
+    }
+
+    /**
+     * Set machine-level cap for per-process parallelism.
+     *
+     * 设置机器层面对“单个进程并行倍数”的上限。
+     */
+    @ZenMethod
+    public fun processParallelism(limit: Int): ZenMachineTypeBuilder {
+        builder.processParallelism(limit)
+        return this
+    }
+
+    /**
+     * Set scheduling execution mode for this machine type.
+     *
+     * 设置该机器类型的逻辑执行线程模式。
+     *
+     * Supported values (case-insensitive):
+     * - "MAIN_THREAD"
+     * - "CONCURRENT"
+     */
+    @ZenMethod
+    public fun executionMode(mode: String): ZenMachineTypeBuilder {
+        builder.executionMode(mode)
+        return this
+    }
+
+    /**
      * Build the machine type (internal use; not for direct ZenScript call).
      * 构建机器类型（内部调用，不直接暴露给脚本）。
      */

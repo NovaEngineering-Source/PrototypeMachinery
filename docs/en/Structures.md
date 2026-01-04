@@ -61,6 +61,13 @@ The structure system provides a data-only preview model for client projection re
 
 - Preview model API: `src/main/kotlin/api/machine/structure/preview/StructurePreviewModel.kt`
 
+Preview display is intentionally decoupled from matching:
+
+- Matching is still decided by `BlockPredicate.matches(...)`.
+- Preview/BOM is produced by `StructurePreviewBuilder` as `BlockRequirement` entries.
+- A predicate may implement `PreviewRequirementProvider` to supply preview-only requirements (e.g. `DisplayBlockListRequirement`) without affecting matching.
+  - JSON counterpart: `pattern[].display` (see `StructureJsonGuide.md`).
+
 See also:
 
 - [Structure preview (client)](./StructurePreview.md)

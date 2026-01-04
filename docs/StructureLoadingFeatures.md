@@ -270,14 +270,30 @@ assert(basicMachine.children[0] === energyHatch)
 - `StructurePatternElementData.nbt` 已支持：当元素带 `nbt` 时，会使用 `StatedBlockNbtPredicate`。
   - 限制：当 `alternatives` 中存在 NBT 约束时，目前不会对“多个候选 + NBT”做完整匹配；loader 会 warn 并回退为仅使用 base option。
 
-### 2) 缺失引用的处理策略
+### 2) predicates（AND 组合）与 display（预览覆盖）
+
+`pattern[]` 元素现在支持：
+
+- `blockId` 可省略：此时必须提供 `predicates`（否则该元素会被 warn 并跳过）。
+- `predicates: []`：每个 entry 解析为一个 `BlockPredicate`，最终按 AND 合并为 `CompositeBlockPredicate`。
+  - 未识别的 predicate id 会被跳过并 warn。
+- `display`：会包装为 `DisplayOverridePredicate(inner, DisplayBlockListRequirement)`。
+  - 这是 **预览专用** 数据：不影响实际匹配，只影响客户端预览/BOM。
+
+### 3) blockIdRegex 加载期展开缓存
+
+- `prototypemachinery:block_id_regex` 的 regex 会在加载期遍历 `Block.REGISTRY` 展开为 `Set<Block>` 并缓存。
+- 匹配阶段不再执行 regex，只做 contains。
+- 注意：regex 使用 `Pattern.matcher(id).matches()`（整串匹配）。
+
+### 4) 缺失引用的处理策略
 
 当 `children` 中出现不存在的结构 ID：
 
 - loader 会记录 warn：`Child structure '...' not found for structure '...'`
 - 并将该 child 从 children 列表中移除（继续加载父结构）
 
-### 3) 重复 ID 的处理策略
+### 5) 重复 ID 的处理策略
 
 当出现重复结构 ID：
 

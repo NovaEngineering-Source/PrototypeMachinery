@@ -3,7 +3,6 @@ package github.kasuminova.prototypemachinery.integration.jei.layout
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.EnergyRequirementComponent
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.FluidRequirementComponent
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.ItemRequirementComponent
-import github.kasuminova.prototypemachinery.impl.recipe.requirement.component.ParallelismRequirementComponent
 import github.kasuminova.prototypemachinery.integration.jei.api.JeiRecipeContext
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiLayoutBuilder
 import github.kasuminova.prototypemachinery.integration.jei.api.layout.PMJeiLayoutRequirementsView
@@ -148,14 +147,6 @@ public object DefaultJeiMachineLayout : PMJeiMachineLayoutDefinition {
                 "shadow" to true
             )
         )
-
-        // Parallelism (if any)
-        val parallelismNodes = requirements.byRole(PMJeiRequirementRole.OTHER)
-            .filter { it.component is ParallelismRequirementComponent }
-            .map { it.nodeId }
-        if (parallelismNodes.isNotEmpty()) {
-            trackingOut.placeNode(parallelismNodes[0], midX - 30, progressY - 15, null)
-        }
 
         // ------------------------------------------
         // Fallback: auto-place any remaining nodes

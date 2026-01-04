@@ -14,6 +14,7 @@ import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructu
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.machine.structure.logic.StructureValidator
 import github.kasuminova.prototypemachinery.api.machine.structure.match.StructureMatchContext
+import github.kasuminova.prototypemachinery.api.machine.workslot.WorkSlot
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.process.ProcessResult
 import github.kasuminova.prototypemachinery.api.recipe.process.RecipeExecutor
@@ -59,7 +60,7 @@ class FactoryRecipeProcessorSystemTest {
         val machine = DummyMachineInstance()
         val process = RecipeProcessImpl(machine, DummyRecipe(durationTicks = 10, requirements = mapOf(typeA to listOf(reqA), typeB to listOf(reqB))), seed = 42L)
 
-        val processor = DummyProcessorComponent(machine, mutableListOf(process))
+        val processor = DummyProcessorComponent(machine, listOf(process))
 
         FactoryRecipeProcessorSystem.onTick(machine, processor)
 
@@ -95,7 +96,7 @@ class FactoryRecipeProcessorSystemTest {
         val machine = DummyMachineInstance()
         val process = RecipeProcessImpl(machine, DummyRecipe(durationTicks = 10, requirements = mapOf(typeA to listOf(reqA), typeB to listOf(reqB))), seed = 42L)
 
-        val processor = DummyProcessorComponent(machine, mutableListOf(process))
+        val processor = DummyProcessorComponent(machine, listOf(process))
 
         // First tick: start succeeds, then tick stage is attempted and gets blocked.
         FactoryRecipeProcessorSystem.onTick(machine, processor)
@@ -144,7 +145,7 @@ class FactoryRecipeProcessorSystemTest {
         val machine = DummyMachineInstance()
         val process = RecipeProcessImpl(machine, DummyRecipe(durationTicks = 1, requirements = mapOf(typeA to listOf(reqA), typeB to listOf(reqB))), seed = 42L)
 
-        val processor = DummyProcessorComponent(machine, mutableListOf(process))
+        val processor = DummyProcessorComponent(machine, listOf(process))
 
         // Tick once: start + tick will advance progress to 1 and try end.
         FactoryRecipeProcessorSystem.onTick(machine, processor)
@@ -172,7 +173,7 @@ class FactoryRecipeProcessorSystemTest {
         val machine = DummyMachineInstance()
         val process = RecipeProcessImpl(machine, DummyRecipe(durationTicks = 1, requirements = mapOf(typeA to listOf(reqA))), seed = 42L)
 
-        val processor = DummyProcessorComponent(machine, mutableListOf(process))
+        val processor = DummyProcessorComponent(machine, listOf(process))
 
         FactoryRecipeProcessorSystem.onTick(machine, processor)
 
@@ -270,9 +271,113 @@ class FactoryRecipeProcessorSystemTest {
 
     private class DummyProcessorComponent(
         override val owner: MachineInstance,
-        override val activeProcesses: MutableCollection<RecipeProcess>,
+        initialProcesses: List<RecipeProcess>,
         override val provider: Any? = null,
     ) : FactoryRecipeProcessorComponent {
+
+        private class DummyWorkSlot(
+            override val name: String,
+        ) : WorkSlot {
+            override val allowedRecipeGroups = emptySet<ResourceLocation>()
+            override var process: RecipeProcess? = null
+            override var statusText: String? = null
+        }
+
+        override val workSlots: MutableList<WorkSlot> = initialProcesses
+            .mapIndexed { idx, p ->
+                DummyWorkSlot("slot$idx").also { it.process = p }
+            }
+            .toMutableList()
+
+        private inner class ActiveProcessCollection : MutableCollection<RecipeProcess> {
+            override val size: Int
+                get() = workSlots.count { it.process != null }
+
+            private fun findSlot(p: RecipeProcess): WorkSlot? = workSlots.firstOrNull { it.process === p }
+
+            override fun add(element: RecipeProcess): Boolean {
+                val slot = workSlots.firstOrNull { it.process == null } ?: return false
+                slot.process = element
+                return true
+            }
+
+            override fun addAll(elements: Collection<RecipeProcess>): Boolean {
+                var changed = false
+                for (e in elements) changed = add(e) || changed
+                return changed
+            }
+
+            override fun clear() {
+                workSlots.forEach { it.process = null }
+            }
+
+            override fun iterator(): MutableIterator<RecipeProcess> {
+                val snapshot = workSlots.toList()
+                var idx = 0
+                var lastSlot: WorkSlot? = null
+
+                return object : MutableIterator<RecipeProcess> {
+                    override fun hasNext(): Boolean {
+                        while (idx < snapshot.size) {
+                            if (snapshot[idx].process != null) return true
+                            idx++
+                        }
+                        return false
+                    }
+
+                    override fun next(): RecipeProcess {
+                        while (idx < snapshot.size) {
+                            val s = snapshot[idx++]
+                            val p = s.process
+                            if (p != null) {
+                                lastSlot = s
+                                return p
+                            }
+                        }
+                        throw NoSuchElementException()
+                    }
+
+                    override fun remove() {
+                        val s = lastSlot ?: throw IllegalStateException("next() not called")
+                        s.process = null
+                        lastSlot = null
+                    }
+                }
+            }
+
+            override fun contains(element: RecipeProcess): Boolean = findSlot(element) != null
+
+            override fun containsAll(elements: Collection<RecipeProcess>): Boolean = elements.all { contains(it) }
+
+            override fun isEmpty(): Boolean = size == 0
+
+            override fun remove(element: RecipeProcess): Boolean {
+                val s = findSlot(element) ?: return false
+                s.process = null
+                return true
+            }
+
+            override fun removeAll(elements: Collection<RecipeProcess>): Boolean {
+                var changed = false
+                for (e in elements) changed = remove(e) || changed
+                return changed
+            }
+
+            override fun retainAll(elements: Collection<RecipeProcess>): Boolean {
+                val keep = elements.toSet()
+                var changed = false
+                for (s in workSlots) {
+                    val p = s.process ?: continue
+                    if (p !in keep) {
+                        s.process = null
+                        changed = true
+                    }
+                }
+                return changed
+            }
+        }
+
+        override val activeProcesses: MutableCollection<RecipeProcess> = ActiveProcessCollection()
 
         override val type: MachineComponentType<*> = object : MachineComponentType<FactoryRecipeProcessorComponent> {
             override val id: ResourceLocation = ResourceLocation("test", "processor")
@@ -292,6 +397,12 @@ class FactoryRecipeProcessorSystemTest {
 
         override fun stopProcess(process: RecipeProcess) {
             activeProcesses.remove(process)
+        }
+
+        override fun startProcessIn(slot: WorkSlot, process: RecipeProcess): Boolean {
+            if (slot.process != null) return false
+            slot.process = process
+            return true
         }
 
         override fun tickProcesses() {

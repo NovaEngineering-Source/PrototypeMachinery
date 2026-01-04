@@ -1,8 +1,13 @@
 package github.kasuminova.prototypemachinery.integration.crafttweaker
 
+import github.kasuminova.prototypemachinery.api.machine.MachineTypeExecutionModeDefaults
+import github.kasuminova.prototypemachinery.api.machine.attribute.MachineAttributeType
+import github.kasuminova.prototypemachinery.api.machine.attribute.MachineTypeAttributeDefaults
+import github.kasuminova.prototypemachinery.api.machine.attribute.StandardMachineAttributes
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentType
 import github.kasuminova.prototypemachinery.api.machine.component.type.ZSDataComponentType
 import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
+import github.kasuminova.prototypemachinery.api.scheduler.ExecutionMode
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
 import net.minecraft.util.ResourceLocation
 
@@ -25,6 +30,14 @@ public class CraftTweakerMachineTypeBuilder(
     // 该机器类型可处理的配方组（FactoryRecipeScanningSystem 会依赖此字段）。
     private val recipeGroups: MutableSet<ResourceLocation> = linkedSetOf()
     private var controllerModel: ResourceLocation? = null
+
+    // Default machine-level attribute bases.
+    // 机器层默认属性 base 值（用于并行上限、速度倍率等）。
+    private val defaultAttributeBases: MutableMap<MachineAttributeType, Double> = linkedMapOf()
+
+    // Default execution mode for scheduling machine logic.
+    // 机器逻辑调度默认执行模式。
+    private var defaultExecutionMode: ExecutionMode? = null
 
     /**
      * Set display name for scripts.
@@ -111,6 +124,64 @@ public class CraftTweakerMachineTypeBuilder(
     }
 
     /**
+     * Set maximum number of concurrently running recipe processes on this machine.
+     *
+     * 设置该机器允许“同时运行”的配方进程数量上限。
+     *
+     * - 1 表示一次只能跑 1 个配方进程
+     * - 2 表示可以同时跑 2 个不同配方/同配方的两个进程（由扫描系统决定）
+     */
+    public fun maxConcurrentProcesses(max: Int): CraftTweakerMachineTypeBuilder {
+        require(max >= 1) { "maxConcurrentProcesses must be >= 1" }
+        defaultAttributeBases[StandardMachineAttributes.MAX_CONCURRENT_PROCESSES] = max.toDouble()
+        return this
+    }
+
+    /**
+     * Set machine-level cap for per-process parallelism.
+     *
+     * 设置机器层面对“单个进程并行倍数”的上限。
+     */
+    public fun processParallelism(limit: Int): CraftTweakerMachineTypeBuilder {
+        require(limit >= 1) { "processParallelism must be >= 1" }
+        defaultAttributeBases[StandardMachineAttributes.PROCESS_PARALLELISM] = limit.toDouble()
+        return this
+    }
+
+    /**
+     * Set scheduling execution mode for this machine type.
+     *
+     * 设置该机器类型的逻辑执行线程模式。
+     *
+     * Supported values (case-insensitive):
+     * - "MAIN_THREAD"
+     * - "CONCURRENT"
+     */
+    public fun executionMode(mode: String): CraftTweakerMachineTypeBuilder {
+        val normalized = mode.trim().replace('-', '_').uppercase()
+        defaultExecutionMode = when (normalized) {
+            "MAIN_THREAD", "MAIN", "SYNC" -> ExecutionMode.MAIN_THREAD
+            "CONCURRENT", "ASYNC" -> ExecutionMode.CONCURRENT
+            else -> throw IllegalArgumentException(
+                "Unknown execution mode '$mode'. Expected MAIN_THREAD or CONCURRENT."
+            )
+        }
+        return this
+    }
+
+    /** Convenience: force main thread execution. */
+    public fun mainThread(): CraftTweakerMachineTypeBuilder {
+        defaultExecutionMode = ExecutionMode.MAIN_THREAD
+        return this
+    }
+
+    /** Convenience: force concurrent execution. */
+    public fun concurrent(): CraftTweakerMachineTypeBuilder {
+        defaultExecutionMode = ExecutionMode.CONCURRENT
+        return this
+    }
+
+    /**
      * Build machine type wrapper for later registration.
      * 构建机器类型包装，用于后续注册。
      *
@@ -126,7 +197,9 @@ public class CraftTweakerMachineTypeBuilder(
             structureProvider = structureProvider,
             componentTypes = componentTypes.toSet(),
             recipeGroups = recipeGroups.toSet(),
-            controllerModelLocation = controllerModel
+            controllerModelLocation = controllerModel,
+            defaultAttributeBases = defaultAttributeBases.toMap(),
+            defaultExecutionMode = defaultExecutionMode ?: ExecutionMode.CONCURRENT
         )
     }
 
@@ -144,8 +217,10 @@ private class CraftTweakerMachineTypeImpl(
     private val structureProvider: () -> MachineStructure,
     override val componentTypes: Set<MachineComponentType<*>>,
     override val recipeGroups: Set<ResourceLocation>,
-    override val controllerModelLocation: ResourceLocation?
-) : ICraftTweakerMachineType {
+    override val controllerModelLocation: ResourceLocation?,
+    override val defaultAttributeBases: Map<MachineAttributeType, Double>,
+    override val defaultExecutionMode: ExecutionMode
+) : ICraftTweakerMachineType, MachineTypeAttributeDefaults, MachineTypeExecutionModeDefaults {
 
     /**
      * Lazily loaded structure instance.

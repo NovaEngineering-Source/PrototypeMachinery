@@ -10,21 +10,39 @@ default_button ：尺寸 W:16 H:19 ，贴图分为有阴影和无阴影。按钮
     有阴影./empty_button/shadow/*_n.png
 ];
 
-expand_button :自定义尺寸按钮，贴图分为有阴影和无阴影，贴图分为9部分，其中中上中间中下为x轴拉伸，中左中间中右为y轴拉伸，调整尺寸时自动拼接，按钮贴图与对应状态和9部分对应位置 [
+expand_button :自定义尺寸按钮 预设尺寸为W:14 H:17 贴图分为有阴影和无阴影，贴图分为9部分，按钮贴图与对应状态和9部分对应位置 [
 default_expand.png = 未按下 ，可在X:2 Y:2 W:7 H:7 设置自定义贴图和文本 按钮尺寸增加时WH同时增加，贴图9部分拆分[
-    X:0 Y:0 W:3 H:8 为左上贴图，X:4 Y:0 W:1 H:8 为中上拉伸贴图，X:6 Y:0 W:10 H:8 为右上贴图，
-    X:0 Y:9 W:3 H:1 为中左拉伸贴图，X:4 Y:9 W:1 H:1 为中间拉伸贴图，X:6 Y:9 W:10 H:1 为中右拉伸贴图，
-    X:0 Y:11 W:3 H:8 为左下贴图，X:4 Y:11 W:1 H:8 为中下拉伸贴图，X:6 Y:11 W:10 H:8 为右下贴图
+    X:0 Y:0 W:3 H:8 为左上贴图 预设位置X:0 Y:0 W:3 H:8，
+    X:4 Y:0 W:1 H:8 为中上拉伸贴图 预设位置X:3 Y:0 W:1 H:8 组件尺寸W增加时此贴图的W同步拉伸，
+    X:6 Y:0 W:10 H:8 为右上贴图 预设位置X:4 Y:0 W:10 H:8 组件尺寸W增加时X轴位置同步偏移，
+    X:0 Y:9 W:3 H:1 为中左拉伸贴图 预设位置X:0 Y:8 W:3 H:1 组件尺寸H增加时H同步拉伸，
+    X:4 Y:9 W:1 H:1 为中间拉伸贴图 预设位置X:3 Y:8 W:1 H:1 组件尺寸W增加时W同步拉伸 组件尺寸H增加时H同步拉伸，
+    X:6 Y:9 W:10 H:1 为中右拉伸贴图 预设位置X:4 Y:8 W:10 H:1 组件尺寸W增加时X轴位置同步偏移 组件尺寸H增加时H同步拉伸，
+    X:0 Y:11 W:3 H:8 为左下贴图 预设位置X:0 Y:9 W:3 H:8 组件尺寸H增加时Y轴位置同步偏移，
+    X:4 Y:11 W:1 H:8 为中下拉伸贴图 预设位置X:3 Y:9 W:1 H:8 组件尺寸W增加时W同步拉伸 组件尺寸H增加时Y轴位置同步偏移，
+    X:6 Y:11 W:10 H:8 为右下贴图 预设位置X:4 Y:9 W:7 H:1 组件尺寸W增加时X轴位置同步偏移 组件尺寸H增加时Y轴位置同步偏移
 ]，
 selected_expand.png = 选中 ，可在X:2 Y:3 W:7 H:7 设置自定义贴图和文本 按钮尺寸增加时WH同时增加，贴图9部分拆分[ 
-    X:0 Y:1 W:3 H:8 为左上贴图，X:4 Y:1 W:1 H:8 为中上拉伸贴图，X:6 Y:1 W:10 H:8 为右上贴图，
-    X:0 Y:10 W:3 H:1 为中左拉伸贴图，X:4 Y:10 W:1 H:1 为中间拉伸贴图，X:6 Y:10 W:10 H:1 为中右拉伸贴图，
-    X:0 Y:12 W:3 H:7 为左下贴图，X:4 Y:12 W:1 H:7 为中下拉伸贴图，X:6 Y:12 W:10 H:7 为右下贴图
+    X:0 Y:1 W:3 H:8 为左上贴图，
+    X:4 Y:1 W:1 H:8 为中上拉伸贴图，
+    X:6 Y:1 W:10 H:8 为右上贴图，
+    X:0 Y:10 W:3 H:1 为中左拉伸贴图，
+    X:4 Y:10 W:1 H:1 为中间拉伸贴图，
+    X:6 Y:10 W:10 H:1 为中右拉伸贴图，
+    X:0 Y:12 W:3 H:7 为左下贴图，
+    X:4 Y:12 W:1 H:7 为中下拉伸贴图，
+    X:6 Y:12 W:10 H:7 为右下贴图
 ]，
 pressed_expand.png = 按下 ，可在X:2 Y:4 W:7 H:7 设置自定义贴图和文本 按钮尺寸增加时WH同时增加，贴图9部分拆分[ 
-    X:0 Y:2 W:3 H:8 为左上贴图，X:4 Y:2 W:1 H:8 为中上拉伸贴图，X:6 Y:2 W:10 H:8 为右上贴图，
-    X:0 Y:11 W:3 H:1 为中左拉伸贴图，X:4 Y:11 W:1 H:1 为中间拉伸贴图，X:6 Y:11 W:10 H:1 为中右拉伸贴图，
-    X:0 Y:13 W:3 H:6 为左下贴图，X:4 Y:13 W:1 H:6 为中下拉伸贴图，X:6 Y:13 W:10 H:6 为右下贴图
+    X:0 Y:2 W:3 H:8 为左上贴图，
+    X:4 Y:2 W:1 H:8 为中上拉伸贴图，
+    X:6 Y:2 W:10 H:8 为右上贴图，
+    X:0 Y:11 W:3 H:1 为中左拉伸贴图，
+    X:4 Y:11 W:1 H:1 为中间拉伸贴图，
+    X:6 Y:11 W:10 H:1 为中右拉伸贴图，
+    X:0 Y:13 W:3 H:6 为左下贴图，
+    X:4 Y:13 W:1 H:6 为中下拉伸贴图，
+    X:6 Y:13 W:10 H:6 为右下贴图
 ]，
 disable_expand.png = 不可用 ，可在X:2 Y:4 W:7 H:7 设的自定义贴图和文本 按钮尺寸增加时WH同时增加，贴图9部分拆分[
     X:0 Y:1 W:3 H:8 为左上贴图，X:4 Y:1 W:1 H:8 为中上拉伸贴图，X:6 Y:1 W:10 H:8 为右上贴图，
@@ -207,8 +225,26 @@ slider_m_x ：扩展宽横滑块 W:15 H: 13 组件尺寸增加时W同时增加�
 # 开关组件
 
 switch_states ：开关组件 W:28 H:14 [
-    关闭状态 ./switch/normal/off.png ，选择时为 ./switch/normal/off_selected.png ，
-    开启状态 ./switch/normal/on.png ，选择时为 ./switch/normal/on_selected.png 
+    [关闭状态 ./gui_states/switch/normal/off.png 选择时为 ./gui_states/switch/normal/off_selected.png],
+    [开启状态 ./gui_states/switch/normal/on.png 选择时为 ./gui_states/switch/normal/on_selected.png] 
 ]
 
+switch_states_s ：有阴影开关组件 W:28 H:14 [
+    [关闭状态 ./gui_states/switch/shadow/off.png 选择时为 ./gui_states/switch/shadow/off_selected.png],
+    [开启状态 ./gui_states/switch/shadow/on.png 选择时为 ./gui_states/switch/shadow/on_selected.png] 
+]
 
+switch_states_ss ：小开关组件 W:20 H:13 [
+    [关闭状态 ./gui_states/switch/s_normal/off.png 选择时为 ./gui_states/switch/s_normal/off_selected.png],
+    [开启状态 ./gui_states/switch/s_normal/on.png 选择时为 ./gui_states/switch/s_normal/on_selected.png] 
+]
+
+switch_states_sn ：有阴影小开关组件 W:20 H:13 [
+    [关闭状态 ./gui_states/switch/s_shadow/off.png 选择时为 ./gui_states/switch/s_shadow/off_selected.png],
+    [开启状态 ./gui_states/switch/s_shadow/on.png 选择时为 ./gui_states/switch/s_shadow/on_selected.png] 
+]
+
+choose_switch ：选择组件 W:11 H:11 [
+    [关闭状态 ./gui_states/choose_switch/normal/off.png 光标选中 时为 ./gui_states/choose_switch/normal/off_selected.png],
+    [开启状态 ./gui_states/choose_switch/normal/on.png 光标选中 时为 ./gui_states/choose_switch/normal/on_selected.png] 
+]

@@ -3,7 +3,6 @@ package github.kasuminova.prototypemachinery.impl.recipe
 import github.kasuminova.prototypemachinery.api.recipe.MachineRecipe
 import github.kasuminova.prototypemachinery.api.recipe.RecipeManager
 import net.minecraft.util.ResourceLocation
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * In-memory recipe registry implementation.
@@ -11,8 +10,10 @@ import java.util.concurrent.ConcurrentHashMap
  * 这是一个轻量的内存“注册表”实现：支持按 id 查询、按 group 查询，以及注册时维护 group 索引。
  */
 public object RecipeManagerImpl : RecipeManager {
-    private val recipes: MutableMap<String, MachineRecipe> = ConcurrentHashMap()
-    private val recipesByGroup: MutableMap<ResourceLocation, MutableSet<MachineRecipe>> = ConcurrentHashMap()
+    // Keep insertion order stable: tests and recipe scanning rely on deterministic iteration.
+    // Registration happens during init on the main thread; we don't need CHM here.
+    private val recipes: MutableMap<String, MachineRecipe> = LinkedHashMap()
+    private val recipesByGroup: MutableMap<ResourceLocation, MutableSet<MachineRecipe>> = LinkedHashMap()
 
     override fun get(id: String): MachineRecipe? = recipes[id]
     override fun getAll(): Collection<MachineRecipe> = recipes.values
@@ -28,7 +29,7 @@ public object RecipeManagerImpl : RecipeManager {
             }
         }
         for (group in recipe.recipeGroups) {
-            val set = recipesByGroup.computeIfAbsent(group) { ConcurrentHashMap.newKeySet() }
+            val set = recipesByGroup.computeIfAbsent(group) { LinkedHashSet() }
             set.add(recipe)
         }
     }

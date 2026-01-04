@@ -5,13 +5,14 @@ import com.cleanroommc.modularui.drawable.UITexture
 import com.cleanroommc.modularui.factory.PlayerInventoryGuiData
 import com.cleanroommc.modularui.screen.ModularPanel
 import com.cleanroommc.modularui.screen.UISettings
-import com.cleanroommc.modularui.utils.BooleanConsumer
 import com.cleanroommc.modularui.value.sync.BooleanSyncValue
 import com.cleanroommc.modularui.value.sync.DoubleSyncValue
 import com.cleanroommc.modularui.value.sync.PanelSyncManager
 import com.cleanroommc.modularui.value.sync.StringSyncValue
 import com.cleanroommc.modularui.widgets.layout.Column
 import github.kasuminova.prototypemachinery.PrototypeMachinery
+import github.kasuminova.prototypemachinery.common.block.MachineBlock
+import github.kasuminova.prototypemachinery.common.block.entity.MachineBlockEntity
 import github.kasuminova.prototypemachinery.common.structure.tools.StructureExportUtil
 import net.minecraft.network.PacketBuffer
 import net.minecraft.util.EnumFacing
@@ -32,6 +33,9 @@ internal object ScannerInstrumentUi {
 
     private const val ACTION_KEY = "pm:scanner_instrument_action"
 
+    /** Safety cap to avoid stalling server tick when users select giant areas. */
+    private const val AUTO_SCAN_MAX_VOLUME: Long = 64L * 64L * 64L
+
     private val BG: UITexture = UITexture.builder()
         .imageSize(384, 256)
         .subAreaXYWH(0, 0, PANEL_W, PANEL_H)
@@ -50,6 +54,17 @@ internal object ScannerInstrumentUi {
     }
 
     fun build(data: PlayerInventoryGuiData, syncManager: PanelSyncManager, settings: UISettings): ModularPanel {
+        // One-time server-side auto init for export origin + preview orientation.
+        if (!data.player.world.isRemote) {
+            val stack = data.player.inventory.getStackInSlot(data.slotIndex)
+            if (!stack.isEmpty) {
+                val tag = ScannerInstrumentNbt.getOrCreateData(stack)
+                ScannerInstrumentNbt.ensureDefaults(stack, tag)
+                tryAutoInitFromController(data.player.world, tag)
+                stack.tagCompound = stack.tagCompound
+            }
+        }
+
         // --- Actions (client -> server) ---
         syncManager.registerSyncedAction(
             ACTION_KEY,
@@ -66,12 +81,30 @@ internal object ScannerInstrumentUi {
 
                 when (actionId) {
                     Action.EXPORT.id -> {
-                        val origin = ScannerInstrumentNbt.readOrigin(tag)
-                        val corner = ScannerInstrumentNbt.readCorner(tag)
-                        if (origin == null || corner == null) {
-                            player.sendMessage(TextComponentString("[PM] 请先用物品在世界中设置 origin/corner（右键方块两次）"))
+                        val selA = ScannerInstrumentNbt.readOrigin(tag)
+                        val selB = ScannerInstrumentNbt.readCorner(tag)
+                        if (selA == null || selB == null) {
+                               player.sendMessage(TextComponentString("[PM] 请先用物品在世界中设置 origin/corner（右键方块两次）"))
+                            player.sendMessage(TextComponentString("[PM] 提示：潜行右键方块可重新选择 origin（会清空 corner）。"))
                             return@ISyncedAction
                         }
+
+                        // Auto init right before export as well (covers cases where player selected after opening UI).
+                        tryAutoInitFromController(player.world, tag)
+
+                        val selectionMin = BlockPos(
+                            minOf(selA.x, selB.x),
+                            minOf(selA.y, selB.y),
+                            minOf(selA.z, selB.z)
+                        )
+                        val selectionMax = BlockPos(
+                            maxOf(selA.x, selB.x),
+                            maxOf(selA.y, selB.y),
+                            maxOf(selA.z, selB.z)
+                        )
+
+                        val exportOrigin = ScannerInstrumentNbt.readEffectiveExportOrigin(tag)
+                            ?: selA
 
                         val suggested = stack.displayName
                         val rawId = tag.getString(ScannerInstrumentNbt.TAG_STRUCTURE_ID).takeIf { it.isNotBlank() }
@@ -82,14 +115,18 @@ internal object ScannerInstrumentUi {
                         val langName = tag.getString(ScannerInstrumentNbt.TAG_LANG_NAME).takeIf { it.isNotBlank() }
                         val includeTileNbtConstraints = tag.getBoolean(ScannerInstrumentNbt.TAG_INCLUDE_TILE_NBT)
 
-                        val structure = StructureExportUtil.exportWorldSelectionAsTemplate(
+                        val rotation = ScannerInstrumentNbt.worldToTemplateRotationFromPreview(tag)
+
+                        val structure = StructureExportUtil.exportWorldBoxAsTemplate(
                             world = player.world,
-                            origin = origin,
-                            corner = corner,
+                            selectionMin = selectionMin,
+                            selectionMax = selectionMax,
+                            exportOrigin = exportOrigin,
                             structureId = structureId,
                             displayName = langName,
                             includeAir = false,
                             includeTileNbtConstraints = includeTileNbtConstraints,
+                            rotationWorldToTemplate = rotation,
                         )
 
                         val file = StructureExportUtil.writeStructureJson(
@@ -103,6 +140,7 @@ internal object ScannerInstrumentUi {
 
                         player.sendMessage(TextComponentString("[PM] 结构已导出: id=$structureId"))
                         player.sendMessage(TextComponentString("[PM] NBT=${if (includeTileNbtConstraints) "ON" else "OFF"}"))
+                        player.sendMessage(TextComponentString("[PM] 导出原点: ${exportOrigin.x},${exportOrigin.y},${exportOrigin.z}"))
                         player.sendMessage(TextComponentString("[PM] 文件: ${file.absolutePath}"))
                         player.sendMessage(TextComponentString("[PM] 提示: 结构 JSON 需要重启/重载后才会被加载（当前暂无在线重载）。"))
                     }
@@ -132,37 +170,51 @@ internal object ScannerInstrumentUi {
                         tag.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_FACING, EnumFacing.NORTH.index)
                         tag.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_ROT, 0)
                         tag.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR, false)
+
+                        tag.setBoolean(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN_AUTO, true)
+                        tag.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_AUTO, true)
                     }
 
                     Action.SET_ORIGIN_FROM_EDIT.id -> {
                         val x = tag.getInteger(ScannerInstrumentNbt.TAG_ORIGIN_EDIT_X)
                         val y = tag.getInteger(ScannerInstrumentNbt.TAG_ORIGIN_EDIT_Y)
                         val z = tag.getInteger(ScannerInstrumentNbt.TAG_ORIGIN_EDIT_Z)
-                        ScannerInstrumentNbt.writeOrigin(tag, BlockPos(x, y, z))
+                        ScannerInstrumentNbt.writeExportOrigin(tag, BlockPos(x, y, z))
+                        tag.setBoolean(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN_AUTO, false)
                     }
 
                     Action.SET_ORIGIN_TO.id -> {
                         val x = buf.readInt()
                         val y = buf.readInt()
                         val z = buf.readInt()
-                        ScannerInstrumentNbt.writeOrigin(tag, BlockPos(x, y, z))
+                        ScannerInstrumentNbt.writeExportOrigin(tag, BlockPos(x, y, z))
+                        tag.setBoolean(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN_AUTO, false)
                     }
 
                     Action.RESET_PREVIEW_ORIENTATION.id -> {
                         tag.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_FACING, EnumFacing.NORTH.index)
                         tag.setInteger(ScannerInstrumentNbt.TAG_PREVIEW_ROT, 0)
                         tag.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR, false)
+
+                        // Allow controller auto init to re-apply on next open/export.
+                        tag.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_AUTO, true)
                     }
 
                     Action.SET_PREVIEW_FACING.id -> {
                         val faceIdx = buf.readVarInt()
                         val facing = EnumFacing.values().getOrNull(faceIdx) ?: EnumFacing.NORTH
                         ScannerInstrumentNbt.writePreviewFacing(tag, facing)
+
+                        // User override.
+                        tag.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_AUTO, false)
                     }
 
                     Action.SET_PREVIEW_ROT.id -> {
                         val rot = buf.readVarInt().coerceIn(0, 3)
                         ScannerInstrumentNbt.writePreviewRot(tag, rot)
+
+                        // User override.
+                        tag.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_AUTO, false)
                     }
                 }
 
@@ -223,8 +275,8 @@ internal object ScannerInstrumentUi {
         syncManager.syncValue(
             "expandedEnabled",
             BooleanSyncValue(
-                java.util.function.BooleanSupplier { readBool(ScannerInstrumentNbt.TAG_EXPANDED) },
-                BooleanConsumer { v -> withData { it.setBoolean(ScannerInstrumentNbt.TAG_EXPANDED, v) } }
+                { readBool(ScannerInstrumentNbt.TAG_EXPANDED) },
+                { v -> withData { it.setBoolean(ScannerInstrumentNbt.TAG_EXPANDED, v) } }
             )
         )
 
@@ -276,22 +328,22 @@ internal object ScannerInstrumentUi {
         syncManager.syncValue(
             "substructure",
             BooleanSyncValue(
-                java.util.function.BooleanSupplier { readBool(ScannerInstrumentNbt.TAG_SUBSTRUCTURE) },
-                BooleanConsumer { v -> withData { it.setBoolean(ScannerInstrumentNbt.TAG_SUBSTRUCTURE, v) } }
+                { readBool(ScannerInstrumentNbt.TAG_SUBSTRUCTURE) },
+                { v -> withData { it.setBoolean(ScannerInstrumentNbt.TAG_SUBSTRUCTURE, v) } }
             )
         )
         syncManager.syncValue(
             "matchNbt",
             BooleanSyncValue(
-                java.util.function.BooleanSupplier { readBool(ScannerInstrumentNbt.TAG_INCLUDE_TILE_NBT) },
-                BooleanConsumer { v -> withData { it.setBoolean(ScannerInstrumentNbt.TAG_INCLUDE_TILE_NBT, v) } }
+                { readBool(ScannerInstrumentNbt.TAG_INCLUDE_TILE_NBT) },
+                { v -> withData { it.setBoolean(ScannerInstrumentNbt.TAG_INCLUDE_TILE_NBT, v) } }
             )
         )
         syncManager.syncValue(
             "allowMirror",
             BooleanSyncValue(
-                java.util.function.BooleanSupplier { readBool(ScannerInstrumentNbt.TAG_ALLOW_MIRROR) },
-                BooleanConsumer { v -> withData { it.setBoolean(ScannerInstrumentNbt.TAG_ALLOW_MIRROR, v) } }
+                { readBool(ScannerInstrumentNbt.TAG_ALLOW_MIRROR) },
+                { v -> withData { it.setBoolean(ScannerInstrumentNbt.TAG_ALLOW_MIRROR, v) } }
             )
         )
 
@@ -322,8 +374,8 @@ internal object ScannerInstrumentUi {
         syncManager.syncValue(
             "previewMirror",
             BooleanSyncValue(
-                java.util.function.BooleanSupplier { readBool(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR) },
-                BooleanConsumer { v -> withData { it.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR, v) } }
+                { readBool(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR) },
+                { v -> withData { it.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR, v) } }
             )
         )
 
@@ -345,6 +397,74 @@ internal object ScannerInstrumentUi {
         }
 
         return panel
+    }
+
+    private data class ControllerHit(
+        val pos: BlockPos,
+        val facing: EnumFacing,
+        val twist: Int,
+    )
+
+    /**
+        * If selection contains exactly one controller, auto-fill export origin + preview orientation.
+        *
+        * Rules:
+        * - Only runs when selection endpoints are present.
+        * - Only applies exportOrigin when TAG_EXPORT_ORIGIN_AUTO is true.
+        * - Only applies previewFacing/rot when TAG_PREVIEW_AUTO is true.
+        */
+    private fun tryAutoInitFromController(world: net.minecraft.world.World, tag: net.minecraft.nbt.NBTTagCompound) {
+        val a = ScannerInstrumentNbt.readOrigin(tag) ?: return
+        val b = ScannerInstrumentNbt.readCorner(tag) ?: return
+
+        val min = BlockPos(minOf(a.x, b.x), minOf(a.y, b.y), minOf(a.z, b.z))
+        val max = BlockPos(maxOf(a.x, b.x), maxOf(a.y, b.y), maxOf(a.z, b.z))
+        val vol = (max.x - min.x + 1).toLong() * (max.y - min.y + 1).toLong() * (max.z - min.z + 1).toLong()
+        if (vol <= 0L || vol > AUTO_SCAN_MAX_VOLUME) return
+
+        val hit = findSingleController(world, min, max) ?: return
+
+        if (tag.getBoolean(ScannerInstrumentNbt.TAG_EXPORT_ORIGIN_AUTO)) {
+            ScannerInstrumentNbt.writeExportOrigin(tag, hit.pos)
+        }
+        if (tag.getBoolean(ScannerInstrumentNbt.TAG_PREVIEW_AUTO)) {
+            ScannerInstrumentNbt.writePreviewFacing(tag, hit.facing)
+            ScannerInstrumentNbt.writePreviewRot(tag, hit.twist)
+            tag.setBoolean(ScannerInstrumentNbt.TAG_PREVIEW_MIRROR, false)
+        }
+    }
+
+    private fun findSingleController(
+        world: net.minecraft.world.World,
+        min: BlockPos,
+        max: BlockPos,
+    ): ControllerHit? {
+        var found: ControllerHit? = null
+        for (y in min.y..max.y) {
+            for (z in min.z..max.z) {
+                for (x in min.x..max.x) {
+                    val p = BlockPos(x, y, z)
+                    val st = world.getBlockState(p)
+                    val blk = st.block
+                    if (blk !is MachineBlock) continue
+
+                    val facing = try {
+                        st.getValue(MachineBlock.FACING)
+                    } catch (_: Throwable) {
+                        EnumFacing.NORTH
+                    }
+                    val twist = (world.getTileEntity(p) as? MachineBlockEntity)?.twist ?: 0
+
+                    val hit = ControllerHit(p, facing, twist)
+                    if (found != null) {
+                        // Multiple controllers: ambiguous, skip auto.
+                        return null
+                    }
+                    found = hit
+                }
+            }
+        }
+        return found
     }
 
     /** Helper for client code to send action packets to server. */

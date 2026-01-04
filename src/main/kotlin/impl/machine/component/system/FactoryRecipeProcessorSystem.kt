@@ -26,9 +26,8 @@ public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcesso
     override fun onTick(machine: MachineInstance, component: FactoryRecipeProcessorComponent) {
         component.tickProcesses() // Tick executors
 
-        val iterator = component.activeProcesses.iterator()
-        while (iterator.hasNext()) {
-            val process = iterator.next()
+        for (slot in component.workSlots) {
+            val process = slot.process ?: continue
 
             // Tick process component systems (pre/tick/post) once per machine tick.
             tickProcessComponents(process, Phase.PRE)
@@ -43,12 +42,14 @@ public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcesso
                         is ProcessResult.Success -> lifecycle.started = true
                         is ProcessResult.Blocked -> {
                             process.status = process.status.copy(message = r.reason, isError = false)
+                            slot.statusText = process.status.message
                             continue
                         }
 
                         is ProcessResult.Failure -> {
                             process.status = process.status.copy(message = r.reason, isError = true)
-                            iterator.remove()
+                            slot.statusText = process.status.message
+                            slot.process = null
                             continue
                         }
                     }
@@ -58,18 +59,21 @@ public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcesso
                 if (isComplete(process)) {
                     when (val r = executeEnd(process)) {
                         is ProcessResult.Success -> {
-                            iterator.remove()
+                            slot.statusText = null
+                            slot.process = null
                             continue
                         }
 
                         is ProcessResult.Blocked -> {
                             process.status = process.status.copy(message = r.reason, isError = false)
+                            slot.statusText = process.status.message
                             continue
                         }
 
                         is ProcessResult.Failure -> {
                             process.status = process.status.copy(message = r.reason, isError = true)
-                            iterator.remove()
+                            slot.statusText = process.status.message
+                            slot.process = null
                             continue
                         }
                     }
@@ -92,16 +96,20 @@ public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcesso
                             message = "Processing",
                             isError = false
                         )
+
+                        slot.statusText = process.status.message
                     }
 
                     is ProcessResult.Blocked -> {
                         process.status = process.status.copy(message = r.reason, isError = false)
+                        slot.statusText = process.status.message
                         continue
                     }
 
                     is ProcessResult.Failure -> {
                         process.status = process.status.copy(message = r.reason, isError = true)
-                        iterator.remove()
+                        slot.statusText = process.status.message
+                        slot.process = null
                         continue
                     }
                 }
@@ -110,18 +118,21 @@ public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcesso
                 if (isComplete(process)) {
                     when (val r = executeEnd(process)) {
                         is ProcessResult.Success -> {
-                            iterator.remove()
+                            slot.statusText = null
+                            slot.process = null
                             continue
                         }
 
                         is ProcessResult.Blocked -> {
                             process.status = process.status.copy(message = r.reason, isError = false)
+                            slot.statusText = process.status.message
                             continue
                         }
 
                         is ProcessResult.Failure -> {
                             process.status = process.status.copy(message = r.reason, isError = true)
-                            iterator.remove()
+                            slot.statusText = process.status.message
+                            slot.process = null
                             continue
                         }
                     }
@@ -131,9 +142,7 @@ public object FactoryRecipeProcessorSystem : MachineSystem<FactoryRecipeProcesso
             }
         }
 
-        if (component.activeProcesses.isEmpty()) {
-            // component.status = RecipeProcessorComponent.ProcessorStatus.IDLE // Already handled in stopRecipe/remove
-        }
+        // IDLE status can be derived from workSlots; no extra state needed here.
     }
 
     override fun onPostTick(machine: MachineInstance, component: FactoryRecipeProcessorComponent) {

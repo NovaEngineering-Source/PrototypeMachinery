@@ -2,6 +2,7 @@ package github.kasuminova.prototypemachinery.api.machine
 
 import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentType
 import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructure
+import github.kasuminova.prototypemachinery.api.machine.workslot.WorkSlotDefinition
 import net.minecraft.util.ResourceLocation
 
 /**
@@ -100,6 +101,18 @@ public interface MachineType {
      */
     public val recipeGroups: Set<ResourceLocation>
         get() = emptySet()
+
+    /**
+     * Static work slot definitions for this machine type.
+     *
+     * 该机器类型的静态工位定义。
+     *
+     * When empty, implementations may treat it as a single implicit slot.
+     *
+     * 当为空时，实现侧可视为“单一隐式工位”。
+     */
+    public val workSlots: List<WorkSlotDefinition>
+        get() = emptyList()
 
     /**
      * Optional custom model location for the controller block.

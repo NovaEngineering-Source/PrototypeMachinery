@@ -87,6 +87,81 @@ item.prototypemachinery.orientation_tool.name=控制器转向工具
 item.prototypemachinery.scanner_instrument.name=范围结构选择器
 item.prototypemachinery.build_instrument.name=机械构建器
 
+# 机械构建器（Build Instrument）UI
+pm.build_instrument.offset=(%s, %s, %s)
+pm.build_instrument.slice_suffix=  [%s-%s 步长 %s]
+pm.build_instrument.substructure.label=%s @ %s
+
+pm.build_instrument.slice_slider=层数：%s/%s
+pm.build_instrument.materials.title=材料
+pm.build_instrument.materials.title_with_count=材料（%s）
+
+pm.build_instrument.material.anyof_entry=可选材料：%s × %s
+pm.build_instrument.material.entry=%s × %s
+pm.build_instrument.material.option.choose=选择
+pm.build_instrument.material.option.selected=已选
+
+pm.build_instrument.req.anyof=<可选:%s>
+pm.build_instrument.req.display=<显示:%s:%s>%s
+pm.build_instrument.req.nbt_marker=[NBT]
+pm.build_instrument.req.nbt_constraints=[NBT:%s]
+pm.build_instrument.req.unknown=<未知>
+
+# 扫描器（Scanner Instrument）UI
+pm.scanner.tooltip.preview=结构预览（只读，跟随导出转向）
+pm.scanner.tooltip.lang_name=本地化名称：导出结构时的显示名（可留空）
+pm.scanner.tooltip.structure_id=结构 ID：用于保存文件名/注册（会自动 sanitize）
+pm.scanner.tooltip.expanded_enabled=是否启用扩展结构（按数量/间距生成重复切片）
+pm.scanner.tooltip.expanded_quantity=扩展数量：切片重复次数（最小 1）
+pm.scanner.tooltip.expanded_spacing=扩展间距：每段切片之间的间隔（最小 0）
+pm.scanner.tooltip.substructure=子结构模式：导出时标记为子结构
+pm.scanner.tooltip.match_nbt=匹配 NBT：导出时包含 TileEntity NBT 约束
+pm.scanner.tooltip.allow_mirror=允许镜像：结构可在镜像后匹配
+pm.scanner.tooltip.export_origin_x=导出原点 X：结构坐标(0,0,0)对应的世界坐标
+pm.scanner.tooltip.export_origin_y=导出原点 Y：结构坐标(0,0,0)对应的世界坐标
+pm.scanner.tooltip.export_origin_z=导出原点 Z：结构坐标(0,0,0)对应的世界坐标
+pm.scanner.tooltip.reset_origin_input=重置导出原点输入：用当前导出原点坐标填充 X/Y/Z
+pm.scanner.tooltip.set_origin_from_input=设定导出原点：把 X/Y/Z 输入写入为结构原点(0,0,0)
+
+pm.scanner.size_preview.empty=X:---- Y:---- Z:----
+pm.scanner.size_preview.value=X:%s Y:%s Z:%s
+
+pm.scanner.tooltip.reset_preview_orientation=重置预览方向：朝向/旋转/镜像恢复默认
+pm.scanner.tooltip.preview_mirror=镜像预览：仅影响预览显示，不会修改已选坐标
+
+pm.scanner.tooltip.preview_facing.up=预览朝向：顶 (UP)
+pm.scanner.tooltip.preview_facing.down=预览朝向：底 (DOWN)
+pm.scanner.tooltip.preview_facing.east=预览朝向：东 (EAST)
+pm.scanner.tooltip.preview_facing.west=预览朝向：西 (WEST)
+pm.scanner.tooltip.preview_facing.north=预览朝向：北 (NORTH)
+pm.scanner.tooltip.preview_facing.south=预览朝向：南 (SOUTH)
+
+pm.scanner.tooltip.preview_rot.0=预览旋转：0°
+pm.scanner.tooltip.preview_rot.1=预览旋转：90°
+pm.scanner.tooltip.preview_rot.2=预览旋转：180°
+pm.scanner.tooltip.preview_rot.3=预览旋转：270°
+pm.scanner.tooltip.preview_rot.other=预览旋转
+
+pm.scanner.tooltip.clear=清空：清除已选择的 origin/corner
+pm.scanner.tooltip.reset=初始化：重置界面字段并清空选择
+pm.scanner.tooltip.export=导出：将当前选择导出为结构 JSON（写入 config/.../scanned）
+
+# 扫描器聊天提示（服务器发送，客户端本地化）
+pm.scanner.chat.origin_set=\u00a7b[PM]\u00a7r 已设置 origin: %s,%s,%s
+pm.scanner.chat.origin_set_and_corner_cleared=\u00a7b[PM]\u00a7r 已设置 origin: %s,%s,%s（corner 已清空）
+pm.scanner.chat.hint_set_corner_then_export=\u00a7b[PM]\u00a7r 再右键一个角点设置范围；打开 GUI 点“导出”。
+pm.scanner.chat.corner_set=\u00a7b[PM]\u00a7r 已设置 corner: %s,%s,%s
+pm.scanner.chat.selection=\u00a7b[PM]\u00a7r 选区: min=%s,%s,%s max=%s,%s,%s size=%sx%sx%s blocks=%s
+pm.scanner.chat.warn_large_selection=\u00a7e[PM]\u00a7r 警告：选区较大（blocks=%s），导出可能耗时/卡服。
+pm.scanner.chat.hint_export=\u00a7b[PM]\u00a7r 打开 GUI 点“导出”生成结构 JSON。
+pm.scanner.chat.corner_updated=\u00a7b[PM]\u00a7r 已更新 corner: %s,%s,%s（打开 GUI 点“导出”）
+
+# 预览罗盘 overlay
+pm.preview.ui.compass.n=北
+pm.preview.ui.compass.e=东
+pm.preview.ui.compass.s=南
+pm.preview.ui.compass.w=西
+
 # 控制器转向工具：模式/提示
 pm.orientation_tool.enabled=控制器转向工具：已开启
 pm.orientation_tool.disabled=控制器转向工具：已关闭

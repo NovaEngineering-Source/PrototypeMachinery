@@ -87,6 +87,81 @@ item.prototypemachinery.orientation_tool.name=Controller Orientation Tool
 item.prototypemachinery.scanner_instrument.name=Structure Range Scanner
 item.prototypemachinery.build_instrument.name=Machine Builder
 
+# Build Instrument UI
+pm.build_instrument.offset=(%s, %s, %s)
+pm.build_instrument.slice_suffix=  [%s-%s step %s]
+pm.build_instrument.substructure.label=%s @ %s
+
+pm.build_instrument.slice_slider=Layers: %s/%s
+pm.build_instrument.materials.title=Materials
+pm.build_instrument.materials.title_with_count=Materials (%s)
+
+pm.build_instrument.material.anyof_entry=Candidates: %s × %s
+pm.build_instrument.material.entry=%s × %s
+pm.build_instrument.material.option.choose=Choose
+pm.build_instrument.material.option.selected=Selected
+
+pm.build_instrument.req.anyof=<anyof:%s>
+pm.build_instrument.req.display=<display:%s:%s>%s
+pm.build_instrument.req.nbt_marker=[NBT]
+pm.build_instrument.req.nbt_constraints=[NBT:%s]
+pm.build_instrument.req.unknown=<unknown>
+
+# Scanner Instrument UI
+pm.scanner.tooltip.preview=Structure preview (read-only, follows export orientation)
+pm.scanner.tooltip.lang_name=Localized name: display name when exporting (optional)
+pm.scanner.tooltip.structure_id=Structure ID: used for filename/registration (auto-sanitized)
+pm.scanner.tooltip.expanded_enabled=Enable expanded structure (repeat slices by quantity/spacing)
+pm.scanner.tooltip.expanded_quantity=Expanded quantity: slice repeat count (min 1)
+pm.scanner.tooltip.expanded_spacing=Expanded spacing: gap between slices (min 0)
+pm.scanner.tooltip.substructure=Substructure mode: mark as substructure on export
+pm.scanner.tooltip.match_nbt=Match NBT: include TileEntity NBT constraints in export
+pm.scanner.tooltip.allow_mirror=Allow mirror: structure can match when mirrored
+pm.scanner.tooltip.export_origin_x=Export origin X: world position mapped to structure (0,0,0)
+pm.scanner.tooltip.export_origin_y=Export origin Y: world position mapped to structure (0,0,0)
+pm.scanner.tooltip.export_origin_z=Export origin Z: world position mapped to structure (0,0,0)
+pm.scanner.tooltip.reset_origin_input=Reset export-origin inputs: fill X/Y/Z from current export origin
+pm.scanner.tooltip.set_origin_from_input=Set export origin: write X/Y/Z inputs as structure origin (0,0,0)
+
+pm.scanner.size_preview.empty=X:---- Y:---- Z:----
+pm.scanner.size_preview.value=X:%s Y:%s Z:%s
+
+pm.scanner.tooltip.reset_preview_orientation=Reset preview orientation: facing/rotation/mirror to default
+pm.scanner.tooltip.preview_mirror=Mirror preview: affects preview only; does not change selection
+
+pm.scanner.tooltip.preview_facing.up=Preview facing: Top (UP)
+pm.scanner.tooltip.preview_facing.down=Preview facing: Bottom (DOWN)
+pm.scanner.tooltip.preview_facing.east=Preview facing: East (EAST)
+pm.scanner.tooltip.preview_facing.west=Preview facing: West (WEST)
+pm.scanner.tooltip.preview_facing.north=Preview facing: North (NORTH)
+pm.scanner.tooltip.preview_facing.south=Preview facing: South (SOUTH)
+
+pm.scanner.tooltip.preview_rot.0=Preview rotation: 0°
+pm.scanner.tooltip.preview_rot.1=Preview rotation: 90°
+pm.scanner.tooltip.preview_rot.2=Preview rotation: 180°
+pm.scanner.tooltip.preview_rot.3=Preview rotation: 270°
+pm.scanner.tooltip.preview_rot.other=Preview rotation
+
+pm.scanner.tooltip.clear=Clear: clear selected origin/corner
+pm.scanner.tooltip.reset=Initialize: reset fields and clear selection
+pm.scanner.tooltip.export=Export: export selection as structure JSON (writes to config/.../scanned)
+
+# Scanner Instrument chat hints (server-sent, client-localized)
+pm.scanner.chat.origin_set=\u00a7b[PM]\u00a7r Set origin: %s,%s,%s
+pm.scanner.chat.origin_set_and_corner_cleared=\u00a7b[PM]\u00a7r Set origin: %s,%s,%s (corner cleared)
+pm.scanner.chat.hint_set_corner_then_export=\u00a7b[PM]\u00a7r Right-click another corner to set range; open GUI and click "Export".
+pm.scanner.chat.corner_set=\u00a7b[PM]\u00a7r Set corner: %s,%s,%s
+pm.scanner.chat.selection=\u00a7b[PM]\u00a7r Selection: min=%s,%s,%s max=%s,%s,%s size=%sx%sx%s blocks=%s
+pm.scanner.chat.warn_large_selection=\u00a7e[PM]\u00a7r Warning: large selection (blocks=%s); export may take time / lag the server.
+pm.scanner.chat.hint_export=\u00a7b[PM]\u00a7r Open GUI and click "Export" to generate structure JSON.
+pm.scanner.chat.corner_updated=\u00a7b[PM]\u00a7r Updated corner: %s,%s,%s (open GUI and click "Export")
+
+# Preview compass overlay
+pm.preview.ui.compass.n=N
+pm.preview.ui.compass.e=E
+pm.preview.ui.compass.s=S
+pm.preview.ui.compass.w=W
+
 # Orientation tool: modes/hints
 pm.orientation_tool.enabled=Controller Orientation Tool: Enabled
 pm.orientation_tool.disabled=Controller Orientation Tool: Disabled

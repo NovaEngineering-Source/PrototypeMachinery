@@ -4,6 +4,7 @@ import github.kasuminova.prototypemachinery.api.machine.structure.MachineStructu
 import github.kasuminova.prototypemachinery.api.machine.structure.SliceLikeMachineStructure
 import github.kasuminova.prototypemachinery.api.machine.structure.TemplateLikeMachineStructure
 import github.kasuminova.prototypemachinery.api.machine.structure.pattern.predicate.BlockPredicate
+import github.kasuminova.prototypemachinery.api.machine.structure.pattern.predicate.PreviewRequirementProvider
 import github.kasuminova.prototypemachinery.api.machine.structure.pattern.predicate.PreviewableBlockPredicate
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.BlockRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.PreviewBomEntry
@@ -35,7 +36,8 @@ public object StructurePreviewBuilder {
         lateinit var addStructure: (MachineStructure, BlockPos) -> Unit
 
         fun describe(predicate: BlockPredicate): BlockRequirement {
-            return (predicate as? PreviewableBlockPredicate)?.toRequirement()
+            return (predicate as? PreviewRequirementProvider)?.previewRequirement()
+                ?: (predicate as? PreviewableBlockPredicate)?.toRequirement()
                 ?: UnknownRequirement(predicate.javaClass.name)
         }
 

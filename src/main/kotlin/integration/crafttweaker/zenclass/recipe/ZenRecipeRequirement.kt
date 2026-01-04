@@ -16,7 +16,6 @@ import github.kasuminova.prototypemachinery.impl.key.item.PMItemKeyType
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.EnergyRequirementComponent
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.FluidRequirementComponent
 import github.kasuminova.prototypemachinery.impl.recipe.requirement.ItemRequirementComponent
-import github.kasuminova.prototypemachinery.impl.recipe.requirement.component.ParallelismRequirementComponent
 import net.minecraft.item.ItemStack
 import net.minecraft.util.ResourceLocation
 import net.minecraftforge.fluids.FluidStack
@@ -392,11 +391,5 @@ public class ZenRecipeRequirement internal constructor(
             )
         }
 
-        @ZenMethod
-        @JvmStatic
-        public fun parallelism(id: String, parallelism: Long): ZenRecipeRequirement {
-            require(parallelism >= 1) { "parallelism must be >= 1" }
-            return ZenRecipeRequirement(ParallelismRequirementComponent(id = id, parallelism = parallelism))
-        }
     }
 }

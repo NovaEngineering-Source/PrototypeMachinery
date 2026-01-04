@@ -6,10 +6,13 @@ import github.kasuminova.prototypemachinery.common.structure.serialization.Struc
 import github.kasuminova.prototypemachinery.common.structure.serialization.StructurePatternElementData
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import net.minecraft.block.properties.IProperty
+import net.minecraft.block.state.IBlockState
 import net.minecraft.init.Blocks
 import net.minecraft.nbt.NBTBase
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.nbt.NBTTagString
+import net.minecraft.util.EnumFacing
 import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 import net.minecraftforge.fml.common.Loader
@@ -88,12 +91,47 @@ internal object StructureExportUtil {
         includeAir: Boolean = false,
         includeTileNbtConstraints: Boolean = false,
     ): StructureData {
-        val minX = minOf(origin.x, corner.x)
-        val minY = minOf(origin.y, corner.y)
-        val minZ = minOf(origin.z, corner.z)
-        val maxX = maxOf(origin.x, corner.x)
-        val maxY = maxOf(origin.y, corner.y)
-        val maxZ = maxOf(origin.z, corner.z)
+        val min = BlockPos(minOf(origin.x, corner.x), minOf(origin.y, corner.y), minOf(origin.z, corner.z))
+        val max = BlockPos(maxOf(origin.x, corner.x), maxOf(origin.y, corner.y), maxOf(origin.z, corner.z))
+        return exportWorldBoxAsTemplate(
+            world = world,
+            selectionMin = min,
+            selectionMax = max,
+            exportOrigin = origin,
+            structureId = structureId,
+            displayName = displayName,
+            includeAir = includeAir,
+            includeTileNbtConstraints = includeTileNbtConstraints,
+            rotationWorldToTemplate = { it },
+        )
+    }
+
+    /**
+     * Export a world selection box as a template structure.
+     *
+     * - The selection region is defined by [selectionMin]..[selectionMax] (inclusive).
+     * - Relative positions are computed against [exportOrigin] (which may be inside the box).
+     * - [rotationWorldToTemplate] rotates both relPos and IBlockState facings from world space into template space.
+     *
+     * This is the cornerstone for scanner “导出转向 / 归北 / 自动原点” workflows.
+     */
+    fun exportWorldBoxAsTemplate(
+        world: World,
+        selectionMin: BlockPos,
+        selectionMax: BlockPos,
+        exportOrigin: BlockPos,
+        structureId: String,
+        displayName: String? = null,
+        includeAir: Boolean = false,
+        includeTileNbtConstraints: Boolean = false,
+        rotationWorldToTemplate: (EnumFacing) -> EnumFacing = { it },
+    ): StructureData {
+        val minX = minOf(selectionMin.x, selectionMax.x)
+        val minY = minOf(selectionMin.y, selectionMax.y)
+        val minZ = minOf(selectionMin.z, selectionMax.z)
+        val maxX = maxOf(selectionMin.x, selectionMax.x)
+        val maxY = maxOf(selectionMin.y, selectionMax.y)
+        val maxZ = maxOf(selectionMin.z, selectionMax.z)
 
         val elements = ArrayList<StructurePatternElementData>()
 
@@ -101,20 +139,26 @@ internal object StructureExportUtil {
             for (z in minZ..maxZ) {
                 for (x in minX..maxX) {
                     val worldPos = BlockPos(x, y, z)
-                    if (worldPos == origin) {
+                    if (worldPos == exportOrigin) {
                         // Reserve controller/origin position.
                         continue
                     }
 
-                    val state = world.getBlockState(worldPos)
-                    val block = state.block
+                    val rawState = world.getBlockState(worldPos)
+                    val block = rawState.block
                     if (!includeAir && block === Blocks.AIR) continue
 
                     val id = block.registryName?.toString() ?: continue
+
+                    val relWorld = worldPos.subtract(exportOrigin)
+                    val relTemplate = github.kasuminova.prototypemachinery.impl.machine.structure.StructureUtils.rotatePos(
+                        relWorld,
+                        rotationWorldToTemplate
+                    )
+
+                    val state = rotateState(rawState, rotationWorldToTemplate)
                     @Suppress("DEPRECATION")
                     val meta = block.getMetaFromState(state)
-
-                    val rel = worldPos.subtract(origin)
 
                     val nbtConstraints = if (includeTileNbtConstraints) {
                         world.getTileEntity(worldPos)
@@ -130,7 +174,7 @@ internal object StructureExportUtil {
 
                     elements.add(
                         StructurePatternElementData(
-                            pos = BlockPosData(rel.x, rel.y, rel.z),
+                            pos = BlockPosData(relTemplate.x, relTemplate.y, relTemplate.z),
                             blockId = id,
                             meta = meta,
                             nbt = nbtConstraints,
@@ -156,6 +200,40 @@ internal object StructureExportUtil {
             validators = emptyList(),
             children = emptyList(),
         )
+    }
+
+    private fun rotateState(state: IBlockState, rotation: (EnumFacing) -> EnumFacing): IBlockState {
+        var newState = state
+        for (prop in state.propertyKeys) {
+            // Handle EnumFacing properties (Direction)
+            if (prop.valueClass === EnumFacing::class.java) {
+                @Suppress("UNCHECKED_CAST")
+                val directionProp = prop as IProperty<EnumFacing>
+                val current = state.getValue(directionProp)
+                val newFacing = rotation(current)
+                if (directionProp.allowedValues.contains(newFacing)) {
+                    newState = newState.withProperty(directionProp, newFacing)
+                }
+            }
+
+            // Handle EnumFacing.Axis properties (Axis)
+            if (prop.valueClass === EnumFacing.Axis::class.java) {
+                @Suppress("UNCHECKED_CAST")
+                val axisProp = prop as IProperty<EnumFacing.Axis>
+                val currentAxis = state.getValue(axisProp)
+
+                val sample = when (currentAxis) {
+                    EnumFacing.Axis.X -> EnumFacing.EAST
+                    EnumFacing.Axis.Y -> EnumFacing.UP
+                    EnumFacing.Axis.Z -> EnumFacing.NORTH
+                }
+                val newAxis = rotation(sample).axis
+                if (axisProp.allowedValues.contains(newAxis)) {
+                    newState = newState.withProperty(axisProp, newAxis)
+                }
+            }
+        }
+        return newState
     }
 
     /**

@@ -10,17 +10,29 @@ import github.kasuminova.prototypemachinery.api.machine.structure.pattern.Struct
 import github.kasuminova.prototypemachinery.api.machine.structure.pattern.predicate.BlockPredicate
 import github.kasuminova.prototypemachinery.common.registry.StructureRegisterer
 import github.kasuminova.prototypemachinery.common.structure.serialization.StructureData
+import github.kasuminova.prototypemachinery.common.structure.serialization.StructureDisplaySpecData
 import github.kasuminova.prototypemachinery.common.structure.serialization.StructurePatternElementData
+import github.kasuminova.prototypemachinery.common.structure.serialization.StructurePredicateSpecData
 import github.kasuminova.prototypemachinery.common.structure.serialization.StructureValidatorSpecData
 import github.kasuminova.prototypemachinery.impl.machine.structure.SliceStructure
 import github.kasuminova.prototypemachinery.impl.machine.structure.StructureRegistryImpl
 import github.kasuminova.prototypemachinery.impl.machine.structure.TemplateStructure
 import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.SimpleStructurePattern
+import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.AnyBlockPredicate
 import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.AnyOfBlockPredicate
+import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.BlockIdRegexPredicate
+import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.CompositeBlockPredicate
+import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.DisplayOverridePredicate
+import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.HasTileEntityPredicate
+import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.NotAirBlockPredicate
 import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.StatedBlockNbtPredicate
 import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.StatedBlockPredicate
+import github.kasuminova.prototypemachinery.impl.machine.structure.pattern.predicate.TileEntityNbtPredicate
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import net.minecraft.block.Block
+import net.minecraft.init.Blocks
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.ResourceLocation
 import net.minecraft.util.math.BlockPos
@@ -28,6 +40,7 @@ import net.minecraftforge.fml.common.Loader
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent
 import java.io.File
+import java.util.regex.Pattern
 
 /**
  * Loader for machine structure definitions from JSON files.
@@ -531,6 +544,91 @@ public object StructureLoader {
     private fun convertPattern(structureId: String, offset: BlockPos, elements: List<StructurePatternElementData>): StructurePattern {
         val blocks = mutableMapOf<BlockPos, BlockPredicate>()
 
+        // Per-pattern caches (reload-safe).
+        val regexCache: HashMap<String, Set<Block>> = HashMap()
+        val compiledRegexCache: HashMap<String, Pattern> = HashMap()
+
+        fun normalizeRegex(raw: String): String = raw.replace("\\\\:", ":")
+
+        fun expandRegexToBlocks(rawPattern: String): Set<Block> {
+            val norm = normalizeRegex(rawPattern)
+            regexCache[norm]?.let { return it }
+
+            val compiled = compiledRegexCache.getOrPut(norm) {
+                Pattern.compile(norm)
+            }
+
+            val out = LinkedHashSet<Block>()
+            for (id in Block.REGISTRY.keys) {
+                val s = id.toString()
+                if (!compiled.matcher(s).matches()) continue
+                val b = Block.REGISTRY.getObject(id)
+                if (b != Blocks.AIR) {
+                    out.add(b)
+                }
+            }
+
+            val set = out.toSet()
+            regexCache[norm] = set
+            return set
+        }
+
+        fun parsePredicateSpec(spec: StructurePredicateSpecData): BlockPredicate? {
+            val id = spec.id
+            return when (id) {
+                "prototypemachinery:any" -> AnyBlockPredicate
+                "prototypemachinery:not_air" -> NotAirBlockPredicate
+                "prototypemachinery:has_tile_entity" -> HasTileEntityPredicate
+
+                "prototypemachinery:tile_nbt" -> {
+                    val nbtObj: JsonObject = spec.params["nbt"] as? JsonObject ?: return TileEntityNbtPredicate(emptyMap())
+                    val map = LinkedHashMap<String, String>(nbtObj.size)
+                    for ((k, v) in nbtObj) {
+                        map[k] = v.jsonPrimitive.content
+                    }
+                    TileEntityNbtPredicate(map)
+                }
+
+                "prototypemachinery:block_id_regex" -> {
+                    val raw = (spec.params["pattern"] ?: spec.params["regex"])?.jsonPrimitive?.content
+                        ?: return null
+                    val blocksSet = expandRegexToBlocks(raw)
+                    BlockIdRegexPredicate(pattern = raw, blocks = blocksSet)
+                }
+
+                else -> {
+                    PrototypeMachinery.logger.warn("Unknown predicate id '${spec.id}' in structure '$structureId' (skipped)")
+                    null
+                }
+            }
+        }
+
+        fun buildDisplayRequirement(pos: BlockPos, spec: StructureDisplaySpecData?): github.kasuminova.prototypemachinery.api.machine.structure.preview.DisplayBlockListRequirement? {
+            if (spec == null) return null
+
+            val opts = ArrayList<github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateRequirement>()
+            for (b in spec.blocks) {
+                val id = runCatching { ResourceLocation(b.blockId) }.getOrNull() ?: continue
+                opts.add(github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateRequirement(id, b.meta, emptyMap()))
+            }
+
+            for (rx in spec.blockIdRegex) {
+                val blocksSet = expandRegexToBlocks(rx)
+                // Bounded: preview only needs a few representative options.
+                for (b in blocksSet.asSequence().sortedBy { it.registryName?.toString() ?: "" }.take(32)) {
+                    val id = b.registryName ?: continue
+                    opts.add(github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateRequirement(id, 0, emptyMap()))
+                }
+            }
+
+            val key = spec.key ?: "${structureId}@${pos.x},${pos.y},${pos.z}"
+            return github.kasuminova.prototypemachinery.api.machine.structure.preview.DisplayBlockListRequirement(
+                key = key,
+                options = opts,
+                tileNbt = spec.tileNbt
+            )
+        }
+
         for (element in elements) {
             val pos = BlockPos(element.pos.x, element.pos.y, element.pos.z)
 
@@ -544,49 +642,77 @@ public object StructureLoader {
                 continue
             }
 
-            // Base option (backward compatible)
-            val baseId = ResourceLocation(element.blockId)
-            val baseBlock = Block.REGISTRY.getObject(baseId)
-            @Suppress("DEPRECATION")
-            val baseState = baseBlock.getStateFromMeta(element.meta)
+            val predicateParts = ArrayList<BlockPredicate>(1 + element.predicates.size)
 
-            // When alternatives are present, build a multi-choice predicate.
-            if (element.alternatives.isNotEmpty()) {
-                val states = ArrayList<net.minecraft.block.state.IBlockState>(1 + element.alternatives.size)
-                states.add(baseState)
-                for (alt in element.alternatives) {
-                    val altId = ResourceLocation(alt.blockId)
-                    val altBlock = Block.REGISTRY.getObject(altId)
-                    @Suppress("DEPRECATION")
-                    val altState = altBlock.getStateFromMeta(alt.meta)
-                    states.add(altState)
-                }
+            // Legacy base option (backward compatible)
+            val legacyBlockId = element.blockId
+            if (legacyBlockId != null) {
+                val baseId = ResourceLocation(legacyBlockId)
+                val baseBlock = Block.REGISTRY.getObject(baseId)
+                @Suppress("DEPRECATION")
+                val baseState = baseBlock.getStateFromMeta(element.meta)
 
-                // NOTE: For now, NBT constraints are supported only if there is exactly one option.
-                // If any option has NBT constraints, fall back to a simple predicate (first option) and warn.
-                val hasAltNbt = element.nbt?.isNotEmpty() == true || element.alternatives.any { !it.nbt.isNullOrEmpty() }
-                if (hasAltNbt) {
-                    PrototypeMachinery.logger.warn(
-                        "Structure '$structureId' pattern element at ${pos.x},${pos.y},${pos.z} uses alternatives with NBT. " +
-                            "This is not supported yet; using the base option only."
-                    )
+                // When alternatives are present, build a multi-choice predicate.
+                if (element.alternatives.isNotEmpty()) {
+                    val states = ArrayList<net.minecraft.block.state.IBlockState>(1 + element.alternatives.size)
+                    states.add(baseState)
+                    for (alt in element.alternatives) {
+                        val altId = ResourceLocation(alt.blockId)
+                        val altBlock = Block.REGISTRY.getObject(altId)
+                        @Suppress("DEPRECATION")
+                        val altState = altBlock.getStateFromMeta(alt.meta)
+                        states.add(altState)
+                    }
+
+                    // NOTE: For now, NBT constraints are supported only if there is exactly one option.
+                    // If any option has NBT constraints, fall back to a simple predicate (first option) and warn.
+                    val hasAltNbt = element.nbt?.isNotEmpty() == true || element.alternatives.any { !it.nbt.isNullOrEmpty() }
+                    if (hasAltNbt) {
+                        PrototypeMachinery.logger.warn(
+                            "Structure '$structureId' pattern element at ${pos.x},${pos.y},${pos.z} uses alternatives with NBT. " +
+                                "This is not supported yet; using the base option only."
+                        )
+                        val predicate = if (!element.nbt.isNullOrEmpty()) {
+                            StatedBlockNbtPredicate(baseState, element.nbt)
+                        } else {
+                            StatedBlockPredicate(baseState)
+                        }
+                        predicateParts.add(predicate)
+                    } else {
+                        predicateParts.add(AnyOfBlockPredicate(states))
+                    }
+                } else {
                     val predicate = if (!element.nbt.isNullOrEmpty()) {
                         StatedBlockNbtPredicate(baseState, element.nbt)
                     } else {
                         StatedBlockPredicate(baseState)
                     }
-                    blocks[pos] = predicate
-                } else {
-                    blocks[pos] = AnyOfBlockPredicate(states)
+                    predicateParts.add(predicate)
                 }
-            } else {
-                val predicate = if (!element.nbt.isNullOrEmpty()) {
-                    StatedBlockNbtPredicate(baseState, element.nbt)
-                } else {
-                    StatedBlockPredicate(baseState)
-                }
-                blocks[pos] = predicate
+            } else if (!element.nbt.isNullOrEmpty() || element.alternatives.isNotEmpty()) {
+                PrototypeMachinery.logger.warn(
+                    "Structure '$structureId' pattern element at ${pos.x},${pos.y},${pos.z} has legacy fields (nbt/alternatives) but no blockId; ignoring legacy fields."
+                )
             }
+
+            // New composable predicates (AND)
+            for (spec in element.predicates) {
+                val p = parsePredicateSpec(spec) ?: continue
+                predicateParts.add(p)
+            }
+
+            if (predicateParts.isEmpty()) {
+                PrototypeMachinery.logger.warn(
+                    "Structure '$structureId' pattern element at ${pos.x},${pos.y},${pos.z} has no predicates and no blockId; skipping."
+                )
+                continue
+            }
+
+            val combined: BlockPredicate = if (predicateParts.size == 1) predicateParts[0] else CompositeBlockPredicate(predicateParts)
+
+            // Optional preview-only display override
+            val displayReq = buildDisplayRequirement(pos, element.display)
+            blocks[pos] = if (displayReq != null) DisplayOverridePredicate(combined, displayReq) else combined
         }
 
         return SimpleStructurePattern(blocks)

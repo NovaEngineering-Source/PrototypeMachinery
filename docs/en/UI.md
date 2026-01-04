@@ -210,7 +210,7 @@ Therefore this mod does not need (and does not try) to override per-fluid name t
 - [Machine UI Editor Runtime JSON contract](./MachineUiEditorRuntime.md)
 - [Structure preview (projection / GUI)](./StructurePreview.md)
 
-## GUI texture specs & slicing/atlas pipeline (structure preview)
+## GUI texture specs (structure preview)
 
 Structure preview GUI textures and spec docs:
 
@@ -218,11 +218,7 @@ Structure preview GUI textures and spec docs:
 - Spec doc (layout/interaction/resource naming):
   - `src/main/resources/assets/prototypemachinery/textures/gui/gui_structure_preview/gui_structure_preview.md`
 
-For stitching many small textures into a `TextureMap` (reducing bind calls), this project also provides:
-
-- Build-time slicer: `src/main/kotlin/devtools/atlas/GuiSliceGenerator.kt`
-- Slice manifests: `src/main/resources/assets/prototypemachinery/pm_gui_slices/*.json`
-- Runtime atlas: `src/main/kotlin/client/atlas/PmGuiAtlas.kt`
+The structure preview UI currently references stable sliced PNG paths directly (no additional build-time slicer / runtime atlas pipeline).
 
 ## GUI texture specs (Machine UI / gui_states)
 

@@ -9,6 +9,7 @@ import github.kasuminova.prototypemachinery.api.machine.structure.SliceLikeMachi
 import github.kasuminova.prototypemachinery.api.machine.structure.StructureOrientation
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.AnyOfRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.BlockRequirement
+import github.kasuminova.prototypemachinery.api.machine.structure.preview.DisplayBlockListRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.ExactBlockStateWithNbtRequirement
 import github.kasuminova.prototypemachinery.api.machine.structure.preview.LiteralRequirement
@@ -25,6 +26,7 @@ import github.kasuminova.prototypemachinery.common.buildinstrument.BuildInstrume
 import github.kasuminova.prototypemachinery.common.buildinstrument.BuildInstrumentUi
 import github.kasuminova.prototypemachinery.common.util.times
 import net.minecraft.block.Block
+import net.minecraft.client.resources.I18n
 import net.minecraft.init.Blocks
 import net.minecraft.item.ItemStack
 import net.minecraft.nbt.NBTTagCompound
@@ -56,6 +58,8 @@ internal object BuildInstrumentClientUi {
     private val COLOR_PAUSE_TAIL = Color(0xD9, 0x78, 0x2F)
     private val COLOR_DIS = Color(0xD7, 0x3E, 0x42)
     private val COLOR_DIS_TAIL = Color(0xAA, 0x21, 0x2B)
+
+    private fun tr(key: String, vararg args: Any): String = I18n.format(key, *args)
 
     /**
      * Add client-side interactive widgets to the root container.
@@ -172,12 +176,12 @@ internal object BuildInstrumentClientUi {
         ) ?: return null
 
         fun formatOffset(pos: net.minecraft.util.math.BlockPos): String {
-            return "(${pos.x}, ${pos.y}, ${pos.z})"
+            return tr("pm.build_instrument.offset", pos.x, pos.y, pos.z)
         }
 
         fun sliceSuffix(s: MachineStructure): String {
             return if (s is SliceLikeMachineStructure) {
-                "  [${s.minCount}-${s.maxCount} step ${formatOffset(s.sliceOffset)}]"
+                tr("pm.build_instrument.slice_suffix", s.minCount, s.maxCount, formatOffset(s.sliceOffset))
             } else {
                 ""
             }
@@ -245,7 +249,7 @@ internal object BuildInstrumentClientUi {
                                 structurePath = path,
                                 highlightRequirementKey = reqKey,
                                 iconStack = icon,
-                                actionLabel = if (chosen) "已选" else "选择",
+                                actionLabel = if (chosen) tr("pm.build_instrument.material.option.selected") else tr("pm.build_instrument.material.option.choose"),
                                 actionEnabled = !chosen,
                                 children = emptyList(),
                                 expanded = true,
@@ -265,7 +269,7 @@ internal object BuildInstrumentClientUi {
 
                         TreeDiagramWidget.TreeNode(
                             id = "$path/materials/$idx",
-                            label = "可选材料: $selectedName × $count",
+                            label = tr("pm.build_instrument.material.anyof_entry", selectedName, count),
                             type = TreeDiagramWidget.NodeType.MATERIAL_OPTION,
                             structure = s,
                             baseOrigin = nodeOrigin,
@@ -281,7 +285,7 @@ internal object BuildInstrumentClientUi {
                         val name = icon?.displayName ?: formatRequirementShort(req)
                         TreeDiagramWidget.TreeNode(
                             id = "$path/materials/$idx",
-                            label = "$name × $count",
+                            label = tr("pm.build_instrument.material.entry", name, count),
                             type = TreeDiagramWidget.NodeType.MATERIAL_OPTION,
                             structure = s,
                             baseOrigin = nodeOrigin,
@@ -307,7 +311,7 @@ internal object BuildInstrumentClientUi {
                 val current = selectedSliceCountFor(path, node)
                 out += TreeDiagramWidget.TreeNode(
                     id = "$path/slice_slider",
-                    label = "层数: $current/${node.maxCount}",
+                    label = tr("pm.build_instrument.slice_slider", current, node.maxCount),
                     type = TreeDiagramWidget.NodeType.SLICE_SLIDER,
                     structure = null,
                     baseOrigin = nodeOrigin,
@@ -329,7 +333,7 @@ internal object BuildInstrumentClientUi {
             if (materialChildren.isNotEmpty()) {
                 out += TreeDiagramWidget.TreeNode(
                     id = "$path/materials",
-                    label = "材料" + (if (uniqueTypes > 0) "（$uniqueTypes）" else ""),
+                    label = if (uniqueTypes > 0) tr("pm.build_instrument.materials.title_with_count", uniqueTypes) else tr("pm.build_instrument.materials.title"),
                     type = TreeDiagramWidget.NodeType.MATERIAL_PANEL,
                     structure = null,
                     baseOrigin = nodeOrigin,
@@ -363,7 +367,11 @@ internal object BuildInstrumentClientUi {
             val childOrigin = childrenBaseOrigin(parent, path, parentOrigin)
             parent.children.mapIndexed { idx, child ->
                 val childPath = "$path/${child.id}#$idx"
-                val label = "${child.name}${sliceSuffix(child)} @ ${formatOffset(child.offset)}"
+                val label = tr(
+                    "pm.build_instrument.substructure.label",
+                    "${child.name}${sliceSuffix(child)}",
+                    formatOffset(child.offset)
+                )
 
                 val aux = buildAuxChildren(child, childPath, childOrigin)
                 TreeDiagramWidget.TreeNode(
@@ -437,6 +445,7 @@ internal object BuildInstrumentClientUi {
             is ExactBlockStateRequirement -> stackForExact(req)
             is ExactBlockStateWithNbtRequirement -> stackForExact(ExactBlockStateRequirement(req.blockId, req.meta, req.properties))
             is AnyOfRequirement -> stackForExact(req.options.first())
+            is DisplayBlockListRequirement -> stackForExact(req.options.firstOrNull() ?: return null)
             else -> null
         }
     }
@@ -451,7 +460,14 @@ internal object BuildInstrumentClientUi {
         return when (req) {
             is AnyOfRequirement -> {
                 // Display a compact marker; the interactive UI will show concrete choices.
-                "<可选:${req.options.size}>"
+                tr("pm.build_instrument.req.anyof", req.options.size)
+            }
+
+            is DisplayBlockListRequirement -> {
+                // Preview-only marker.
+                val n = req.options.size
+                val nbt = if (req.tileNbt.isNullOrBlank()) "" else tr("pm.build_instrument.req.nbt_marker")
+                tr("pm.build_instrument.req.display", req.key, n, nbt)
             }
 
             is ExactBlockStateRequirement -> {
@@ -462,12 +478,12 @@ internal object BuildInstrumentClientUi {
             is ExactBlockStateWithNbtRequirement -> {
                 val id = req.blockId
                 val props = if (req.properties.isEmpty()) "" else "{${req.properties.size}}"
-                val nbt = if (req.nbtConstraints.isEmpty()) "" else "[NBT:${req.nbtConstraints.size}]"
+                val nbt = if (req.nbtConstraints.isEmpty()) "" else tr("pm.build_instrument.req.nbt_constraints", req.nbtConstraints.size)
                 "${id.path}:${req.meta}$props$nbt"
             }
 
             is LiteralRequirement -> req.key
-            is UnknownRequirement -> "<未知>"
+            is UnknownRequirement -> tr("pm.build_instrument.req.unknown")
             else -> req.stableKey()
         }
     }
