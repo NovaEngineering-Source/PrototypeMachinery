@@ -41,6 +41,9 @@ internal class DebugQuadBuildTask(
         builder.finishDrawing()
 
         return BuiltBuffers(
+            originX = 0,
+            originY = 0,
+            originZ = 0,
             byPass = mapOf(RenderPass.DEFAULT to builder),
         )
     }

@@ -249,14 +249,6 @@ public object PrototypeMachineryCommonConfig {
                 /* comment = */ "If true, merged draws may upload each source builder directly into scratch VBO slices via glBufferSubData(offset,data), avoiding an intermediate CPU merge buffer."
             )
 
-            // Async uncached bucket packing: keep only the master enable toggle.
-            val keepAsyncUncachedBucketPackEnabled = cfg.getBoolean(
-                /* name = */ "asyncUncachedBucketPackEnabled",
-                /* category = */ CATEGORY_RENDER_ASYNC_PACK,
-                /* defaultValue = */ RenderTuning.asyncUncachedBucketPackEnabled,
-                /* comment = */ "If true, uncached (dynamic) opaque buckets may be packed on a background thread and rendered from the last completed packed buffer for a few frames (or skipped until ready)."
-            )
-
             // VBO cache: keep only the master enable toggle.
             val keepVboCacheEnabled = cfg.getBoolean(
                 /* name = */ "vboCacheEnabled",
@@ -284,7 +276,6 @@ public object PrototypeMachineryCommonConfig {
             RenderTuning.renderBuildUseCoroutines = keepRenderBuildUseCoroutines
             RenderTuning.mergeParallelCopyEnabled = keepMergeParallelCopyEnabled
             RenderTuning.mergeDirectVboSliceUploadEnabled = keepMergeDirectVboSliceUploadEnabled
-            RenderTuning.asyncUncachedBucketPackEnabled = keepAsyncUncachedBucketPackEnabled
             RenderTuning.vboCacheEnabled = keepVboCacheEnabled
             RenderTuning.geckoDirectMappedVboEnabled = keepGeckoDirectMappedVboEnabled
 
@@ -357,13 +348,6 @@ public object PrototypeMachineryCommonConfig {
                 /* category = */ CATEGORY_RENDER_MERGE,
                 /* defaultValue = */ keepMergeDirectVboSliceUploadEnabled,
                 /* comment = */ "If true, merged draws may upload each source builder directly into scratch VBO slices (avoids intermediate CPU merge buffer)."
-            )
-
-            cfg.getBoolean(
-                /* name = */ "asyncUncachedBucketPackEnabled",
-                /* category = */ CATEGORY_RENDER_ASYNC_PACK,
-                /* defaultValue = */ keepAsyncUncachedBucketPackEnabled,
-                /* comment = */ "If true, uncached (dynamic) opaque buckets may be packed on a background thread and rendered from the last completed packed buffer for a few frames (or skipped until ready)."
             )
 
             cfg.getBoolean(

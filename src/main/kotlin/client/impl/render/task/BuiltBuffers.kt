@@ -11,6 +11,15 @@ import net.minecraft.client.renderer.BufferBuilder
  * IMPORTANT: The contained [BufferBuilder] instances must only be *drawn* on the render thread.
  */
 internal data class BuiltBuffers(
+    /**
+     * World-space origin used when baking vertex positions.
+     *
+     * Geometry in buffers is expressed relative to this origin.
+     * Draw code must translate by this origin (in addition to the usual -camera).
+     */
+    internal val originX: Int = 0,
+    internal val originY: Int = 0,
+    internal val originZ: Int = 0,
     internal val byPass: Map<RenderPass, BufferBuilder> = emptyMap(),
     internal val packedByPass: Map<RenderPass, PackedBucketBatch> = emptyMap(),
     internal val gpuByPass: Map<RenderPass, GpuBucketDraw> = emptyMap(),

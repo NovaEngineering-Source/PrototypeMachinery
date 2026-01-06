@@ -122,8 +122,11 @@ public class MachineBlockEntity() : BlockEntity(), ITickable, IGuiHolder<PosGuiD
     }
 
     override fun getRenderBoundingBox(): AxisAlignedBB {
-        return AxisAlignedBB(pos).grow(TESR_RENDER_BOUNDS_GROW_BLOCKS)
+        return INFINITE_EXTENT_AABB
+//        return AxisAlignedBB(pos).grow(TESR_RENDER_BOUNDS_GROW_BLOCKS)
     }
+
+    override fun getMaxRenderDistanceSquared(): Double = Double.MAX_VALUE
 
     override fun update() {
         if (currentTotalTick == world.totalWorldTime) {

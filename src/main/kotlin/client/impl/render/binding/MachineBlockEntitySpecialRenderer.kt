@@ -1,5 +1,6 @@
 package github.kasuminova.prototypemachinery.client.impl.render.binding
 
+import github.kasuminova.prototypemachinery.api.machine.component.MachineComponentMap
 import github.kasuminova.prototypemachinery.api.machine.component.type.GeckoModelStateComponent
 import github.kasuminova.prototypemachinery.api.machine.component.type.GeckoModelStateComponentType
 import github.kasuminova.prototypemachinery.api.machine.component.type.StructureRenderDataComponentType
@@ -12,6 +13,7 @@ import github.kasuminova.prototypemachinery.client.api.render.binding.GeckoStruc
 import github.kasuminova.prototypemachinery.client.api.render.binding.SliceRenderMode
 import github.kasuminova.prototypemachinery.client.impl.render.MachineRenderDispatcher
 import github.kasuminova.prototypemachinery.client.impl.render.RenderFrameClock
+import github.kasuminova.prototypemachinery.client.impl.render.RenderWorldOrigin
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelBaker
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoModelRenderBuildTask
 import github.kasuminova.prototypemachinery.client.impl.render.gecko.GeckoRenderSnapshot
@@ -40,6 +42,12 @@ import net.minecraft.util.ResourceLocation
  * causing incorrect ordering and washed-out bloom.
  */
 internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<MachineBlockEntity>() {
+
+    private fun originFor(): RenderWorldOrigin.Origin {
+        // Global per-frame origin around the camera.
+        // Avoids per-origin draw overhead while keeping coordinates small.
+        return RenderWorldOrigin.current()
+    }
 
     override fun isGlobalRenderer(te: MachineBlockEntity): Boolean {
         // Called by the dispatcher during culling checks.
@@ -105,7 +113,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
             // Never run structure matching on the render thread.
             // Server already matches on a schedule and syncs formed + slice counts.
             if (te.machine.isFormed()) {
-                val sliceCounts = (te.machine.componentMap.get(StructureRenderDataComponentType)
+                val sliceCounts = (te.machine.componentMap[StructureRenderDataComponentType]
                     as? github.kasuminova.prototypemachinery.api.machine.component.type.StructureRenderDataComponent)
                     ?.sliceCounts
                     ?: emptyMap()
@@ -181,12 +189,18 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
     private data class CollectedRenderData(
         val texture: ResourceLocation,
         val combinedLight: Int,
+        val originX: Int,
+        val originY: Int,
+        val originZ: Int,
         val built: BuiltBuffers
     ) {
         fun toPendingRenderData(): MachineRenderDispatcher.PendingRenderData {
             return MachineRenderDispatcher.PendingRenderData(
                 texture = texture,
                 combinedLight = combinedLight,
+                originX = originX,
+                originY = originY,
+                originZ = originZ,
                 built = built,
             )
         }
@@ -198,6 +212,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         resourcesRoot: java.nio.file.Path,
         bindingKey: ResourceLocation,
     ): List<CollectedRenderData> {
+        val origin = originFor()
         val state = te.world.getBlockState(te.pos)
         val front = runCatching { state.getValue(MachineBlock.FACING) }.getOrDefault(EnumFacing.NORTH)
         val top = te.getTopFacing(front)
@@ -263,6 +278,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                 x = te.pos.x.toDouble(),
                 y = te.pos.y.toDouble(),
                 z = te.pos.z.toDouble(),
+                originX = origin.x.toDouble(),
+                originY = origin.y.toDouble(),
+                originZ = origin.z.toDouble(),
                 modelOffsetX = binding.modelOffsetX,
                 modelOffsetY = binding.modelOffsetY,
                 modelOffsetZ = binding.modelOffsetZ,
@@ -292,6 +310,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                     CollectedRenderData(
                         texture = rk.textureId,
                         combinedLight = renderable.combinedLight,
+                        originX = built.originX,
+                        originY = built.originY,
+                        originZ = built.originZ,
                         built = built,
                     )
                 )
@@ -301,7 +322,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
 
         // Permanent static task: cache across animation switches.
         run {
-            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.PERMANENT_STATIC.ordinal, RenderPart.values().size)
+            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.PERMANENT_STATIC.ordinal, RenderPart.entries.size)
             val rk = baseKey(animationStateHash = 0, animationTimeKey = 0, variant = variantBase)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.PERMANENT_STATIC_ONLY)
@@ -313,6 +334,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                     CollectedRenderData(
                         texture = rk.textureId,
                         combinedLight = renderable.combinedLight,
+                        originX = built.originX,
+                        originY = built.originY,
+                        originZ = built.originZ,
                         built = built,
                     )
                 )
@@ -321,7 +345,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
 
         // Temporary static task: cache until animation selection changes.
         run {
-            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.TEMP_STATIC.ordinal, RenderPart.values().size)
+            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.TEMP_STATIC.ordinal, RenderPart.entries.size)
             val rk = baseKey(animationStateHash = 0, animationTimeKey = 0, variant = variantForAnim)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.TEMP_STATIC_ONLY)
@@ -333,6 +357,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                     CollectedRenderData(
                         texture = rk.textureId,
                         combinedLight = renderable.combinedLight,
+                        originX = built.originX,
+                        originY = built.originY,
+                        originZ = built.originZ,
                         built = built,
                     )
                 )
@@ -341,7 +368,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
 
         // Dynamic task: rebuild at tick-rate.
         run {
-            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.DYNAMIC.ordinal, RenderPart.values().size)
+            val ownerKey = RenderTaskOwnerKeys.legacyOwnerKey(te, bindingKey, RenderPart.DYNAMIC.ordinal, RenderPart.entries.size)
             val rk = baseKey(animationStateHash = animTick, animationTimeKey = animTimeKey, variant = variantForAnim)
             val renderable = baseRenderable(ownerKey, rk)
             val snapshot = baseSnapshot(ownerKey, rk, GeckoModelBaker.BakeMode.ANIMATED_ONLY)
@@ -353,6 +380,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                     CollectedRenderData(
                         texture = rk.textureId,
                         combinedLight = renderable.combinedLight,
+                        originX = built.originX,
+                        originY = built.originY,
+                        originZ = built.originZ,
                         built = built,
                     )
                 )
@@ -368,6 +398,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         anchor: ClientStructureRenderAnchors.Anchor,
         resourcesRoot: java.nio.file.Path,
     ): List<CollectedRenderData> {
+        val origin = originFor()
         val model = binding.model
 
         val state = te.world.getBlockState(te.pos)
@@ -473,6 +504,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                 x = te.pos.x.toDouble(),
                 y = te.pos.y.toDouble(),
                 z = te.pos.z.toDouble(),
+                originX = origin.x.toDouble(),
+                originY = origin.y.toDouble(),
+                originZ = origin.z.toDouble(),
                 // Structure anchor delta + user modelOffset, both expressed in base/local structure coordinates.
                 // They will be rotated by (front/top) in GeckoModelRenderBuildTask.
                 modelOffsetX = localDx.toDouble() + model.modelOffsetX,
@@ -507,6 +541,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                     CollectedRenderData(
                         texture = rk.textureId,
                         combinedLight = renderable.combinedLight,
+                        originX = built.originX,
+                        originY = built.originY,
+                        originZ = built.originZ,
                         built = built,
                     )
                 )
@@ -534,6 +571,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                     CollectedRenderData(
                         texture = rk.textureId,
                         combinedLight = renderable.combinedLight,
+                        originX = built.originX,
+                        originY = built.originY,
+                        originZ = built.originZ,
                         built = built,
                     )
                 )
@@ -560,6 +600,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                     CollectedRenderData(
                         texture = rk.textureId,
                         combinedLight = renderable.combinedLight,
+                        originX = built.originX,
+                        originY = built.originY,
+                        originZ = built.originZ,
                         built = built,
                     )
                 )
@@ -586,6 +629,9 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
                     CollectedRenderData(
                         texture = rk.textureId,
                         combinedLight = renderable.combinedLight,
+                        originX = built.originX,
+                        originY = built.originY,
+                        originZ = built.originZ,
                         built = built,
                     )
                 )
@@ -660,7 +706,7 @@ internal class MachineBlockEntitySpecialRenderer : TileEntitySpecialRenderer<Mac
         return h
     }
 
-    private fun github.kasuminova.prototypemachinery.api.machine.component.MachineComponentMap.containsComponentTypeId(id: ResourceLocation): Boolean {
+    private fun MachineComponentMap.containsComponentTypeId(id: ResourceLocation): Boolean {
         // MVP: linear scan. Can be optimized later by keeping an id->type index.
         return this.components.keys.any { it.id == id }
     }

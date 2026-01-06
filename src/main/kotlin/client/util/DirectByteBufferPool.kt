@@ -119,11 +119,10 @@ internal object DirectByteBufferPool {
         q.offer(buf)
         pooledBytes += cap.toLong()
 
-        val maxEntries = RenderTuning.directByteBufferPoolMaxEntries
         val maxBytes = RenderTuning.directByteBufferPoolMaxBytes
 
-        if ((maxEntries > 0 && pooledCount() > maxEntries) || (maxBytes > 0L && pooledBytes > maxBytes)) {
-            trim(maxEntries, maxBytes)
+        if (maxBytes in 1 downTo pooledBytes) {
+            trim(maxBytes)
         }
     }
 
@@ -142,12 +141,11 @@ internal object DirectByteBufferPool {
     @Synchronized
     fun createdCount(): Int = created.size
 
-    private fun trim(maxEntries: Int, maxBytes: Long) {
+    private fun trim(maxBytes: Long) {
         // Evict from the largest buffers first.
         while (true) {
-            val tooMany = maxEntries > 0 && pooledCount() > maxEntries
-            val tooBig = maxBytes > 0L && pooledBytes > maxBytes
-            if (!tooMany && !tooBig) break
+            val tooBig = maxBytes in 1 downTo pooledBytes
+            if (!tooBig) break
 
             val last = pool.lastEntry() ?: break
             val cap = last.key

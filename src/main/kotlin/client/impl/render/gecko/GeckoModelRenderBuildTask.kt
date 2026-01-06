@@ -47,6 +47,16 @@ internal data class GeckoRenderSnapshot(
     internal val z: Double,
 
     /**
+     * World-space origin used to keep baked vertex positions small.
+     *
+     * The bake task writes vertices in coordinates relative to this origin (x-originX, ...).
+     * At draw time, renderers add this origin back via a matrix translate.
+     */
+    internal val originX: Double,
+    internal val originY: Double,
+    internal val originZ: Double,
+
+    /**
      * Additional translation in structure/model local units (blocks).
      *
      * This offset is applied *after* orientation rotation, so it rotates with (front/top).
@@ -210,10 +220,7 @@ internal class GeckoModelRenderBuildTask(
                 val want = estimatedBytesByPass[pass] ?: 0
                 val minCap = maxOf(32 * 1024, want)
 
-                val total = totalEstimatedBytes
-                val mappedOk = allowMappedVbo && (RenderTuning.geckoDirectMappedVboMinBytes <= 0 || total >= RenderTuning.geckoDirectMappedVboMinBytes)
-
-                if (mappedOk) {
+                if (allowMappedVbo) {
                     val key = MappedVboWriteCache.Key(
                         ownerKey = snapshot.ownerKey,
                         pass = pass,
@@ -235,12 +242,12 @@ internal class GeckoModelRenderBuildTask(
         val ms = MatrixStack()
         ms.push()
 
-        // World-space placement (RenderManager already translates to camera origin).
-        ms.translate(
-            snapshot.x.toFloat(),
-            (snapshot.y + snapshot.yOffset).toFloat(),
-            snapshot.z.toFloat()
-        )
+        // World-space placement is baked relative to [originX/Y/Z] to avoid float precision loss at large coordinates.
+        // Renderers will translate by origin at draw time (and also apply -camera).
+        val localX = (snapshot.x - snapshot.originX).toFloat()
+        val localY = (snapshot.y - snapshot.originY + snapshot.yOffset).toFloat()
+        val localZ = (snapshot.z - snapshot.originZ).toFloat()
+        ms.translate(localX, localY, localZ)
         ms.translate(0.0f, 0.01f, 0.0f)
         ms.translate(0.5f, 0.0f, 0.5f)
 
@@ -314,9 +321,7 @@ internal class GeckoModelRenderBuildTask(
             if (sum > Int.MAX_VALUE.toLong()) Int.MAX_VALUE else sum.toInt()
         }
 
-        val usePacked =
-            snapshot.bakeMode == GeckoModelBaker.BakeMode.ANIMATED_ONLY &&
-                (RenderTuning.geckoDirectPackedBuffersMinBytes <= 0 || totalEstimatedBytes >= RenderTuning.geckoDirectPackedBuffersMinBytes)
+        val usePacked = snapshot.bakeMode == GeckoModelBaker.BakeMode.ANIMATED_ONLY
 
         if (usePacked) {
             GeckoModelBaker.bakeRoutedFilteredPacked(
@@ -370,7 +375,14 @@ internal class GeckoModelRenderBuildTask(
             buildersByPass.values.forEach { it.finishDrawing() }
         }
 
-        return BuiltBuffers(byPass = buildersByPass, packedByPass = packedByPass, gpuByPass = gpuByPass)
+        return BuiltBuffers(
+            originX = snapshot.originX.toInt(),
+            originY = snapshot.originY.toInt(),
+            originZ = snapshot.originZ.toInt(),
+            byPass = buildersByPass,
+            packedByPass = packedByPass,
+            gpuByPass = gpuByPass,
+        )
     }
 
 

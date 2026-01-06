@@ -136,14 +136,14 @@ public object RenderTuning {
     /**
      * Scratch VBO upload mode.
      *
-     * Default is [ScratchVboUploadMode.SUB_DATA].
+     * Default is [ScratchVboUploadMode.MAP_RANGE_UNSYNC].
      *
      * Notes:
      * - [ScratchVboUploadMode.MAP_RANGE_UNSYNC] uses glMapBufferRange with UNSYNCHRONIZED_BIT when supported.
     * - This implementation always orphans the buffer storage before mapping, so overwrite hazards are handled by the driver.
      */
     @Volatile
-    public var mergeScratchVboUploadMode: Int = ScratchVboUploadMode.SUB_DATA
+    public var mergeScratchVboUploadMode: Int = ScratchVboUploadMode.MAP_RANGE_UNSYNC
 
     // --- VBO caching (per built BufferBuilder) ---
 
@@ -193,28 +193,13 @@ public object RenderTuning {
 
     /** Max number of idle pooled direct ByteBuffers kept. 0 disables entry-count limit. */
     @Volatile
-    public var directByteBufferPoolMaxEntries: Int = 64
+    public var directByteBufferPoolMaxEntries: Int = 0
 
     /** Max total bytes kept by the direct ByteBuffer pool. 0 disables the bytes limit. */
     @Volatile
     public var directByteBufferPoolMaxBytes: Long = 256L * 1024L * 1024L
 
     // --- Async bucket packing (hide merge cost off-thread) ---
-
-    /**
-     * If true, the dispatcher may pack uncached (dynamic) DEFAULT buckets off-thread,
-     * then render from the last completed packed buffer (or skip) for a few frames.
-     */
-    @Volatile
-    public var asyncUncachedBucketPackEnabled: Boolean = false
-
-    /** Minimum bytes in a bucket before we submit an async pack task. */
-    @Volatile
-    public var asyncUncachedBucketPackMinBytes: Int = 512 * 1024
-
-    /** Minimum buffers in a bucket before we submit an async pack task. */
-    @Volatile
-    public var asyncUncachedBucketPackMinBuffers: Int = 2
 
     /**
      * Maximum bytes for a single packed output buffer (part). <=0 disables splitting.
@@ -274,24 +259,11 @@ public object RenderTuning {
     // --- Gecko baker ---
 
     /**
-     * For GeckoModelBaker ANIMATED_ONLY builds: minimum (estimated) total bytes before using direct packed buffers
-     * (PackedBucketBatch) instead of BufferBuilder.
-     *
-     * 0 = always attempt. Set to a very large value to effectively disable.
-     */
-    @Volatile
-    public var geckoDirectPackedBuffersMinBytes: Int = 256 * 1024
-
-    /**
      * Experimental: for GeckoModelBaker ANIMATED_ONLY builds, try to write packed vertex data directly into a mapped
      * VBO (A/B buffered per owner+pass), avoiding CPU-side intermediate buffers and the upload memcpy.
      */
     @Volatile
     public var geckoDirectMappedVboEnabled: Boolean = false
-
-    /** Minimum (estimated) total bytes before enabling mapped-VBO direct write. 0 = always attempt. */
-    @Volatile
-    public var geckoDirectMappedVboMinBytes: Int = 512 * 1024
 
     internal fun sanitize() {
         if (!animStepTicks.isFinite() || animStepTicks <= 0.0) {
@@ -339,9 +311,6 @@ public object RenderTuning {
         if (directByteBufferPoolMaxEntries < 0) directByteBufferPoolMaxEntries = 0
         if (directByteBufferPoolMaxBytes < 0L) directByteBufferPoolMaxBytes = 0L
 
-        if (asyncUncachedBucketPackMinBytes < 0) asyncUncachedBucketPackMinBytes = 0
-        if (asyncUncachedBucketPackMinBuffers < 1) asyncUncachedBucketPackMinBuffers = 1
-
         if (asyncUncachedBucketPackMaxPartBytes < 0) asyncUncachedBucketPackMaxPartBytes = 0
         if (asyncUncachedBucketPackMaxPartBytes > 512 * 1024 * 1024) asyncUncachedBucketPackMaxPartBytes = 512 * 1024 * 1024
 
@@ -349,11 +318,5 @@ public object RenderTuning {
         if (asyncUncachedBucketPackMaxParts > 64) asyncUncachedBucketPackMaxParts = 64
 
         if (asyncUncachedBucketPackMaxLagFrames < 0) asyncUncachedBucketPackMaxLagFrames = 0
-
-        if (geckoDirectPackedBuffersMinBytes < 0) geckoDirectPackedBuffersMinBytes = 0
-        if (geckoDirectPackedBuffersMinBytes > 512 * 1024 * 1024) geckoDirectPackedBuffersMinBytes = 512 * 1024 * 1024
-
-        if (geckoDirectMappedVboMinBytes < 0) geckoDirectMappedVboMinBytes = 0
-        if (geckoDirectMappedVboMinBytes > 512 * 1024 * 1024) geckoDirectMappedVboMinBytes = 512 * 1024 * 1024
     }
 }

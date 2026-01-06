@@ -147,14 +147,14 @@ pm.scanner.tooltip.reset=Initialize: reset fields and clear selection
 pm.scanner.tooltip.export=Export: export selection as structure JSON (writes to config/.../scanned)
 
 # Scanner Instrument chat hints (server-sent, client-localized)
-pm.scanner.chat.origin_set=\u00a7b[PM]\u00a7r Set origin: %s,%s,%s
-pm.scanner.chat.origin_set_and_corner_cleared=\u00a7b[PM]\u00a7r Set origin: %s,%s,%s (corner cleared)
-pm.scanner.chat.hint_set_corner_then_export=\u00a7b[PM]\u00a7r Right-click another corner to set range; open GUI and click "Export".
-pm.scanner.chat.corner_set=\u00a7b[PM]\u00a7r Set corner: %s,%s,%s
-pm.scanner.chat.selection=\u00a7b[PM]\u00a7r Selection: min=%s,%s,%s max=%s,%s,%s size=%sx%sx%s blocks=%s
-pm.scanner.chat.warn_large_selection=\u00a7e[PM]\u00a7r Warning: large selection (blocks=%s); export may take time / lag the server.
-pm.scanner.chat.hint_export=\u00a7b[PM]\u00a7r Open GUI and click "Export" to generate structure JSON.
-pm.scanner.chat.corner_updated=\u00a7b[PM]\u00a7r Updated corner: %s,%s,%s (open GUI and click "Export")
+pm.scanner.chat.origin_set=§b[PM]§r Set origin: %s,%s,%s
+pm.scanner.chat.origin_set_and_corner_cleared=§b[PM]§r Set origin: %s,%s,%s (corner cleared)
+pm.scanner.chat.hint_set_corner_then_export=§b[PM]§r Right-click another corner to set range; open GUI and click "Export".
+pm.scanner.chat.corner_set=§b[PM]§r Set corner: %s,%s,%s
+pm.scanner.chat.selection=§b[PM]§r Selection: min=%s,%s,%s max=%s,%s,%s size=%sx%sx%s blocks=%s
+pm.scanner.chat.warn_large_selection=§e[PM]§r Warning: large selection (blocks=%s); export may take time / lag the server.
+pm.scanner.chat.hint_export=§b[PM]§r Open GUI and click "Export" to generate structure JSON.
+pm.scanner.chat.corner_updated=§b[PM]§r Updated corner: %s,%s,%s (open GUI and click "Export")
 
 # Preview compass overlay
 pm.preview.ui.compass.n=N

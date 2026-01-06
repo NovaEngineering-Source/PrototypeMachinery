@@ -147,14 +147,14 @@ pm.scanner.tooltip.reset=初始化：重置界面字段并清空选择
 pm.scanner.tooltip.export=导出：将当前选择导出为结构 JSON（写入 config/.../scanned）
 
 # 扫描器聊天提示（服务器发送，客户端本地化）
-pm.scanner.chat.origin_set=\u00a7b[PM]\u00a7r 已设置 origin: %s,%s,%s
-pm.scanner.chat.origin_set_and_corner_cleared=\u00a7b[PM]\u00a7r 已设置 origin: %s,%s,%s（corner 已清空）
-pm.scanner.chat.hint_set_corner_then_export=\u00a7b[PM]\u00a7r 再右键一个角点设置范围；打开 GUI 点“导出”。
-pm.scanner.chat.corner_set=\u00a7b[PM]\u00a7r 已设置 corner: %s,%s,%s
-pm.scanner.chat.selection=\u00a7b[PM]\u00a7r 选区: min=%s,%s,%s max=%s,%s,%s size=%sx%sx%s blocks=%s
-pm.scanner.chat.warn_large_selection=\u00a7e[PM]\u00a7r 警告：选区较大（blocks=%s），导出可能耗时/卡服。
-pm.scanner.chat.hint_export=\u00a7b[PM]\u00a7r 打开 GUI 点“导出”生成结构 JSON。
-pm.scanner.chat.corner_updated=\u00a7b[PM]\u00a7r 已更新 corner: %s,%s,%s（打开 GUI 点“导出”）
+pm.scanner.chat.origin_set=§b[PM]§r 已设置 origin: %s,%s,%s
+pm.scanner.chat.origin_set_and_corner_cleared=§b[PM]§r 已设置 origin: %s,%s,%s（corner 已清空）
+pm.scanner.chat.hint_set_corner_then_export=§b[PM]§r 再右键一个角点设置范围；打开 GUI 点“导出”。
+pm.scanner.chat.corner_set=§b[PM]§r 已设置 corner: %s,%s,%s
+pm.scanner.chat.selection=§b[PM]§r 选区: min=%s,%s,%s max=%s,%s,%s size=%sx%sx%s blocks=%s
+pm.scanner.chat.warn_large_selection=§e[PM]§r 警告：选区较大（blocks=%s），导出可能耗时/卡服。
+pm.scanner.chat.hint_export=§b[PM]§r 打开 GUI 点“导出”生成结构 JSON。
+pm.scanner.chat.corner_updated=§b[PM]§r 已更新 corner: %s,%s,%s（打开 GUI 点“导出”）
 
 # 预览罗盘 overlay
 pm.preview.ui.compass.n=北

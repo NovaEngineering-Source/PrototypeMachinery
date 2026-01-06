@@ -120,7 +120,7 @@ public open class MachineBlock(
             if (d0 - pos.y.toDouble() > 2.0) return EnumFacing.UP
             if (pos.y.toDouble() - d0 > 0.0) return EnumFacing.DOWN
         }
-        return placer.horizontalFacing
+        return placer.horizontalFacing.opposite
     }
 
     override fun onBlockPlacedBy(

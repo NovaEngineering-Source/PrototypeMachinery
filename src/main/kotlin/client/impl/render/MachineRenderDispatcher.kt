@@ -33,6 +33,21 @@ import org.lwjgl.opengl.GL11
  */
 internal object MachineRenderDispatcher {
 
+    private data class OriginKey(val x: Int, val y: Int, val z: Int)
+
+    private fun commonOrigin(dataList: List<PendingRenderData>): OriginKey? {
+        if (dataList.isEmpty()) return null
+        val first = dataList[0]
+        val ox = first.originX
+        val oy = first.originY
+        val oz = first.originZ
+        for (i in 1 until dataList.size) {
+            val d = dataList[i]
+            if (d.originX != ox || d.originY != oy || d.originZ != oz) return null
+        }
+        return OriginKey(ox, oy, oz)
+    }
+
     private val uploader = ReusableVboUploader()
 
     /**
@@ -49,6 +64,10 @@ internal object MachineRenderDispatcher {
     data class PendingRenderData(
         val texture: ResourceLocation,
         val combinedLight: Int,
+        /** World-space origin added back at draw time; baked geometry is relative to this origin. */
+        val originX: Int,
+        val originY: Int,
+        val originZ: Int,
         val built: BuiltBuffers,
     )
 
@@ -102,7 +121,7 @@ internal object MachineRenderDispatcher {
 
         GlStateManager.pushMatrix()
         // IMPORTANT:
-        // Our VBOs are baked in absolute world coordinates (we use te.pos.x/y/z in the bake task).
+        // Our VBOs are baked in origin-relative coordinates to avoid float precision loss at large world coordinates.
         // When drawing here (after TESR batch), the current modelview may NOT have the camera-origin
         // translation applied. RenderManager (used by the GT bloom callback) always applies -camera.
         // If we don't do the same here, DEFAULT/TRANSPARENT will appear offset while BLOOM looks correct.
@@ -127,23 +146,23 @@ internal object MachineRenderDispatcher {
                     // Defer to RenderManager for GT bloom callback
                     for (data in dataList) {
                         data.built.byPass[RenderPass.BLOOM]?.let { buffer ->
-                            RenderManager.addBuffer(RenderPass.BLOOM, data.texture, -1, buffer)
+                            RenderManager.addBuffer(RenderPass.BLOOM, data.texture, -1, data.originX, data.originY, data.originZ, buffer)
                         }
                         data.built.packedByPass[RenderPass.BLOOM]?.let { batch ->
-                            RenderManager.addPacked(RenderPass.BLOOM, data.texture, -1, batch)
+                            RenderManager.addPacked(RenderPass.BLOOM, data.texture, -1, data.originX, data.originY, data.originZ, batch)
                         }
                         data.built.gpuByPass[RenderPass.BLOOM]?.let { draw ->
-                            RenderManager.addGpu(RenderPass.BLOOM, data.texture, -1, draw)
+                            RenderManager.addGpu(RenderPass.BLOOM, data.texture, -1, data.originX, data.originY, data.originZ, draw)
                         }
                         
                         data.built.byPass[RenderPass.BLOOM_TRANSPARENT]?.let { buffer ->
-                            RenderManager.addBuffer(RenderPass.BLOOM_TRANSPARENT, data.texture, -1, buffer)
+                            RenderManager.addBuffer(RenderPass.BLOOM_TRANSPARENT, data.texture, -1, data.originX, data.originY, data.originZ, buffer)
                         }
                         data.built.packedByPass[RenderPass.BLOOM_TRANSPARENT]?.let { batch ->
-                            RenderManager.addPacked(RenderPass.BLOOM_TRANSPARENT, data.texture, -1, batch)
+                            RenderManager.addPacked(RenderPass.BLOOM_TRANSPARENT, data.texture, -1, data.originX, data.originY, data.originZ, batch)
                         }
                         data.built.gpuByPass[RenderPass.BLOOM_TRANSPARENT]?.let { draw ->
-                            RenderManager.addGpu(RenderPass.BLOOM_TRANSPARENT, data.texture, -1, draw)
+                            RenderManager.addGpu(RenderPass.BLOOM_TRANSPARENT, data.texture, -1, data.originX, data.originY, data.originZ, draw)
                         }
                         
                     }
@@ -173,23 +192,152 @@ internal object MachineRenderDispatcher {
     private fun renderPassBatched(dataList: List<PendingRenderData>, pass: RenderPass, applyLightmap: Boolean) {
         if (dataList.isEmpty()) return
 
-        // Texture -> Light -> Buffers
-        val buckets: MutableMap<ResourceLocation, Int2ObjectOpenHashMap<MutableList<BufferBuilder>>> =
+        // Fast path: global origin (single translate), then use simpler buckets (texture -> light).
+        val commonOrigin = commonOrigin(dataList)
+        if (commonOrigin != null) {
+            GlStateManager.pushMatrix()
+            GlStateManager.translate(commonOrigin.x.toDouble(), commonOrigin.y.toDouble(), commonOrigin.z.toDouble())
+            try {
+                // Texture -> Light -> Buffers
+                val buckets: MutableMap<ResourceLocation, Int2ObjectOpenHashMap<MutableList<BufferBuilder>>> =
+                    Object2ObjectOpenHashMap()
+
+                // Texture -> Light -> Packed batches
+                val packedBuckets: MutableMap<ResourceLocation, Int2ObjectOpenHashMap<MutableList<PackedBucketBatch>>> =
+                    Object2ObjectOpenHashMap()
+
+                // Texture -> Light -> GPU VBO draws
+                val gpuBuckets: MutableMap<ResourceLocation, Int2ObjectOpenHashMap<MutableList<GpuBucketDraw>>> =
+                    Object2ObjectOpenHashMap()
+
+                for (data in dataList) {
+                    val buffer = data.built.byPass[pass] ?: continue
+                    val light = if (applyLightmap) data.combinedLight else -1
+                    buckets
+                        .computeIfAbsent(data.texture) { Int2ObjectOpenHashMap() }
+                        .computeIfAbsent(light) { ObjectArrayList() }
+                        .add(buffer)
+                }
+
+                for (data in dataList) {
+                    val batch = data.built.packedByPass[pass] ?: continue
+                    val light = if (applyLightmap) data.combinedLight else -1
+                    packedBuckets
+                        .computeIfAbsent(data.texture) { Int2ObjectOpenHashMap() }
+                        .computeIfAbsent(light) { ObjectArrayList() }
+                        .add(batch)
+                }
+
+                for (data in dataList) {
+                    val draw = data.built.gpuByPass[pass] ?: continue
+                    val light = if (applyLightmap) data.combinedLight else -1
+                    gpuBuckets
+                        .computeIfAbsent(data.texture) { Int2ObjectOpenHashMap() }
+                        .computeIfAbsent(light) { ObjectArrayList() }
+                        .add(draw)
+                }
+
+                if (buckets.isEmpty() && packedBuckets.isEmpty() && gpuBuckets.isEmpty()) return
+
+                buckets.forEach { (texture, lightMap) ->
+                    RenderStats.addTextureBind()
+                    ExternalDiskTextureBinder.bind(texture)
+                    lightMap.forEach { (light, bufferList) ->
+                        if (applyLightmap) {
+                            setLightmapCoords(light)
+                        }
+                        RenderStats.noteMergeBucket(bufferList.size)
+                        uploader.drawMultiple(bufferList)
+                    }
+                }
+
+                packedBuckets.forEach { (texture, lightMap) ->
+                    RenderStats.addTextureBind()
+                    ExternalDiskTextureBinder.bind(texture)
+                    lightMap.forEach { (light, batchList) ->
+                        if (applyLightmap) {
+                            setLightmapCoords(light)
+                        }
+                        if (batchList.isEmpty()) return@forEach
+
+                        val first = batchList[0]
+                        val format = first.format
+                        val drawMode = first.drawMode
+
+                        var totalBytes = 0
+                        var totalVertices = 0
+                        val segmentsTmp: MutableList<ReusableVboUploader.ByteBufferSegment> = ArrayList(batchList.size)
+
+                        for (b in batchList) {
+                            if (b.format != format || b.drawMode != drawMode) {
+                                // Fallback: draw individually
+                                for (bb in batchList) {
+                                    for (p in bb.parts) {
+                                        uploader.drawMergedByteBuffer(bb.format, bb.drawMode, p.vertexCount, p.totalBytes, p.data)
+                                    }
+                                }
+                                return@forEach
+                            }
+                            for (p in b.parts) {
+                                if (p.totalBytes <= 0 || p.vertexCount <= 0) continue
+                                segmentsTmp.add(ReusableVboUploader.ByteBufferSegment(p.data, totalBytes, p.totalBytes))
+                                totalBytes += p.totalBytes
+                                totalVertices += p.vertexCount
+                            }
+                        }
+
+                        if (totalVertices <= 0 || totalBytes <= 0 || segmentsTmp.isEmpty()) return@forEach
+
+                        RenderStats.noteMergeBucket(segmentsTmp.size)
+                        if (segmentsTmp.size == 1) {
+                            val s = segmentsTmp[0]
+                            uploader.drawMergedByteBuffer(format, drawMode, totalVertices, totalBytes, s.data)
+                        } else {
+                            uploader.drawMergedByteBufferSegments(format, drawMode, totalVertices, totalBytes, segmentsTmp.toTypedArray())
+                        }
+                    }
+                }
+
+                gpuBuckets.forEach { (texture, lightMap) ->
+                    RenderStats.addTextureBind()
+                    ExternalDiskTextureBinder.bind(texture)
+                    lightMap.forEach { (light, drawList) ->
+                        if (applyLightmap) {
+                            setLightmapCoords(light)
+                        }
+                        if (drawList.isEmpty()) return@forEach
+                        for (d in drawList) {
+                            if (d.vertexCount <= 0) continue
+                            uploader.drawVbo(d.vbo, d.format, d.drawMode, d.vertexCount)
+                        }
+                    }
+                }
+
+                return
+            } finally {
+                GlStateManager.popMatrix()
+            }
+        }
+
+        // Texture -> Origin -> Light -> Buffers
+        val buckets: MutableMap<ResourceLocation, MutableMap<OriginKey, Int2ObjectOpenHashMap<MutableList<BufferBuilder>>>> =
             Object2ObjectOpenHashMap()
 
-        // Texture -> Light -> Packed batches
-        val packedBuckets: MutableMap<ResourceLocation, Int2ObjectOpenHashMap<MutableList<PackedBucketBatch>>> =
+        // Texture -> Origin -> Light -> Packed batches
+        val packedBuckets: MutableMap<ResourceLocation, MutableMap<OriginKey, Int2ObjectOpenHashMap<MutableList<PackedBucketBatch>>>> =
             Object2ObjectOpenHashMap()
 
-        // Texture -> Light -> GPU VBO draws
-        val gpuBuckets: MutableMap<ResourceLocation, Int2ObjectOpenHashMap<MutableList<GpuBucketDraw>>> =
+        // Texture -> Origin -> Light -> GPU VBO draws
+        val gpuBuckets: MutableMap<ResourceLocation, MutableMap<OriginKey, Int2ObjectOpenHashMap<MutableList<GpuBucketDraw>>>> =
             Object2ObjectOpenHashMap()
 
         for (data in dataList) {
             val buffer = data.built.byPass[pass] ?: continue
             val light = if (applyLightmap) data.combinedLight else -1
+            val origin = OriginKey(data.originX, data.originY, data.originZ)
             buckets
-                .computeIfAbsent(data.texture) { Int2ObjectOpenHashMap() }
+                .computeIfAbsent(data.texture) { Object2ObjectOpenHashMap() }
+                .computeIfAbsent(origin) { Int2ObjectOpenHashMap() }
                 .computeIfAbsent(light) { ObjectArrayList() }
                 .add(buffer)
         }
@@ -197,8 +345,10 @@ internal object MachineRenderDispatcher {
         for (data in dataList) {
             val batch = data.built.packedByPass[pass] ?: continue
             val light = if (applyLightmap) data.combinedLight else -1
+            val origin = OriginKey(data.originX, data.originY, data.originZ)
             packedBuckets
-                .computeIfAbsent(data.texture) { Int2ObjectOpenHashMap() }
+                .computeIfAbsent(data.texture) { Object2ObjectOpenHashMap() }
+                .computeIfAbsent(origin) { Int2ObjectOpenHashMap() }
                 .computeIfAbsent(light) { ObjectArrayList() }
                 .add(batch)
         }
@@ -206,84 +356,110 @@ internal object MachineRenderDispatcher {
         for (data in dataList) {
             val draw = data.built.gpuByPass[pass] ?: continue
             val light = if (applyLightmap) data.combinedLight else -1
+            val origin = OriginKey(data.originX, data.originY, data.originZ)
             gpuBuckets
-                .computeIfAbsent(data.texture) { Int2ObjectOpenHashMap() }
+                .computeIfAbsent(data.texture) { Object2ObjectOpenHashMap() }
+                .computeIfAbsent(origin) { Int2ObjectOpenHashMap() }
                 .computeIfAbsent(light) { ObjectArrayList() }
                 .add(draw)
         }
 
         if (buckets.isEmpty() && packedBuckets.isEmpty() && gpuBuckets.isEmpty()) return
 
-        buckets.forEach { (texture, lightMap) ->
+        buckets.forEach { (texture, originMap) ->
             RenderStats.addTextureBind()
             ExternalDiskTextureBinder.bind(texture)
-            lightMap.forEach { (light, bufferList) ->
-                if (applyLightmap) {
-                    setLightmapCoords(light)
+            originMap.forEach { (origin, lightMap) ->
+                GlStateManager.pushMatrix()
+                GlStateManager.translate(origin.x.toDouble(), origin.y.toDouble(), origin.z.toDouble())
+                try {
+                    lightMap.forEach { (light, bufferList) ->
+                        if (applyLightmap) {
+                            setLightmapCoords(light)
+                        }
+                        RenderStats.noteMergeBucket(bufferList.size)
+                        uploader.drawMultiple(bufferList)
+                    }
+                } finally {
+                    GlStateManager.popMatrix()
                 }
-                RenderStats.noteMergeBucket(bufferList.size)
-                uploader.drawMultiple(bufferList)
             }
         }
 
-        packedBuckets.forEach { (texture, lightMap) ->
+        packedBuckets.forEach { (texture, originMap) ->
             RenderStats.addTextureBind()
             ExternalDiskTextureBinder.bind(texture)
-            lightMap.forEach { (light, batchList) ->
-                if (applyLightmap) {
-                    setLightmapCoords(light)
-                }
-                if (batchList.isEmpty()) return@forEach
+            originMap.forEach { (origin, lightMap) ->
+                GlStateManager.pushMatrix()
+                GlStateManager.translate(origin.x.toDouble(), origin.y.toDouble(), origin.z.toDouble())
+                try {
+                    lightMap.forEach { (light, batchList) ->
+                        if (applyLightmap) {
+                            setLightmapCoords(light)
+                        }
+                        if (batchList.isEmpty()) return@forEach
 
-                val first = batchList[0]
-                val format = first.format
-                val drawMode = first.drawMode
+                        val first = batchList[0]
+                        val format = first.format
+                        val drawMode = first.drawMode
 
-                var totalBytes = 0
-                var totalVertices = 0
-                val segmentsTmp: MutableList<ReusableVboUploader.ByteBufferSegment> = ArrayList(batchList.size)
+                        var totalBytes = 0
+                        var totalVertices = 0
+                        val segmentsTmp: MutableList<ReusableVboUploader.ByteBufferSegment> = ArrayList(batchList.size)
 
-                for (b in batchList) {
-                    if (b.format != format || b.drawMode != drawMode) {
-                        // Fallback: draw individually
-                        for (bb in batchList) {
-                            for (p in bb.parts) {
-                                uploader.drawMergedByteBuffer(bb.format, bb.drawMode, p.vertexCount, p.totalBytes, p.data)
+                        for (b in batchList) {
+                            if (b.format != format || b.drawMode != drawMode) {
+                                // Fallback: draw individually
+                                for (bb in batchList) {
+                                    for (p in bb.parts) {
+                                        uploader.drawMergedByteBuffer(bb.format, bb.drawMode, p.vertexCount, p.totalBytes, p.data)
+                                    }
+                                }
+                                return@forEach
+                            }
+                            for (p in b.parts) {
+                                if (p.totalBytes <= 0 || p.vertexCount <= 0) continue
+                                segmentsTmp.add(ReusableVboUploader.ByteBufferSegment(p.data, totalBytes, p.totalBytes))
+                                totalBytes += p.totalBytes
+                                totalVertices += p.vertexCount
                             }
                         }
-                        return@forEach
-                    }
-                    for (p in b.parts) {
-                        if (p.totalBytes <= 0 || p.vertexCount <= 0) continue
-                        segmentsTmp.add(ReusableVboUploader.ByteBufferSegment(p.data, totalBytes, p.totalBytes))
-                        totalBytes += p.totalBytes
-                        totalVertices += p.vertexCount
-                    }
-                }
 
-                if (totalVertices <= 0 || totalBytes <= 0 || segmentsTmp.isEmpty()) return@forEach
+                        if (totalVertices <= 0 || totalBytes <= 0 || segmentsTmp.isEmpty()) return@forEach
 
-                RenderStats.noteMergeBucket(segmentsTmp.size)
-                if (segmentsTmp.size == 1) {
-                    val s = segmentsTmp[0]
-                    uploader.drawMergedByteBuffer(format, drawMode, totalVertices, totalBytes, s.data)
-                } else {
-                    uploader.drawMergedByteBufferSegments(format, drawMode, totalVertices, totalBytes, segmentsTmp.toTypedArray())
+                        RenderStats.noteMergeBucket(segmentsTmp.size)
+                        if (segmentsTmp.size == 1) {
+                            val s = segmentsTmp[0]
+                            uploader.drawMergedByteBuffer(format, drawMode, totalVertices, totalBytes, s.data)
+                        } else {
+                            uploader.drawMergedByteBufferSegments(format, drawMode, totalVertices, totalBytes, segmentsTmp.toTypedArray())
+                        }
+                    }
+                } finally {
+                    GlStateManager.popMatrix()
                 }
             }
         }
 
-        gpuBuckets.forEach { (texture, lightMap) ->
+        gpuBuckets.forEach { (texture, originMap) ->
             RenderStats.addTextureBind()
             ExternalDiskTextureBinder.bind(texture)
-            lightMap.forEach { (light, drawList) ->
-                if (applyLightmap) {
-                    setLightmapCoords(light)
-                }
-                if (drawList.isEmpty()) return@forEach
-                for (d in drawList) {
-                    if (d.vertexCount <= 0) continue
-                    uploader.drawVbo(d.vbo, d.format, d.drawMode, d.vertexCount)
+            originMap.forEach { (origin, lightMap) ->
+                GlStateManager.pushMatrix()
+                GlStateManager.translate(origin.x.toDouble(), origin.y.toDouble(), origin.z.toDouble())
+                try {
+                    lightMap.forEach { (light, drawList) ->
+                        if (applyLightmap) {
+                            setLightmapCoords(light)
+                        }
+                        if (drawList.isEmpty()) return@forEach
+                        for (d in drawList) {
+                            if (d.vertexCount <= 0) continue
+                            uploader.drawVbo(d.vbo, d.format, d.drawMode, d.vertexCount)
+                        }
+                    }
+                } finally {
+                    GlStateManager.popMatrix()
                 }
             }
         }
@@ -298,7 +474,53 @@ internal object MachineRenderDispatcher {
     // 3) GPU-resident mapped VBO draw（GpuBucketDraw）
 
     private fun renderPassWithoutState(dataList: List<PendingRenderData>, pass: RenderPass) {
+        // Fast path: global origin
+        val commonOrigin = commonOrigin(dataList)
+        if (commonOrigin != null) {
+            GlStateManager.pushMatrix()
+            GlStateManager.translate(commonOrigin.x.toDouble(), commonOrigin.y.toDouble(), commonOrigin.z.toDouble())
+            try {
+                for (data in dataList) {
+                    data.built.byPass[pass]?.let { buffer ->
+                        RenderStats.addTextureBind()
+                        ExternalDiskTextureBinder.bind(data.texture)
+                        if (pass != RenderPass.BLOOM && pass != RenderPass.BLOOM_TRANSPARENT) {
+                            setLightmapCoords(data.combinedLight)
+                        }
+                        uploader.draw(buffer)
+                    }
+
+                    data.built.gpuByPass[pass]?.let { draw ->
+                        if (draw.vertexCount <= 0) return@let
+                        RenderStats.addTextureBind()
+                        ExternalDiskTextureBinder.bind(data.texture)
+                        if (pass != RenderPass.BLOOM && pass != RenderPass.BLOOM_TRANSPARENT) {
+                            setLightmapCoords(data.combinedLight)
+                        }
+                        uploader.drawVbo(draw.vbo, draw.format, draw.drawMode, draw.vertexCount)
+                    }
+
+                    data.built.packedByPass[pass]?.let { batch ->
+                        RenderStats.addTextureBind()
+                        ExternalDiskTextureBinder.bind(data.texture)
+                        if (pass != RenderPass.BLOOM && pass != RenderPass.BLOOM_TRANSPARENT) {
+                            setLightmapCoords(data.combinedLight)
+                        }
+                        for (p in batch.parts) {
+                            uploader.drawMergedByteBuffer(batch.format, batch.drawMode, p.vertexCount, p.totalBytes, p.data)
+                        }
+                    }
+                }
+                return
+            } finally {
+                GlStateManager.popMatrix()
+            }
+        }
+
         for (data in dataList) {
+            GlStateManager.pushMatrix()
+            GlStateManager.translate(data.originX.toDouble(), data.originY.toDouble(), data.originZ.toDouble())
+
             data.built.byPass[pass]?.let { buffer ->
                 RenderStats.addTextureBind()
                 ExternalDiskTextureBinder.bind(data.texture)
@@ -328,6 +550,8 @@ internal object MachineRenderDispatcher {
                     uploader.drawMergedByteBuffer(batch.format, batch.drawMode, p.vertexCount, p.totalBytes, p.data)
                 }
             }
+
+            GlStateManager.popMatrix()
         }
     }
 
