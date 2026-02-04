@@ -1,0 +1,52 @@
+name: Build Mods
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Test PrototypeMachinery
+        run: ./gradlew test --no-daemon
+
+      - name: Build PrototypeMachinery
+        run: ./gradlew build -x test --no-daemon
+
+      - name: Test Modern Backend
+        working-directory: modern-backend
+        run: ./gradlew test -Pjava_toolchain=21 --no-daemon
+
+      - name: Build Modern Backend
+        working-directory: modern-backend
+        run: ./gradlew build -x test -Pjava_toolchain=21 --no-daemon
+
+      - name: Upload PrototypeMachinery artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrototypeMachinery
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+      - name: Upload Modern Backend artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrototypeMachinery-ModernBackend
+          path: modern-backend/build/libs/*.jar
+          if-no-files-found: error
