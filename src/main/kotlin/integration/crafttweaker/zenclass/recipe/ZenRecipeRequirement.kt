@@ -28,7 +28,7 @@ import stanhebben.zenscript.annotations.ZenMethod
  */
 @ZenClass("mods.prototypemachinery.recipe.PMRecipeRequirement")
 @ZenRegister
-public class ZenRecipeRequirement internal constructor(
+public class ZenRecipeRequirement(
     internal val component: RecipeRequirementComponent,
 ) {
     public companion object {

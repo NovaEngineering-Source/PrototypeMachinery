@@ -16,7 +16,6 @@ import java.util.Map;
 public class PMMixinLoader implements IFMLLoadingPlugin {
 
     public PMMixinLoader() {
-        Mixins.addConfiguration("mixins.prototypemachinery.json");
     }
 
     @Override
@@ -37,6 +36,7 @@ public class PMMixinLoader implements IFMLLoadingPlugin {
 
     @Override
     public void injectData(final Map<String, Object> data) {
+        Mixins.addConfiguration("mixins.prototypemachinery.json");
     }
 
     @Override
